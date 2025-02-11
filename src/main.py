@@ -2,7 +2,7 @@
 
 import contextlib
 
-from app.tui import TUIApplication
+from tui import TUIApplication
 
 
 def main() -> None:
