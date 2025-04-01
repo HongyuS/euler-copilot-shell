@@ -1,12 +1,15 @@
-"""TUI 应用"""
+"""应用入口点"""
 
-from tui import TUIApplication
+import sys
+
+from app.tui import EulerCopilot
 
 
 def main() -> None:
     """主函数"""
-    app = TUIApplication()
+    app = EulerCopilot()
     app.run()
 
+
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)
