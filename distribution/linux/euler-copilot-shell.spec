@@ -1,7 +1,7 @@
 %global pypi_name eulercopilot
 
 Name:           euler-copilot-shell
-Version:        0.9.6
+Version:        0.10.0
 Release:        1%{?dist}
 Summary:        智能 Shell 命令行工具
 License:        MulanPSL-2.0
@@ -62,5 +62,5 @@ install -m 0755 dist/%{pypi_name} %{buildroot}%{_bindir}/%{pypi_name}
 %{_bindir}/%{pypi_name}
 
 %changelog
-* %{_builddate} openEuler <contact@openeuler.org> - 0.1.0-1
+* %{_builddate} openEuler <contact@openeuler.org> - 0.10.0-1
 - 首次构建RPM包，支持x86_64和aarch64架构
