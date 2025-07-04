@@ -11,7 +11,8 @@ BLACKLIST = ["rm", "sudo", "shutdown", "reboot", "mkfs"]
 
 
 def is_command_safe(command: str) -> bool:
-    """检查命令是否安全
+    """
+    检查命令是否安全
 
     检查命令是否安全，若包含黑名单中的子串则返回 False。
     """
@@ -19,7 +20,8 @@ def is_command_safe(command: str) -> bool:
 
 
 def execute_command(command: str) -> tuple[bool, str]:
-    """执行命令并返回结果
+    """
+    执行命令并返回结果
 
     尝试执行命令：
     返回 (True, 命令标准输出) 或 (False, 错误信息)。
@@ -33,18 +35,20 @@ def execute_command(command: str) -> tuple[bool, str]:
             timeout=600,
             check=False,
         )
-        if result.returncode != 0:
-            return False, result.stderr
-        return True, result.stdout
-    except Exception as e:
+        success = result.returncode == 0
+        output = result.stdout if success else result.stderr
+    except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
         return False, str(e)
+    else:
+        return success, output
 
 
 async def process_command(command: str, llm_client: OpenAIClient) -> AsyncGenerator[tuple[str, bool], None]:
-    """处理用户输入的命令
+    """
+    处理用户输入的命令
 
     1. 检查 PATH 中是否存在用户输入的命令（取输入字符串的第一个单词）；
-    2. 若存在，则执行命令；若执行失败则将错误信息附带命令发送给大模型；
+    2. 若存在，则检查命令安全性，安全时执行命令；若执行失败则将错误信息附带命令发送给大模型；
     3. 若不存在，则直接将命令内容发送给大模型生成建议。
 
     返回一个元组 (content, is_llm_output)，其中：
@@ -58,6 +62,11 @@ async def process_command(command: str, llm_client: OpenAIClient) -> AsyncGenera
 
     prog = tokens[0]
     if shutil.which(prog) is not None:
+        # 检查命令安全性
+        if not is_command_safe(command):
+            yield ("检测到不安全命令，已阻止执行。", True)  # 作为LLM输出处理
+            return
+
         success, output = execute_command(command)
         if success:
             yield (output, False)  # 系统命令输出，使用纯文本

@@ -1,4 +1,5 @@
-"""setup.py
+"""
+setup.py
 
 This is a setup script for the eulercopilot package.
 """

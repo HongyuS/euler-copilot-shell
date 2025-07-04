@@ -1,23 +1,27 @@
 """基于 Textual 的 TUI 应用"""
 
+from __future__ import annotations
+
 import asyncio
-from typing import ClassVar, Optional, Union
+from typing import TYPE_CHECKING, ClassVar
 
 from rich.markdown import Markdown as RichMarkdown
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Container, Horizontal
-from textual.events import Key as KeyEvent
-from textual.events import Mount
 from textual.screen import ModalScreen
-from textual.visual import VisualType
 from textual.widgets import Button, Footer, Header, Input, Label, Static
 
 from app.settings import SettingsScreen
 from backend.openai import OpenAIClient
 from config import ConfigManager
 from tool.command_processor import process_command
+
+if TYPE_CHECKING:
+    from textual.events import Key as KeyEvent
+    from textual.events import Mount
+    from textual.visual import VisualType
 
 
 class FocusableContainer(Container):
@@ -249,7 +253,7 @@ class EulerCopilot(App):
             task.result()
         except asyncio.CancelledError:
             pass
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             self.log.error("Command processing error: %s", e)  # noqa: TRY400
         finally:
             # 确保处理标志被重置
@@ -258,7 +262,7 @@ class EulerCopilot(App):
     async def _process_command(self, user_input: str) -> None:
         """异步处理命令"""
         try:
-            current_line: Optional[Union[OutputLine, MarkdownOutputLine]] = None
+            current_line: OutputLine | MarkdownOutputLine | None = None
             current_content = ""  # 用于累积内容
             output_container = self.query_one("#output-container", Container)
             is_first_content = True  # 标记是否是第一段内容
@@ -305,7 +309,7 @@ class EulerCopilot(App):
                 # 滚动到底部
                 await self._scroll_to_end()
 
-        except Exception as e:
+        except (asyncio.CancelledError, OSError, ValueError) as e:
             # 添加异常处理，显示错误信息
             output_container = self.query_one("#output-container", Container)
             output_container.mount(OutputLine(f"处理命令时出错: {e!s}", command=False))

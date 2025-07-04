@@ -124,7 +124,7 @@ class SettingsScreen(Screen):
             # 更新模型按钮文本
             model_btn = self.query_one("#model-btn", Button)
             model_btn.label = self.selected_model
-        except Exception:
+        except (OSError, ValueError, RuntimeError):
             model_btn = self.query_one("#model-btn", Button)
             model_btn.label = "暂无可用模型"
 
@@ -200,7 +200,7 @@ class SettingsScreen(Screen):
             # 更新按钮文本
             model_btn = self.query_one("#model-btn", Button)
             model_btn.label = self.selected_model
-        except Exception:
+        except (IndexError, ValueError):
             # 处理任何可能的异常
             self.selected_model = self.models[0] if self.models else "默认模型"
             model_btn = self.query_one("#model-btn", Button)

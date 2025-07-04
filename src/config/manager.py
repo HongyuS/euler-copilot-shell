@@ -7,7 +7,8 @@ from config.model import Backend, ConfigModel
 
 
 class ConfigManager:
-    """配置管理器
+    """
+    配置管理器
 
     负责管理与持久化储存 base_url、模型及 api_key
     """

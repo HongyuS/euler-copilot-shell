@@ -7,7 +7,8 @@ from openai import AsyncOpenAI
 
 
 def validate_url(url: str) -> bool:
-    """校验 URL 是否合法
+    """
+    校验 URL 是否合法
 
     校验 URL 是否以 http:// 或 https:// 开头。
     """
@@ -29,7 +30,8 @@ class OpenAIClient:
         )
 
     async def get_llm_response(self, prompt: str) -> AsyncGenerator[str, None]:
-        """生成命令建议
+        """
+        生成命令建议
 
         异步调用 OpenAI 或兼容接口的大模型生成命令建议，支持流式输出。
         请确保已安装 openai 库（pip install openai）。
@@ -45,7 +47,8 @@ class OpenAIClient:
                 yield content
 
     async def get_available_models(self) -> list[str]:
-        """获取当前 LLM 服务中可用的模型，返回名称列表
+        """
+        获取当前 LLM 服务中可用的模型，返回名称列表
 
         调用 LLM 服务的模型列表接口，并解析返回结果提取模型名称。
         """
