@@ -1,0 +1,158 @@
+#!/bin/bash
+# 颜色定义
+COLOR_INFO='\033[34m'    # 蓝色信息
+COLOR_SUCCESS='\033[32m' # 绿色成功
+COLOR_ERROR='\033[31m'   # 红色错误
+COLOR_WARNING='\033[33m' # 黄色警告
+COLOR_RESET='\033[0m'    # 重置颜色
+declare -a uninstalled_pkgs=()
+uninstall_success=true
+missing_pkgs=()
+pkgs=(
+  "nginx"
+  "redis"
+  "mysql"
+  "java-17-openjdk"
+  "postgresql"
+  "libpq-devel"
+)
+
+# 清理函数（在中断或退出时调用）
+cleanup() {
+  echo -e "${COLOR_ERROR}[Error] 检测到中断，停止执行${COLOR_RESET}"
+  return 1
+}
+
+uninstall_dependency() {
+  # 捕获中断信号(Ctrl+C)和错误
+  trap cleanup INT TERM ERR
+
+  # 检查并卸载每个包
+  for pkg in "${pkgs[@]}"; do
+    if rpm -q "$pkg" >/dev/null 2>&1; then
+      echo -e "${COLOR_INFO}[Info] 正在卸载 $pkg...${COLOR_RESET}"
+      if [ "$pkg" = "nginx" ]; then
+        dnf remove -y nginx >/dev/null 2>&1
+      elif dnf remove -y "$pkg" >/dev/null 2>&1; then
+        uninstalled_pkgs+=("$pkg")
+      else
+        echo -e "${COLOR_ERROR}[Error] 卸载 $pkg 失败！${COLOR_RESET}"
+        uninstall_success=false
+        missing_pkgs+=("$pkg")
+        cleanup
+      fi
+    else
+      echo -e "${COLOR_INFO}[Info] $pkg 未安装，跳过...${COLOR_RESET}"
+    fi
+
+  done
+  # 取消捕获
+  trap - INT TERM ERR
+  # 检查安装结果
+  if $uninstall_success; then
+    echo -e "${COLOR_INFO}[Info] 所有包卸载成功！${COLOR_RESET}"
+  else
+    echo -e "${COLOR_ERROR}[Error] 以下包卸载失败: ${missing_pkgs[*]}${COLOR_RESET}"
+    return 1
+  fi
+}
+
+delete_dir() {
+  # 基础目录和子目录定义
+  local BASE_PWD="/opt"
+  local dirs=(
+    "aops"
+    "authhub"
+    "copilot"
+    "minio"
+    "mongodb"
+    "pgvector"
+    "scws*"
+    "tika"
+    "zhparser"
+  )
+
+  # 状态跟踪
+  local delete_success=true
+  local deleted_dirs=()
+  local failed_dirs=()
+  local skipped_dirs=()
+
+  # 日志文件
+  local LOG_FILE="/var/log/deletion_$(date +%Y%m%d).log"
+  echo "[$(date +'%Y-%m-%d %H:%M:%S')] 开始目录清理操作" >>"$LOG_FILE"
+
+  # 检查root权限
+  if [[ $EUID -ne 0 ]]; then
+    echo -e "${COLOR_ERROR}[Error] 需要root权限执行此操作${COLOR_RESET}" | tee -a "$LOG_FILE"
+    return 1
+  fi
+
+  # 显示将要删除的目录
+  echo -e "${COLOR_WARNING}[Warning] 即将删除以下目录：${COLOR_RESET}" | tee -a "$LOG_FILE"
+  for dir in "${dirs[@]}"; do
+    echo "  $BASE_PWD/$dir" | tee -a "$LOG_FILE"
+  done
+
+  # 捕获中断信号
+  trap 'echo -e "${COLOR_ERROR}[Error] 操作被中断！${COLOR_RESET}" | tee -a "$LOG_FILE"; exit 1' INT TERM
+
+  # 执行删除
+  for dir in "${dirs[@]}"; do
+    local target="$BASE_PWD/$dir"
+
+    # 检查目录是否存在
+    if ls -d $target &>/dev/null; then
+      echo -e "${COLOR_INFO}[Info] 正在删除: $target${COLOR_RESET}" | tee -a "$LOG_FILE"
+
+      # 实际删除操作
+      if rm -rf $target; then
+        deleted_dirs+=("$target")
+        echo -e "${COLOR_INFO}[Info] 成功删除: $target${COLOR_RESET}" | tee -a "$LOG_FILE"
+      else
+        failed_dirs+=("$target")
+        delete_success=false
+        echo -e "${COLOR_ERROR}[Error] 删除失败: $target${COLOR_RESET}" | tee -a "$LOG_FILE"
+      fi
+    else
+      skipped_dirs+=("$target")
+      echo -e "${COLOR_INFO}[Info] 目录不存在，跳过: $target${COLOR_RESET}" | tee -a "$LOG_FILE"
+    fi
+  done
+
+  # 取消信号捕获
+  trap - INT TERM
+
+  if $delete_success; then
+    echo -e "${COLOR_INFO}[Info] 目录清理完成！${COLOR_RESET}" | tee -a "$LOG_FILE"
+  else
+    echo -e "${COLOR_ERROR}[Error] 目录清理未完全成功！${COLOR_RESET}" | tee -a "$LOG_FILE"
+    echo -e "${COLOR_ERROR}[Error] 失败的目录: ${failed_dirs[*]}${COLOR_RESET}" | tee -a "$LOG_FILE"
+    return 1
+  fi
+}
+delete_data() {
+  echo -e "${COLOR_INFO}[Info] 清理数据库遗留数据！${COLOR_RESET}"
+  rm -rf /var/lib/mysql
+  rm -rf /var/log/mysql
+  rm -rf /var/lib/pgsql
+  echo -e "${SUCCESS}[Success] 清理数据库遗留数据 完成！${COLOR_RESET}"
+}
+
+# 主执行函数
+main() {
+  echo -e "${COLOR_INFO}[Info] === 开始卸载依赖===${COLOR_RESET}"
+
+  # 执行安装验证
+  if uninstall_dependency; then
+    delete_dir
+    delete_data
+    echo -e "${COLOR_SUCCESS}[Success] 卸载依赖完成！${COLOR_RESET}"
+    return 0
+  else
+    echo -e "${COLOR_ERROR}[Error] 卸载依赖失败！${COLOR_RESET}"
+    return 1
+  fi
+}
+
+main
