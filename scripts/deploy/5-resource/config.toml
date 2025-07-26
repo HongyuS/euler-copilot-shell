@@ -1,0 +1,66 @@
+[deploy]
+mode = 'local'
+cookie = 'domain'
+data_dir = '/opt/copilot'
+
+[login]
+provider = 'authhub'
+[login.settings]
+host = 'http://76.53.17.51:8000'
+host_inner = 'http://127.0.0.1:11120'
+login_api = 'http://76.53.17.51:8080/api/auth/login'
+app_id = 'ZqMwXAjOAV0GhiTghERAahuR'
+app_secret = 'g6QliWAQ89aQJ6qHtKiMuqJubxF28Juw7IGF46GRjb9Ap2g0'
+
+[fastapi]
+domain = '76.53.17.51'
+
+[security]
+half_key1 = 'jtbDsFPxCv1cjXCKwzWU'
+half_key2 = 'sEEdztCiw2szN4EtmNR6'
+half_key3 = 'NXcp2KUqYjezctZDDasc'
+jwt_key = 'MF0DXTp0N9Ky9rscrwHz'
+
+[embedding]
+type = 'openai'
+endpoint = 'http://10.50.88.44:11434/v1'
+api_key = 'sk-123456'
+model = 'bge-m3'
+
+[rag]
+rag_service = 'http://127.0.0.1:9988'
+
+[mongodb]
+host = '127.0.0.1'
+port = 27017
+user = 'euler_copilot'
+password = 'YqzzpxJtF5tMAMCrHWw6'
+database = 'euler_copilot'
+
+[minio]
+endpoint = '127.0.0.1:9000'
+access_key = 'minioadmin'
+secret_key = 'ZVzc6xJr3B7HsEUibVBh'
+secure = false
+
+[llm]
+endpoint = "http://10.50.88.44:11434/v1"
+key = 'sk-123456'
+model = 'deepseek-llm-7b-chat'
+max_tokens = 8192
+temperature = 0.7
+
+[function_call]
+backend = 'ollama'
+endpoint = 'http://10.50.88.44:11434'
+model = 'deepseek-llm-7b-chat'
+api_key = 'sk-123456'
+max_tokens = 8192
+temperature = 0.7
+
+[check]
+enable = false
+words_list = ""
+
+[extra]
+sql_url = ''
