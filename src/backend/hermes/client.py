@@ -1,0 +1,417 @@
+"""Hermes Chat API 客户端"""
+
+from __future__ import annotations
+
+import json
+import re
+from typing import TYPE_CHECKING, Any
+from urllib.parse import urljoin
+
+import httpx
+from typing_extensions import Self
+
+from backend.base import LLMClientBase
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+    from types import TracebackType
+
+# HTTP 状态码常量
+HTTP_OK = 200
+
+
+class HermesAPIError(Exception):
+    """Hermes API 错误异常"""
+
+    def __init__(self, status_code: int, message: str) -> None:
+        """初始化 Hermes API 错误异常"""
+        self.status_code = status_code
+        self.message = message
+        super().__init__(f"HTTP {status_code}: {message}")
+
+
+def validate_url(url: str) -> bool:
+    """
+    校验 URL 是否合法
+
+    校验 URL 是否以 http:// 或 https:// 开头。
+    """
+    return re.match(r"^https?://", url) is not None
+
+
+class HermesMessage:
+    """Hermes 消息类"""
+
+    def __init__(self, role: str, content: str) -> None:
+        """初始化 Hermes 消息"""
+        self.role = role
+        self.content = content
+
+    def to_dict(self) -> dict[str, str]:
+        """转换为字典格式"""
+        return {"role": self.role, "content": self.content}
+
+
+class HermesFeatures:
+    """Hermes 功能特性配置"""
+
+    def __init__(self, max_tokens: int = 2048, context_num: int = 2) -> None:
+        """初始化功能特性配置"""
+        self.max_tokens = max_tokens
+        self.context_num = context_num
+
+    def to_dict(self) -> dict[str, int]:
+        """转换为字典格式"""
+        return {
+            "max_tokens": self.max_tokens,
+            "context_num": self.context_num,
+        }
+
+
+class HermesApp:
+    """Hermes 应用配置"""
+
+    def __init__(self, app_id: str, flow_id: str = "") -> None:
+        """初始化应用配置"""
+        self.app_id = app_id
+        self.flow_id = flow_id
+
+    def to_dict(self) -> dict[str, Any]:
+        """转换为字典格式"""
+        return {
+            "appId": self.app_id,
+            "auth": {},
+            "flowId": self.flow_id,
+            "params": {},
+        }
+
+
+class HermesChatRequest:
+    """Hermes Chat 请求类"""
+
+    def __init__(
+        self,
+        app: HermesApp,
+        conversation_id: str,
+        question: str,
+        features: HermesFeatures | None = None,
+        language: str = "zh_cn",
+    ) -> None:
+        """初始化 Hermes Chat 请求"""
+        self.app = app
+        self.conversation_id = conversation_id
+        self.question = question
+        self.features = features or HermesFeatures()
+        self.language = language
+
+    def to_dict(self) -> dict[str, Any]:
+        """转换为请求字典格式"""
+        return {
+            "app": self.app.to_dict(),
+            "conversationId": self.conversation_id,
+            "features": self.features.to_dict(),
+            "language": self.language,
+            "question": self.question,
+        }
+
+
+class HermesStreamEvent:
+    """Hermes 流事件类"""
+
+    def __init__(self, event_type: str, data: dict[str, Any]) -> None:
+        """初始化流事件"""
+        self.event_type = event_type
+        self.data = data
+
+    @classmethod
+    def from_line(cls, line: str) -> HermesStreamEvent | None:
+        """从 SSE 行解析事件"""
+        line = line.strip()
+        if not line.startswith("data: "):
+            return None
+
+        data_str = line[6:]  # 去掉 "data: " 前缀
+
+        if data_str == "[DONE]":
+            return cls("done", {})
+
+        if data_str == '{"event": "heartbeat"}':
+            return cls("heartbeat", {})
+
+        try:
+            data = json.loads(data_str)
+            event_type = data.get("event", "unknown")
+            return cls(event_type, data)
+        except json.JSONDecodeError:
+            return None
+
+    def get_text_content(self) -> str | None:
+        """获取文本内容"""
+        if self.event_type == "text.add":
+            return self.data.get("content", {}).get("text", "")
+        if self.event_type == "step.output":
+            content = self.data.get("content", {})
+            if "text" in content:
+                return content["text"]
+        return None
+
+
+class HermesChatClient(LLMClientBase):
+    """Hermes Chat API 客户端"""
+
+    def __init__(self, base_url: str, auth_token: str = "") -> None:
+        """初始化 Hermes Chat API 客户端"""
+        if not validate_url(base_url):
+            msg = "无效的 API URL，请确保 URL 以 http:// 或 https:// 开头。"
+            raise ValueError(msg)
+
+        self.base_url = base_url.rstrip("/")
+        self.auth_token = auth_token
+        self.client: httpx.AsyncClient | None = None
+        self._conversation_id: str | None = None  # 存储会话 ID
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        """获取或创建 HTTP 客户端"""
+        if self.client is None or self.client.is_closed:
+            headers = {
+                "Accept": "text/event-stream",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "keep-alive",
+                "Content-Type": "application/json; charset=UTF-8",
+            }
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+
+            self.client = httpx.AsyncClient(headers=headers, timeout=30.0)
+        return self.client
+
+    async def _create_conversation(self, llm_id: str = "") -> str:
+        """
+        创建新的会话并返回 conversationId
+
+        Args:
+            llm_id: 指定的 LLM ID，留空则使用默认模型
+
+        Returns:
+            str: 创建的会话 ID
+
+        Raises:
+            HermesAPIError: 当 API 调用失败时
+
+        """
+        client = await self._get_client()
+        conversation_url = urljoin(self.base_url, "/api/conversation")
+
+        # 构建请求参数
+        params = {}
+        if llm_id:
+            params["llm_id"] = llm_id
+
+        headers = {}
+        if self.auth_token:
+            headers["Authorization"] = f"Bearer {self.auth_token}"
+
+        try:
+            response = await client.post(
+                conversation_url,
+                params=params,
+                json={},  # 空的 JSON 体
+                headers=headers,
+            )
+        except httpx.RequestError as e:
+            raise HermesAPIError(500, f"Failed to create conversation: {e!s}") from e
+
+        if response.status_code != HTTP_OK:
+            error_text = await response.aread()
+            raise HermesAPIError(response.status_code, error_text.decode("utf-8"))
+
+        try:
+            data = response.json()
+        except json.JSONDecodeError as e:
+            raise HermesAPIError(500, "Invalid JSON response") from e
+
+        # 检查响应格式
+        if not isinstance(data, dict) or "result" not in data:
+            raise HermesAPIError(500, "Invalid API response format")
+
+        result = data["result"]
+        if not isinstance(result, dict) or "conversationId" not in result:
+            raise HermesAPIError(500, "Missing conversationId in response")
+
+        conversation_id = result["conversationId"]
+        if not conversation_id:
+            raise HermesAPIError(500, "Empty conversationId received")
+
+        return conversation_id
+
+    async def _ensure_conversation(self, llm_id: str = "") -> str:
+        """
+        确保有可用的会话 ID，如果没有则创建新会话
+
+        Args:
+            llm_id: 指定的 LLM ID
+
+        Returns:
+            str: 可用的会话 ID
+
+        """
+        if self._conversation_id is None:
+            self._conversation_id = await self._create_conversation(llm_id)
+        return self._conversation_id
+
+    def reset_conversation(self) -> None:
+        """重置会话，下次聊天时会创建新的会话"""
+        self._conversation_id = None
+
+    async def _chat_stream(
+        self,
+        request: HermesChatRequest,
+    ) -> AsyncGenerator[str, None]:
+        """
+        发送聊天请求并返回流式响应
+
+        Args:
+            request: Hermes 聊天请求对象
+
+        Yields:
+            str: 流式响应的文本内容
+
+        Raises:
+            HermesAPIError: 当 API 调用失败时
+
+        """
+        client = await self._get_client()
+        chat_url = urljoin(self.base_url, "/api/chat")
+
+        headers = {}
+        if self.auth_token:
+            headers["Authorization"] = f"Bearer {self.auth_token}"
+
+        try:
+            async with client.stream(
+                "POST",
+                chat_url,
+                json=request.to_dict(),
+                headers=headers,
+            ) as response:
+                if response.status_code != HTTP_OK:
+                    error_text = await response.aread()
+                    raise HermesAPIError(response.status_code, error_text.decode("utf-8"))
+
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+
+                    event = HermesStreamEvent.from_line(line)
+                    if event is None:
+                        continue
+
+                    # 处理完成事件
+                    if event.event_type == "done":
+                        break
+
+                    # 获取文本内容
+                    text_content = event.get_text_content()
+                    if text_content:
+                        yield text_content
+
+        except httpx.RequestError as e:
+            raise HermesAPIError(500, f"Network error: {e!s}") from e
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            raise HermesAPIError(500, f"Data parsing error: {e!s}") from e
+
+    async def get_llm_response(self, prompt: str) -> AsyncGenerator[str, None]:
+        """
+        生成命令建议
+
+        为了兼容现有的 OpenAI 客户端接口，提供简化的聊天接口。
+
+        Args:
+            prompt: 用户输入的提示语
+
+        Yields:
+            str: 流式响应的文本内容
+
+        Raises:
+            HermesAPIError: 当 API 调用失败时
+
+        """
+        # 确保有会话 ID
+        conversation_id = await self._ensure_conversation()
+
+        # 创建聊天请求
+        app = HermesApp("default-app")
+        request = HermesChatRequest(
+            app=app,
+            conversation_id=conversation_id,
+            question=prompt,
+            features=HermesFeatures(),
+            language="zh_cn",
+        )
+
+        # 直接传递异常，不在这里处理
+        async for text in self._chat_stream(request):
+            yield text
+
+    async def get_available_models(self) -> list[str]:
+        """
+        获取当前 LLM 服务中可用的模型，返回名称列表
+
+        通过调用 /api/llm 接口获取可用的大模型列表。
+        如果调用失败或没有返回，使用空列表，后端接口会自动使用默认模型。
+        """
+        try:
+            client = await self._get_client()
+            llm_url = urljoin(self.base_url, "/api/llm")
+
+            headers = {}
+            headers["Authorization"] = f"Bearer {self.auth_token}"
+            response = await client.get(llm_url, headers=headers)
+
+            if response.status_code != HTTP_OK:
+                # 如果接口调用失败，返回空列表
+                return []
+
+            data = response.json()
+
+            # 检查响应格式
+            if not isinstance(data, dict) or "result" not in data:
+                return []
+
+            result = data["result"]
+            if not isinstance(result, list):
+                return []
+
+            # 提取模型名称
+            models = []
+            for llm_info in result:
+                if isinstance(llm_info, dict):
+                    # 优先使用 modelName，如果没有则使用 llmId
+                    model_name = llm_info.get("modelName") or llm_info.get("llmId")
+                    if model_name:
+                        models.append(model_name)
+
+        except (httpx.HTTPError, httpx.InvalidURL, json.JSONDecodeError, KeyError, ValueError):
+            # 如果发生网络错误、JSON解析错误或其他预期错误，返回空列表
+            return []
+
+        else:
+            return models
+
+    async def close(self) -> None:
+        """关闭 HTTP 客户端"""
+        if self.client and not self.client.is_closed:
+            await self.client.aclose()
+
+    async def __aenter__(self) -> Self:
+        """异步上下文管理器入口"""
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        """异步上下文管理器出口"""
+        await self.close()

@@ -19,7 +19,7 @@ BuildRequires:  python3-pip
 Requires:       glibc
 
 %description
-EulerCopilot 智能 Shell 是一个智能命令行程序。
+openEuler Intelligence 智能 Shell 是一个智能命令行程序。
 它允许用户输入命令，通过集成大语言模型提供命令建议，帮助用户更高效地使用命令行。
 
 %prep

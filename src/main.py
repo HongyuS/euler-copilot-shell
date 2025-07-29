@@ -2,12 +2,12 @@
 
 import sys
 
-from app.tui import EulerCopilot
+from app.tui import Hermes
 
 
 def main() -> None:
     """主函数"""
-    app = EulerCopilot()
+    app = Hermes()
     app.run()
 
 

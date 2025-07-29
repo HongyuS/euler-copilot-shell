@@ -4,7 +4,7 @@ import shutil
 import subprocess
 from collections.abc import AsyncGenerator
 
-from backend.openai import OpenAIClient
+from backend.base import LLMClientBase
 
 # 定义危险命令黑名单
 BLACKLIST = ["rm", "sudo", "shutdown", "reboot", "mkfs"]
@@ -43,7 +43,7 @@ def execute_command(command: str) -> tuple[bool, str]:
         return success, output
 
 
-async def process_command(command: str, llm_client: OpenAIClient) -> AsyncGenerator[tuple[str, bool], None]:
+async def process_command(command: str, llm_client: LLMClientBase) -> AsyncGenerator[tuple[str, bool], None]:
     """
     处理用户输入的命令
 

@@ -17,7 +17,8 @@ setup(
     package_dir={"": "src"},
     include_package_data=True,
     install_requires=[
-        "openai>=1.61.0",
+        "httpx>=0.28.0",
+        "openai>=1.93.0",
         "rich>=14.0.0",
         "textual>=3.0.0",
     ],
