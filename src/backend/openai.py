@@ -5,6 +5,8 @@ from collections.abc import AsyncGenerator
 
 from openai import AsyncOpenAI
 
+from backend.base import LLMClientBase
+
 
 def validate_url(url: str) -> bool:
     """
@@ -15,7 +17,7 @@ def validate_url(url: str) -> bool:
     return re.match(r"^https?://", url) is not None
 
 
-class OpenAIClient:
+class OpenAIClient(LLMClientBase):
     """OpenAI 大模型客户端"""
 
     def __init__(self, base_url: str, model: str, api_key: str = "") -> None:
@@ -54,3 +56,7 @@ class OpenAIClient:
         """
         models_response = await self.client.models.list()
         return [model.id async for model in models_response]
+
+    async def close(self) -> None:
+        """关闭 OpenAI 客户端"""
+        await self.client.close()

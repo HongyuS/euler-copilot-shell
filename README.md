@@ -1,4 +1,4 @@
-# EulerCopilot Shell
+# openEuler Intelligence Smart Shell
 
 这是一个基于 Python Textual 库开发的 TUI（文本用户界面）应用程序。它允许用户输入命令，验证并执行这些命令。如果命令无法执行，应用程序会与大型语言模型交互，生成建议或纠正方案。
 
@@ -68,7 +68,7 @@ python src/main.py
 
 您可以通过应用内的设置界面（按 Ctrl+S）配置以下选项:
 
-- 后端类型: OpenAI 或 EulerCopilot
+- 后端类型: OpenAI 或 Hermes
 - API 基础 URL
 - API 密钥
 - 模型选择（OpenAI 后端）

@@ -8,7 +8,7 @@ from textual.containers import Container, Horizontal
 from textual.screen import Screen
 from textual.widgets import Button, Input, Label, Static
 
-from backend.openai import OpenAIClient
+from backend.base import LLMClientBase
 from config import Backend, ConfigManager
 
 
@@ -17,7 +17,7 @@ class SettingsScreen(Screen):
 
     CSS_PATH = "css/styles.tcss"
 
-    def __init__(self, config_manager: ConfigManager, llm_client: OpenAIClient) -> None:
+    def __init__(self, config_manager: ConfigManager, llm_client: LLMClientBase) -> None:
         """初始化设置页面"""
         super().__init__()
         self.config_manager = config_manager

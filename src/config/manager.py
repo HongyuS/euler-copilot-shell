@@ -57,20 +57,20 @@ class ConfigManager:
         self._save_settings()
 
     def get_eulercopilot_url(self) -> str:
-        """获取当前 EulerCopilot base_url"""
+        """获取当前 Hermes base_url"""
         return self.data.eulercopilot.base_url
 
     def set_eulercopilot_url(self, url: str) -> None:
-        """更新 EulerCopilot base_url 并保存"""
+        """更新 Hermes base_url 并保存"""
         self.data.eulercopilot.base_url = url
         self._save_settings()
 
     def get_eulercopilot_key(self) -> str:
-        """获取当前 EulerCopilot api_key"""
+        """获取当前 Hermes api_key"""
         return self.data.eulercopilot.api_key
 
     def set_eulercopilot_key(self, key: str) -> None:
-        """更新 EulerCopilot api_key 并保存"""
+        """更新 Hermes api_key 并保存"""
         self.data.eulercopilot.api_key = key
         self._save_settings()
 
@@ -95,6 +95,6 @@ if __name__ == "__main__":
     manager = ConfigManager()
     print("当前设置:", manager.data.to_dict())  # noqa: T201
     manager.set_base_url("http://127.0.0.1:1234/v1")
-    manager.set_model("qwen2.5-14b-instruct-1m")
+    manager.set_model("qwen/qwen3-30b-a3b")
     manager.set_api_key("lm-studio")
     print("修改后的设置:", manager.data.to_dict())  # noqa: T201

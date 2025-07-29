@@ -14,7 +14,8 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Header, Input, Label, Static
 
 from app.settings import SettingsScreen
-from backend.openai import OpenAIClient
+from backend.base import LLMClientBase
+from backend.factory import BackendFactory
 from config import ConfigManager
 from tool.command_processor import process_command
 
@@ -173,7 +174,7 @@ class ExitDialog(ModalScreen):
         self.app.exit()
 
 
-class EulerCopilot(App):
+class Hermes(App):
     """基于 Textual 的智能终端应用"""
 
     CSS_PATH = "css/styles.tcss"
@@ -327,13 +328,9 @@ class EulerCopilot(App):
         # 等待一个小的延迟，确保UI有时间更新
         await asyncio.sleep(0.01)
 
-    def _get_llm_client(self) -> OpenAIClient:
+    def _get_llm_client(self) -> LLMClientBase:
         """获取大模型客户端"""
-        return OpenAIClient(
-            base_url=self.config_manager.get_base_url(),
-            model=self.config_manager.get_model(),
-            api_key=self.config_manager.get_api_key(),
-        )
+        return BackendFactory.create_client(self.config_manager)
 
     def action_toggle_focus(self) -> None:
         """在命令输入框和文本区域之间切换焦点"""

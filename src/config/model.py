@@ -34,14 +34,14 @@ class OpenAIConfig:
 
 
 @dataclass
-class EulerCopilotConfig:
-    """EulerCopilot 后端配置"""
+class HermesConfig:
+    """Hermes 后端配置"""
 
     base_url: str = field(default="https://www.eulercopilot.com")
     api_key: str = field(default="your-eulercopilot-api-key")
 
     @classmethod
-    def from_dict(cls, d: dict) -> "EulerCopilotConfig":
+    def from_dict(cls, d: dict) -> "HermesConfig":
         """从字典初始化配置"""
         return cls(
             base_url=d.get("base_url", cls.base_url),
@@ -59,21 +59,30 @@ class ConfigModel:
 
     backend: Backend = field(default=Backend.OPENAI)
     openai: OpenAIConfig = field(default_factory=OpenAIConfig)
-    eulercopilot: EulerCopilotConfig = field(default_factory=EulerCopilotConfig)
+    eulercopilot: HermesConfig = field(default_factory=HermesConfig)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ConfigModel":
         """从字典初始化配置模型"""
+        backend_value = d.get("backend", Backend.OPENAI)
+        # 确保 backend 始终是 Backend 枚举类型
+        if isinstance(backend_value, Backend):
+            backend = backend_value
+        elif isinstance(backend_value, str):
+            backend = Backend(backend_value)
+        else:
+            backend = Backend.OPENAI
+
         return cls(
-            backend=d.get("backend", Backend.OPENAI),
+            backend=backend,
             openai=OpenAIConfig.from_dict(d.get("openai", {})),
-            eulercopilot=EulerCopilotConfig.from_dict(d.get("eulercopilot", {})),
+            eulercopilot=HermesConfig.from_dict(d.get("eulercopilot", {})),
         )
 
     def to_dict(self) -> dict:
         """转换为字典"""
         return {
-            "backend": self.backend,
+            "backend": self.backend.value,  # 保存枚举的值
             "openai": self.openai.to_dict(),
             "eulercopilot": self.eulercopilot.to_dict(),
         }
