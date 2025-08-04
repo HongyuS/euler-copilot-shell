@@ -49,7 +49,15 @@ uninstall_tika() {
     return 1
   fi
 }
-
+is_x86_architecture() {
+    local arch
+    arch=$(uname -m)
+    if [[ $arch == i386 || $arch == i686 || $arch == x86_64 ]]; then
+        return 0  # 是 x86 架构，返回 0（成功）
+    else
+        return 1  # 非 x86 架构，返回 1（失败）
+    fi
+}
 uninstall_server() {
   uninstall_tika
 
@@ -70,6 +78,21 @@ uninstall_server() {
         flag=1
       elif [[ "$pkg" = "euler-copilot-web" || "$pkg" = "euler-copilot-witchaind-web" || "$pkg" = "euler-copilot-rag" ]]; then
         : # 什么都不做
+      elif [ "$pkg" = "minio"  ];then
+        if is_x86_architecture;then
+          dnf remove -y "$pkg" >/dev/null 2>&1
+        else
+          systemctl stop minio >/dev/null 2>&1
+          rm -rf /etc/systemd/system/minio.service
+          rm -rf /etc/default/minio
+          rm -rf /var/lib/minio
+          rm -rf /etc/systemd/system/minio.service
+          rm -rf /usr/local/bin/minio
+          systemctl daemon-reload || {
+            echo -e "${COLOR_WARNING}[Warning] 卸载 $pkg 重载systemd失败${COLOR_RESET}"
+          }
+
+        fi
       elif [ "$pkg" = "euler-copilot-framework" ]; then
         systemctl stop framework
       else

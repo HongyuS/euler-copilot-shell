@@ -5,45 +5,24 @@ COLOR_SUCCESS='\033[32m' # 绿色成功
 COLOR_ERROR='\033[31m'   # 红色错误
 COLOR_WARNING='\033[33m' # 黄色警告
 COLOR_RESET='\033[0m'    # 重置颜色
-
+INSTALL_MODEL_FILE="/etc/euler_Intelligence_install_model"
 # 全局模式标记
 OFFLINE_MODE=false
 
-# 需要检查的软件包列表
-PACKAGES=(
-  "euler-copilot-web"
-  "euler-copilot-witchaind-web"
-  "authHub"
-  "authhub-web"
-  "euler-copilot-rag"
-  "euler-copilot-framework"
-  "nginx"
-  "redis"
-  "mysql"
-  "mysql-server"
-  "java-17-openjdk"
-  "postgresql-server"
-  "postgresql-server-devel"
-  "postgresql"
-  "libpq-devel"
-  "git"
-  "make"
-  "gcc"
-  "gcc-c++"
-  "clang"
-  "llvm"
-  "tar"
-  "python3-pip"
-)
+is_x86_architecture() {
+  # 获取系统架构信息（使用 uname -m 或 arch 命令）
+  local arch
+  arch=$(uname -m) # 多数系统支持，返回架构名称（如 x86_64、i686、aarch64 等）
+  # 备选：arch 命令，输出与 uname -m 类似
+  # arch=$(arch)
 
-#需要检测wget是否可达
-wget_urls=(
-  "https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20250524170830.0.0-1.x86_64.rpm"
-  "https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.x86_64.rpm"
-  "https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/x86_64/RPMS/mongodb-org-server-7.0.21-1.el9.x86_64.rpm"
-  "https://github.com/pgvector/pgvector.git"
-  "https://github.com/amutu/zhparser.git"
-)
+  # x86 架构的常见标识：i386、i686（32位），x86_64（64位）
+  if [[ $arch == i386 || $arch == i686 || $arch == x86_64 ]]; then
+    return 0 # 是 x86 架构，返回 0（成功）
+  else
+    return 1 # 非 x86 架构，返回 1（失败）
+  fi
+}
 # 安装wget工具
 install_wget() {
   echo -e "${COLOR_INFO}[INFO] 正在尝试安装wget...${COLOR_RESET}"
@@ -72,15 +51,56 @@ install_wget() {
   fi
 }
 
+# 基础URL列表（无论RAG是否启用都需要检测）
+base_urls_x86=(
+  "https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20250524170830.0.0-1.x86_64.rpm"
+  "https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.x86_64.rpm"
+  "https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/x86_64/RPMS/mongodb-org-server-7.0.21-1.el9.x86_64.rpm"
+)
+
+base_urls_arm=(
+  "https://dl.min.io/server/minio/release/linux-arm64/minio"
+  "https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/aarch64/RPMS/mongodb-org-server-7.0.21-1.el9.aarch64.rpm"
+  "https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.aarch64.rpm"
+)
+
+# RAG专用URL列表（仅当RAG启用时检测）
+rag_urls=(
+  "https://gitee.com/fromhsc/pgvector.git"
+  "https://gitee.com/fromhsc/zhparser.git"
+)
+
 # 检测URL可达性的函数
 check_url_accessibility() {
   # 首先检查wget是否安装
   if ! command -v wget &>/dev/null; then
     echo -e "${COLOR_WARNING}[WARN] wget未安装，尝试自动安装...${COLOR_RESET}"
     if ! install_wget; then
-      echo -e "${COLOR_FAILURE}[ERROR] URL检测中止：wget安装失败${COLOR_RESET}"
+      echo -e "${COLOR_ERROR}[ERROR] URL检测中止：wget安装失败${COLOR_RESET}"
       return 1
     fi
+  fi
+
+  # 读取RAG安装状态（依赖之前的read_install_model函数设置RAG_INSTALL变量）
+  if ! read_install_model; then
+    echo -e "${COLOR_WARNING}[WARN] 无法读取安装模式，默认按RAG未启用检测${COLOR_RESET}"
+    local RAG_INSTALL="n"
+  fi
+
+  # 根据架构和RAG状态组合最终需要检测的URL列表
+  local detect_urls=()
+  if is_x86_architecture; then
+    detect_urls+=("${base_urls_x86[@]}")
+  else
+    detect_urls+=("${base_urls_arm[@]}")
+  fi
+
+  # 如果启用RAG，添加RAG专用URL
+  if [ "$RAG_INSTALL" = "y" ]; then
+    detect_urls+=("${rag_urls[@]}")
+    echo -e "${COLOR_INFO} RAG组件已启用，将检测所有必要URL（共${#detect_urls[@]}个）${COLOR_RESET}"
+  else
+    echo -e "${COLOR_INFO} RAG组件未启用，仅检测基础URL（共${#detect_urls[@]}个）${COLOR_RESET}"
   fi
 
   local all_success=true
@@ -88,23 +108,24 @@ check_url_accessibility() {
   local temp_file=$(mktemp) # 创建临时文件
   local failed_urls=()      # 存储失败的URL
 
-  echo -e "${COLOR_INFO}[Info] 开始检测 ${#wget_urls[@]} 个URL的可达性...${COLOR_RESET}"
-  echo -e "${COLOR_INFO}      超时时间: ${timeout_seconds}秒${COLOR_RESET}"
+  echo -e "${COLOR_INFO}开始检测URL可达性...${COLOR_RESET}"
+  echo -e "${COLOR_INFO}超时时间: ${timeout_seconds}秒${COLOR_RESET}"
 
-  for url in "${wget_urls[@]}"; do
+  for url in "${detect_urls[@]}"; do
+    # 格式化输出，保持对齐
     printf "%-80s" "检测: $url"
 
-    # 使用timeout命令包裹wget，确保严格超时控制
+    # 使用timeout命令控制超时，--spider只检查URL是否存在不下载
     if timeout $timeout_seconds wget --spider --timeout=$timeout_seconds --tries=1 --no-check-certificate "$url" >"$temp_file" 2>&1; then
       echo -e "${COLOR_SUCCESS} [OK]${COLOR_RESET}"
     else
-      echo -e "${COLOR_FAILURE} [FAIL]${COLOR_RESET}"
+      echo -e "${COLOR_ERROR} [FAIL]${COLOR_RESET}"
 
-      # 判断是否是超时导致的失败
+      # 提取错误原因
       if grep -q "timed out" "$temp_file"; then
         error_msg="操作超时 (${timeout_seconds}秒)"
       else
-        error_msg=$(grep -i "error\|failed\|timeout" "$temp_file" | head -1)
+        error_msg=$(grep -i "error\|failed\|timeout" "$temp_file" | head -1 | cut -d' ' -f4- | sed 's/[[:cntrl:]]//g')
       fi
 
       echo -e "  ${COLOR_WARNING}原因: ${error_msg:-未知错误}${COLOR_RESET}"
@@ -113,12 +134,13 @@ check_url_accessibility() {
     fi
   done
 
-  rm -rf "$temp_file" # 删除临时文件
+  # 清理临时文件
+  rm -rf "$temp_file"
 
   # 结果汇总
-  echo -e "${COLOR_INFO}====== 检测结果 ======${COLOR_RESET}"
+  echo -e "\n${COLOR_INFO}====== 检测结果 ======${COLOR_RESET}"
   if $all_success; then
-    echo -e "${COLOR_SUCCESS}[Success] 所有URL均可访问${COLOR_RESET}"
+    echo -e "${COLOR_SUCCESS}[Success] 所有必要URL均可访问${COLOR_RESET}"
     return 0
   else
     echo -e "${COLOR_ERROR}[Error] ${#failed_urls[@]}个URL不可访问:${COLOR_RESET}"
@@ -130,8 +152,25 @@ check_url_accessibility() {
   fi
 }
 
-# 需要开放的端口列表
-PORTS=(8080 9888 8000 11120)
+# 全局变量：默认端口列表（未启用Web时）
+PORTS=(8002)
+
+# 读取安装模式并设置端口列表的函数
+init_ports_based_on_web() {
+  if ! read_install_model; then
+    echo -e "${COLOR_WARNING}[Warning] 无法读取安装模式，使用默认端口配置${COLOR_RESET}"
+    return 1
+  fi
+
+  # 根据Web组件状态更新全局PORTS变量
+  if [ "$WEB_INSTALL" = "y" ]; then
+    PORTS=(8080 9888 8000 11120)
+    echo -e "${COLOR_INFO} Web组件已启用，端口列表: ${PORTS[*]}${COLOR_RESET}"
+  else
+    PORTS=(8002)
+    echo -e "${COLOR_INFO} Web组件未启用，端口列表: ${PORTS[*]}${COLOR_RESET}"
+  fi
+}
 
 function check_user {
   if [[ $(id -u) -ne 0 ]]; then
@@ -219,14 +258,40 @@ check_package() {
     return 1
   fi
 }
-
+# 需要检查的软件包列表
+PACKAGES=(
+  "euler-copilot-web"
+  "euler-copilot-witchaind-web"
+  "authHub"
+  "authhub-web"
+  "euler-copilot-rag"
+  "euler-copilot-framework"
+  "nginx"
+  "redis"
+  "mysql"
+  "mysql-server"
+  "java-17-openjdk"
+  "postgresql-server"
+  "postgresql-server-devel"
+  "postgresql"
+  "libpq-devel"
+  "git"
+  "make"
+  "gcc"
+  "gcc-c++"
+  "clang"
+  "llvm"
+  "tar"
+  "python3-pip"
+)
+all_available=true
 # 检查所有软件包
 check_all_packages() {
-  local all_available=true
+  local PACKAGES=("$@")
+
   local timeout_seconds=30
   local start_time=$(date +%s)
 
-  echo -e "${COLOR_INFO}[Info]正在检查软件包可用性(超时:${timeout_seconds}s)...${COLOR_RESET}"
   echo -e "${COLOR_INFO}--------------------------------${COLOR_RESET}"
 
   for pkg in "${PACKAGES[@]}"; do
@@ -239,26 +304,57 @@ check_all_packages() {
       echo -e "${COLOR_INFO}--------------------------------${COLOR_RESET}"
       return 2
     fi
-
     if ! check_package "$pkg"; then
       all_available=false
     fi
     sleep 0.1 # 避免请求过快
   done
 
-  echo -e "--------------------------------"
-
-  if $all_available; then
-    echo -e "${COLOR_SUCCESS}[Success] 所有软件包都可用${COLOR_RESET}"
-    return 0
-  else
-    echo -e "${COLOR_ERROR}[Error] 部分软件包不可用${COLOR_RESET}"
-    echo -e "${COLOR_INFO}[Info] 提示：可以尝试以下命令更新仓库缓存：${COLOR_RESET}"
-    echo -e "${COLOR_INFO}[Info] sudo dnf clean all && sudo dnf makecache${COLOR_RESET}"
+}
+check_web_pkg() {
+  local pkgs=(
+    "nginx"
+    "redis"
+    "mysql"
+    "mysql-server"
+    "authHub"
+    "authhub-web"
+    "euler-copilot-web"
+    "euler-copilot-witchaind-web"
+  )
+  if ! check_all_packages "${pkgs[@]}"; then
     return 1
   fi
 }
-
+check_framework_pkg() {
+  local pkgs=(
+    "euler-copilot-framework"
+    "git"
+    "make"
+    "gcc"
+    "gcc-c++"
+    "tar"
+    "python3-pip"
+  )
+  if ! check_all_packages "${pkgs[@]}"; then
+    return 1
+  fi
+}
+check_rag_pkg() {
+  local pkgs=(
+    "euler-copilot-rag"
+    "clang"
+    "llvm"
+    "java-17-openjdk"
+    "postgresql"
+    "postgresql-server"
+    "postgresql-server-devel"
+    "libpq-devel"
+  )
+  if ! check_all_packages "${pkgs[@]}"; then
+    return 1
+  fi
+}
 function check_network {
   echo -e "${COLOR_INFO}[Info] 检查网络连接...${COLOR_RESET}"
 
@@ -335,6 +431,7 @@ function check_firewall {
 check_ports() {
   local occupied=()
   echo -e "${COLOR_INFO}正在检查端口占用情况...${COLOR_RESET}"
+  init_ports_based_on_web
 
   for port in "${PORTS[@]}"; do
     if ss -tuln | grep -q ":${port} "; then
@@ -380,6 +477,55 @@ setup_firewall() {
   echo -e "${COLOR_SUCCESS}[Success]重新加载防火墙规则成功${COLOR_RESET}"
   return 0
 }
+# 读取安装模式的方法
+read_install_model() {
+  # 检查文件是否存在
+  if [ ! -f "$INSTALL_MODEL_FILE" ]; then
+    echo "web_install=n" >"$INSTALL_MODEL_FILE"
+    echo "rag_install=n" >>"$INSTALL_MODEL_FILE"
+  fi
+
+  # 从文件读取配置（格式：key=value）
+  local web_install=$(grep "web_install=" "$INSTALL_MODEL_FILE" | cut -d'=' -f2)
+  local rag_install=$(grep "rag_install=" "$INSTALL_MODEL_FILE" | cut -d'=' -f2)
+
+  # 验证读取结果
+  if [ -z "$web_install" ] || [ -z "$rag_install" ]; then
+    echo -e "${COLOR_ERROR}[Error] 安装模式文件格式错误${COLOR_RESET}"
+    return 1
+  fi
+  # 将结果存入全局变量（供其他函数使用）
+  WEB_INSTALL=$web_install
+  RAG_INSTALL=$rag_install
+  return 0
+}
+# 示例：根据安装模式执行对应操作（可根据实际需求扩展）
+install_components() {
+  # 读取安装模式
+  read_install_model || return 1
+  echo -e "${COLOR_INFO}[Info] 检查软件包是否可用${COLOR_RESET}"
+  if [ "$WEB_INSTALL" = "y" ]; then
+    check_web_pkg
+  fi
+
+  if [ "$RAG_INSTALL" = "y" ]; then
+    # 此处添加RAG安装命令，示例：
+    check_rag_pkg
+  fi
+
+  check_framework_pkg
+  echo -e "--------------------------------"
+
+  if $all_available; then
+    echo -e "${COLOR_SUCCESS}[Success] 所有软件包都可用${COLOR_RESET}"
+    return 0
+  else
+    echo -e "${COLOR_ERROR}[Error] 部分软件包不可用${COLOR_RESET}"
+    echo -e "${COLOR_INFO}[Info] 提示：可以尝试以下命令更新仓库缓存：${COLOR_RESET}"
+    echo -e "${COLOR_INFO}[Info] sudo dnf clean all && sudo dnf makecache${COLOR_RESET}"
+    return 1
+  fi
+}
 
 function main {
   check_user || return 1
@@ -387,7 +533,7 @@ function main {
   check_hostname || return 1
 
   # 网络检查与模式判断
-  check_all_packages || return 1
+  install_components || return 1
 
   check_dns || return 1
   check_ram || return 1
