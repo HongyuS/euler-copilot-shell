@@ -132,7 +132,7 @@ run_script_with_check() {
 }
 # 初始化部署流程
 start_deployment() {
-  local total_steps=4
+  local total_steps=3
   local current_step=1
   export GLOBAL_IS_AUTO="TRUE"
 

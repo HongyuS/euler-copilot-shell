@@ -1,0 +1,16 @@
+{
+  "name": "systrace_mcp_server",
+  "overview": "sysTrace server 服务器",
+  "description": "面向运维、开发人员，支持自然语言对接，实现启发式调优，实现3个工具接口，分别为性能劣化感知工具，慢卡定界工具，报告输出工具。\n其中：\n性能劣化感知工具：通过解析sysTrace采集的L0数据，即AI框架关键阶段 dataloader、forward、backward的类step时延数据，检测是否存在性能劣化现象；\n慢卡定界工具：性能劣化后，开启慢卡定界，输入通信算子数据(5分钟左右)，输出故障节点，时间，覆盖计算慢、通信慢、算子下发慢、IO慢问题；\n报告输出工具：在上述工具的输出基础上，整理结果，形成报告输出；",
+  "type": "sse",
+  "author": "hx",
+  "config": {
+    "env": {
+    },
+    "autoApprove": [],
+    "disabled": false,
+    "autoInstall": false,
+    "command": "",
+    "url": "http://192.168.122.196:12140/sse"
+  }
+}

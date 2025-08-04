@@ -46,7 +46,6 @@ modify_authhub_yml() {
     return 1
   }
 
-  echo -e "${COLOR_INFO}[Info] YAML file has been updated successfully. Original file backed up as $YAML_FILE.bak${COLOR_RESET}"
   return 0
 }
 
@@ -72,7 +71,7 @@ validate_config() {
 
 # 安装服务
 install_service() {
-  echo -e "${COLOR_INFO}[Info] 启动服务...${COLOR_RESET}"
+  echo -e "${COLOR_INFO}[Info] authhub 服务启动...${COLOR_RESET}"
   systemctl enable --now authhub &&
     systemctl status authhub --no-pager
 }
@@ -107,9 +106,9 @@ main() {
   modify_authhub_yml || return 1
   if validate_config; then
     install_service
-    echo -e "${COLOR_SUCCESS}[Success] 配置完成${COLOR_RESET}"
+    echo -e "${COLOR_SUCCESS}[Success] authhub 服务初始化完成${COLOR_RESET}"
   else
-    echo -e "${COLOR_ERROR}[Error] 配置验证失败${COLOR_RESET}"
+    echo -e "${COLOR_ERROR}[Error] authhub 服务初始化失败${COLOR_RESET}"
     exit 1
   fi
 }

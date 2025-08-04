@@ -5,32 +5,7 @@ COLOR_SUCCESS='\033[32m' # 绿色成功
 COLOR_ERROR='\033[31m'   # 红色错误
 COLOR_WARNING='\033[33m' # 黄色警告
 COLOR_RESET='\033[0m'    # 重置颜色
-pkgs=(
-  "nginx"
-  "redis"
-  "mysql"
-  "mysql-server"
-  "java-17-openjdk"
-  "postgresql"
-  "postgresql-server"
-  "postgresql-server-devel"
-  "libpq-devel"
-  "authHub"
-  "authhub-web"
-  "euler-copilot-web"
-  "euler-copilot-witchaind-web"
-  "euler-copilot-rag"
-  "euler-copilot-framework"
-  "git"
-  "make"
-  "gcc"
-  "gcc-c++"
-  "clang"
-  "llvm"
-  "tar"
-  "python3-pip"
-)
-
+INSTALL_MODEL_FILE="/etc/euler_Intelligence_install_model"
 # 全局变量
 declare -a installed_pkgs=()
 install_success=true
@@ -41,7 +16,7 @@ LOCAL_REPO_FILE="/etc/yum.repos.d/local.repo"
 init_local_repo() {
   [ "$(id -u)" -ne 0 ] && {
     echo "需要root权限"
-    exit 1
+    return 1
   }
 
   # 检查仓库目录和repo文件是否存在
@@ -116,8 +91,10 @@ smart_install() {
 
   return 1
 }
-
+#&>/dev/null
 install_and_verify() {
+  # 接收传入的包列表参数
+  local pkgs=("$@")
   # 检查并安装每个包
   for pkg in "${pkgs[@]}"; do
     smart_install $pkg
@@ -128,13 +105,13 @@ install_and_verify() {
     echo -e "${COLOR_SUCCESS}[Success] dnf 包安装完成！${COLOR_RESET}"
   else
     echo -e "${COLOR_ERROR}[Error] 以下包安装失败: ${missing_pkgs[*]}${COLOR_RESET}"
-    exit 1
+    return 1
   fi
 }
 # 安装pgvector服务
 install_pgvector() {
   local pgvector_dir="/opt/pgvector"
-  local zhparser_url="https://github.com/pgvector/pgvector.git"
+  local zhparser_url="https://gitee.com/fromhsc/pgvector.git"
   local pgvector_installed_marker="/usr/share/pgsql/extension/vector.control" # pgvector安装后的标志文件
   echo -e "${COLOR_INFO}[Info] 开始安装pgvector...${COLOR_RESET}"
   if [ -f "$pgvector_installed_marker" ]; then
@@ -146,9 +123,9 @@ install_pgvector() {
   git config --global http.sslVerify false
 
   # 2. 克隆仓库
-  echo -e "${COLOR_INFO}[Info] 正在克隆zhparser仓库...${COLOR_RESET}"
+  echo -e "${COLOR_INFO} 正在克隆zhparser仓库...${COLOR_RESET}"
   if [ -d "$pgvector_dir" ]; then
-    echo -e "${COLOR_INFO}[Info] 目标目录已存在，尝试更新代码...${COLOR_RESET}"
+    echo -e "${COLOR_INFO} 目标目录已存在，尝试更新代码...${COLOR_RESET}"
     cd "$pgvector_dir" || {
       echo -e "${COLOR_ERROR}[Error] 无法进入目录: $pgvector_dir${COLOR_RESET}"
       return 1
@@ -173,7 +150,7 @@ install_pgvector() {
   git config --global http.sslVerify true
 
   # 4. 进入解压目录编译安装
-  echo -e "${COLOR_INFO}[Info] 正在编译安装pgvector...${COLOR_RESET}"
+  echo -e "${COLOR_INFO} 正在编译安装pgvector...${COLOR_RESET}"
   cd "$pgvector_dir" || {
     echo -e "${COLOR_ERROR}[Error] 无法进入目录: $pgvector_dir${COLOR_RESET}"
     return 1
@@ -204,7 +181,7 @@ install_scws() {
     return 0
   fi
   # 2. 下载SCWS安装包
-  echo -e "${COLOR_INFO}[Info] 正在下载SCWS...${COLOR_RESET}"
+  echo -e "${COLOR_INFO} 正在下载SCWS...${COLOR_RESET}"
   if ! wget "$scws_url" --no-check-certificate -O "$scws_tar"; then
     echo -e "${COLOR_ERROR}[Error] SCWS下载失败${COLOR_RESET}"
     return 1
@@ -217,14 +194,14 @@ install_scws() {
   fi
 
   # 4. 解压安装包
-  echo -e "${COLOR_INFO}[Info] 正在解压SCWS...${COLOR_RESET}"
+  echo -e "${COLOR_INFO} 正在解压SCWS...${COLOR_RESET}"
   if ! tar -xjf "$scws_tar" -C "$scws_dir" --strip-components=1; then
     echo -e "${COLOR_ERROR}[Error] 解压SCWS失败${COLOR_RESET}"
     return 1
   fi
 
   # 5. 编译安装
-  echo -e "${COLOR_INFO}[Info] 正在编译安装SCWS...${COLOR_RESET}"
+  echo -e "${COLOR_INFO} 正在编译安装SCWS...${COLOR_RESET}"
   cd "$scws_dir" || {
     echo -e "${COLOR_ERROR}[Error] 无法进入目录: $scws_dir${COLOR_RESET}"
     return 1
@@ -252,7 +229,7 @@ install_scws() {
 install_zhparser() {
   # 目标目录
   local zhparser_dir="/opt/zhparser"
-  local zhparser_url="https://github.com/amutu/zhparser.git"
+  local zhparser_url="https://gitee.com/fromhsc/zhparser.git"
   local zhparser_installed_marker="/usr/share/pgsql/extension/zhparser.control" # zhparser安装后的标志文件
   echo -e "${COLOR_INFO}[Info] 开始安装zhparser...${COLOR_RESET}"
   # 检查是否已安装
@@ -265,7 +242,7 @@ install_zhparser() {
   git config --global http.sslVerify false
 
   # 2. 克隆仓库
-  echo -e "${COLOR_INFO}[Info] 正在克隆zhparser仓库...${COLOR_RESET}"
+  echo -e "${COLOR_INFO} 正在克隆zhparser仓库...${COLOR_RESET}"
   if [ -d "$zhparser_dir" ]; then
     echo -e "${COLOR_INFO}[Info] 目标目录已存在，尝试更新代码...${COLOR_RESET}"
     cd "$zhparser_dir" || {
@@ -306,19 +283,33 @@ install_zhparser() {
   echo -e "${COLOR_SUCCESS}[Success] zhparser安装成功${COLOR_RESET}"
   return 0
 }
+is_x86_architecture() {
+    # 获取系统架构信息（使用 uname -m 或 arch 命令）
+    local arch
+    arch=$(uname -m)  # 多数系统支持，返回架构名称（如 x86_64、i686、aarch64 等）
+    # 备选：arch 命令，输出与 uname -m 类似
+    # arch=$(arch)
 
+    # x86 架构的常见标识：i386、i686（32位），x86_64（64位）
+    if [[ $arch == i386 || $arch == i686 || $arch == x86_64 ]]; then
+        return 0  # 是 x86 架构，返回 0（成功）
+    else
+        return 1  # 非 x86 架构，返回 1（失败）
+    fi
+}
 # 安装MinIO
 install_minio() {
-  local minio_url="https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20250524170830.0.0-1.x86_64.rpm"
-  local minio_src="../5-resource/rpm/minio-20250524170830.0.0-1.x86_64.rpm"
-  local minio_dir="/opt/minio"
-  local minio_file="/opt/minio/minio-20250524170830.0.0-1.x86_64.rpm"
   echo -e "${COLOR_INFO}[Info] 开始安装MinIO...${COLOR_RESET}"
-
+  local minio_dir="/opt/minio"
   if ! mkdir -p "$minio_dir"; then
     echo -e "${COLOR_ERROR}[Error] 创建目录失败: $minio_dir${COLOR_RESET}"
     return 1
   fi
+  ! is_x86_architecture || {
+  local minio_url="https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20250524170830.0.0-1.x86_64.rpm"
+  local minio_src="../5-resource/rpm/minio-20250524170830.0.0-1.x86_64.rpm"
+  local minio_file="/opt/minio/minio-20250524170830.0.0-1.x86_64.rpm"
+
   if [ -f "$minio_src" ]; then
     cp -r "$minio_src" "$minio_file"
     sleep 1
@@ -337,18 +328,43 @@ install_minio() {
   }
   echo -e "${COLOR_SUCCESS}[Success] MinIO安装成功...${COLOR_RESET}"
   return 0
+  }
+  echo -e "${COLOR_INFO}[Info] 下载MinIO二进制文件（aarch64）...${COLOR_RESET}"
+  local minio_url="https://dl.min.io/server/minio/release/linux-arm64/minio"
+  local temp_dir=$minio_dir
+  local minio_path="../5-resource/rpm/minio"
+
+  # 检查文件是否已存在
+  if [ -f "$minio_path" ]; then
+    cp -r $minio_path $temp_dir
+    echo -e "${COLOR_INFO}[Info] MinIO二进制文件已存在，跳过下载${COLOR_RESET}"
+  else
+    echo -e "${COLOR_INFO}[Info] 下载MinIO二进制文件（aarch64）...${COLOR_RESET}"
+    if ! wget -q --show-progress "$minio_url" -O "$temp_dir/minio" --no-check-certificate; then
+      echo -e "${COLOR_ERROR}[Error] 下载MinIO失败，请检查网络连接${COLOR_RESET}"
+      rm -rf "$temp_dir"
+      return 1
+    fi
+  fi
 }
 
 # 安装配置mongodb
 install_mongodb() {
   local mongodb_server_url="https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/x86_64/RPMS/mongodb-org-server-7.0.21-1.el9.x86_64.rpm"
   local mongodb_mongosh_url="https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.x86_64.rpm"
+  local mongodb_server_arm_url="https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/aarch64/RPMS/mongodb-org-server-7.0.21-1.el9.aarch64.rpm"
+  local mongodb_mongosh_arm_url="https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.aarch64.rpm"
+
+  is_x86_architecture || {
+    mongodb_server_url=$mongodb_server_arm_url
+    mongodb_mongosh_url=$mongodb_mongosh_arm_url
+  }
   local mongodb_dir="/opt/mongodb"
   local mongodb_server="/opt/mongodb/mongodb-org-server-7.0.21-1.el9.x86_64.rpm"
   local mongodb_server_src="../5-resource/rpm/mongodb-org-server-7.0.21-1.el9.x86_64.rpm"
   local mongodb_mongosh="/opt/mongodb/mongodb-mongosh-2.5.2.x86_64.rpm"
   local mongodb_mongosh_src="../5-resource/rpm/mongodb-mongosh-2.5.2.x86_64.rpm"
-  echo -e "${COLOR_INFO}[Info] 开始安装配置MongoDB...${COLOR_RESET}"
+  echo -e "${COLOR_INFO}[Info] 开始安装MongoDB...${COLOR_RESET}"
   if rpm -q mongod &>/dev/null; then
     echo -e "${COLOR_WARNING}[Warning] MongoDB 已安装，当前版本: $(rpm -q mongod)${COLOR_RESET}"
     echo -e "${COLOR_INFO}[Info] 跳过MongoDB安装${COLOR_RESET}"
@@ -369,14 +385,14 @@ install_mongodb() {
     sleep 1
   fi
   if [ ! -f "$mongodb_server" ]; then
-    echo -e "${COLOR_INFO}[Info] 正在下载MongoDB软件包...${COLOR_RESET}"
+    echo -e "${COLOR_INFO}[Info] 正在下载MongoDB server软件包...${COLOR_RESET}"
     if ! wget "$mongodb_server_url" --no-check-certificate -O "$mongodb_server"; then
       echo -e "${COLOR_ERROR}[Error] MongoDB下载失败${COLOR_RESET}"
       return 1
     fi
   fi
   if [ ! -f "$mongodb_mongosh" ]; then
-    echo -e "${COLOR_INFO}[Info] 正在下载MongoDB软件包...${COLOR_RESET}"
+    echo -e "${COLOR_INFO}[Info] 正在下载MongoDB mongosh软件包...${COLOR_RESET}"
     if ! wget "$mongodb_mongosh_url" --no-check-certificate -O "$mongodb_mongosh"; then
       echo -e "${COLOR_ERROR}[Error] MongoDB下载失败${COLOR_RESET}"
       return 1
@@ -455,7 +471,10 @@ check_pip() {
     ["sqlalchemy"]="2.0.23"
     ["paddlepaddle"]="2.6.2"
     ["paddleocr"]="2.9.1"
-    ["pymongo"]="" # 不指定版本
+    ["pymongo"]=""
+    ["requests"]=""
+    ["pydantic"]=""
+    ["tiktoken"]=""
   )
 
   local need_install=0
@@ -499,31 +518,128 @@ check_pip() {
 
   return 0
 }
+install_framework(){
+  echo -e "\n${COLOR_INFO}[Info] 开始安装框架服务...${COLOR_RESET}"
+  local pkgs=(
+  "euler-copilot-framework"
+  "git"
+  "make"
+  "gcc"
+  "gcc-c++"
+  "tar"
+  "python3-pip"
+  )
+  if ! install_and_verify "${pkgs[@]}"; then
+    echo -e "${COLOR_ERROR}[Error] dnf安装验证未通过！${COLOR_RESET}"
+    return 1
+  fi
+  cd "$SCRIPT_DIR" || return 1
+  install_minio || return 1
+  cd "$SCRIPT_DIR" || return 1
+  install_mongodb || return 1
+  check_pip || return 1
+}
+install_rag(){
+  local pkgs=(
+  "euler-copilot-rag"
+  "clang"
+  "llvm"
+  "java-17-openjdk"
+  "postgresql"
+  "postgresql-server"
+  "postgresql-server-devel"
+  "libpq-devel"
+  )
+  if ! install_and_verify "${pkgs[@]}"; then
+    echo -e "${COLOR_ERROR}[Error] dnf安装验证未通过！${COLOR_RESET}"
+    return 1
+  fi
+  cd "$SCRIPT_DIR" || return 1
+  install_scws || return 1
+  cd "$SCRIPT_DIR" || return 1
+  install_pgvector || return 1
+  cd "$SCRIPT_DIR" || return 1
+  install_zhparser || return 1
+
+}
+install_web(){
+  local pkgs=(
+    "nginx"
+    "redis"
+    "mysql"
+    "mysql-server"
+    "authHub"
+    "authhub-web"
+    "euler-copilot-web"
+    "euler-copilot-witchaind-web"
+  )
+  if ! install_and_verify "${pkgs[@]}"; then
+    echo -e "${COLOR_ERROR}[Error] dnf安装验证未通过！${COLOR_RESET}"
+    return 1
+  fi
+}
+# 读取安装模式的方法
+read_install_model() {
+  if [ ! -f "$INSTALL_MODEL_FILE" ]; then
+    echo "web_install=n" >"$INSTALL_MODEL_FILE"
+    echo "rag_install=n" >>"$INSTALL_MODEL_FILE"
+  fi
+
+  # 从文件读取配置（格式：key=value）
+  local web_install=$(grep "web_install=" "$INSTALL_MODEL_FILE" | cut -d'=' -f2)
+  local rag_install=$(grep "rag_install=" "$INSTALL_MODEL_FILE" | cut -d'=' -f2)
+
+  # 验证读取结果
+  if [ -z "$web_install" ] || [ -z "$rag_install" ]; then
+    echo -e "${COLOR_ERROR}[Error] 安装模式文件格式错误${COLOR_RESET}"
+    return 1
+  fi
+
+  # 输出读取结果（也可根据需要返回变量）
+  echo -e "${COLOR_INFO}[Info] 读取安装模式:"
+  echo -e "  安装Web界面: ${web_install}"
+  echo -e "  安装RAG组件: ${rag_install}${COLOR_RESET}"
+
+  # 将结果存入全局变量（供其他函数使用）
+  WEB_INSTALL=$web_install
+  RAG_INSTALL=$rag_install
+  return 0
+}
+# 示例：根据安装模式执行对应操作（可根据实际需求扩展）
+install_components() {
+  # 读取安装模式
+  read_install_model || return 1
+
+  # 安装Web界面（如果用户选择）
+  if [ "$WEB_INSTALL" = "y" ]; then
+    echo -e "\n${COLOR_INFO}[Info] 开始安装Web管理界面...${COLOR_RESET}"
+    # 此处添加Web安装命令，示例：
+    install_web || return 1
+  fi
+
+  # 安装RAG组件（如果用户选择）
+  if [ "$RAG_INSTALL" = "y" ]; then
+    echo -e "\n${COLOR_INFO}[Info] 开始安装RAG检索增强组件...${COLOR_RESET}"
+    # 此处添加RAG安装命令，示例：
+    install_rag || return 1
+  fi
+}
+
 # 主执行函数
 main() {
   echo -e "${COLOR_INFO}[Info] === 开始服务安装===${COLOR_RESET}"
   # 获取脚本所在的绝对路径
-  SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  declare SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
   # 切换到脚本所在目录
-  cd "$SCRIPT_DIR" || exit 1
-  systemctl stop dnf-makecache.timer
+  cd "$SCRIPT_DIR" || return 1
+  #查看当前脚本执行的模式
 
+  systemctl stop dnf-makecache.timer
   # 执行安装验证
   init_local_repo
-  if ! install_and_verify; then
-    echo -e "${COLOR_ERROR}[Error] dnf安装验证未通过！${COLOR_RESET}"
-    return 1
-  fi
-  install_pgvector || return 1
-  cd "$SCRIPT_DIR" || exit 1
-  install_scws || return 1
-  cd "$SCRIPT_DIR" || exit 1
-  install_zhparser || return 1
-  cd "$SCRIPT_DIR" || exit 1
-  install_minio || exut 1
-  cd "$SCRIPT_DIR" || exit 1
-  install_mongodb || exut 1
-  check_pip || exit 1
+  #分支执行TODO
+  install_framework || return 1
+  install_components || return 1
   echo -e "${COLOR_SUCCESS}[Success] 安装 openEuler Intelligence 完成！${COLOR_RESET}"
   return 0
 }
