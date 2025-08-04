@@ -1,4 +1,4 @@
-%global pypi_name eulercopilot
+%global pypi_name oi-cli
 
 Name:           euler-copilot-shell
 Version:        0.10.0

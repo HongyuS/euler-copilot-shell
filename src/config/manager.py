@@ -14,7 +14,7 @@ class ConfigManager:
     """
 
     data = ConfigModel()
-    config_path = Path.home() / ".config" / "eulercopilot" / "smart-shell.json"
+    config_path = Path.home() / ".config" / "eulerintelli" / "smart-shell.json"
 
     def __init__(self) -> None:
         """初始化配置管理器"""
@@ -56,22 +56,22 @@ class ConfigManager:
         self.data.backend = backend
         self._save_settings()
 
-    def get_eulercopilot_url(self) -> str:
+    def get_eulerintelli_url(self) -> str:
         """获取当前 Hermes base_url"""
-        return self.data.eulercopilot.base_url
+        return self.data.eulerintelli.base_url
 
-    def set_eulercopilot_url(self, url: str) -> None:
+    def set_eulerintelli_url(self, url: str) -> None:
         """更新 Hermes base_url 并保存"""
-        self.data.eulercopilot.base_url = url
+        self.data.eulerintelli.base_url = url
         self._save_settings()
 
-    def get_eulercopilot_key(self) -> str:
+    def get_eulerintelli_key(self) -> str:
         """获取当前 Hermes api_key"""
-        return self.data.eulercopilot.api_key
+        return self.data.eulerintelli.api_key
 
-    def set_eulercopilot_key(self, key: str) -> None:
+    def set_eulerintelli_key(self, key: str) -> None:
         """更新 Hermes api_key 并保存"""
-        self.data.eulercopilot.api_key = key
+        self.data.eulerintelli.api_key = key
         self._save_settings()
 
     def _load_settings(self) -> None:
