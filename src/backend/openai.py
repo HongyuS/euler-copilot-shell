@@ -3,11 +3,15 @@
 import re
 import time
 from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING
 
 from openai import AsyncOpenAI
 
 from backend.base import LLMClientBase
 from log.manager import get_logger, log_api_request, log_exception
+
+if TYPE_CHECKING:
+    from openai.types.chat import ChatCompletionMessageParam
 
 
 def validate_url(url: str) -> bool:
@@ -37,6 +41,10 @@ class OpenAIClient(LLMClientBase):
             api_key=api_key,
             base_url=base_url,
         )
+
+        # 添加历史记录管理
+        self._conversation_history: list[ChatCompletionMessageParam] = []
+
         self.logger.info("OpenAI 客户端初始化成功 - URL: %s, Model: %s", base_url, model)
 
     async def get_llm_response(self, prompt: str) -> AsyncGenerator[str, None]:
@@ -44,15 +52,20 @@ class OpenAIClient(LLMClientBase):
         生成命令建议
 
         异步调用 OpenAI 或兼容接口的大模型生成命令建议，支持流式输出。
-        请确保已安装 openai 库（pip install openai）。
+        保持对话历史记录，支持多轮对话上下文。
         """
         start_time = time.time()
         self.logger.info("开始请求 OpenAI 流式聊天 API - Model: %s", self.model)
 
+        # 添加用户消息到历史记录
+        user_message: ChatCompletionMessageParam = {"role": "user", "content": prompt}
+        self._conversation_history.append(user_message)
+
         try:
+            # 使用完整的对话历史记录
             response = await self.client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=self._conversation_history,
                 stream=True,
             )
 
@@ -66,14 +79,35 @@ class OpenAIClient(LLMClientBase):
                 duration,
                 model=self.model,
                 stream=True,
+                history_length=len(self._conversation_history),
             )
 
+            # 收集助手的完整回复
+            assistant_response = ""
             async for chunk in response:
                 content = chunk.choices[0].delta.content
                 if content:
+                    assistant_response += content
                     yield content
 
+            # 将助手回复添加到历史记录
+            if assistant_response:
+                assistant_message: ChatCompletionMessageParam = {
+                    "role": "assistant",
+                    "content": assistant_response,
+                }
+                self._conversation_history.append(assistant_message)
+                self.logger.info("对话历史记录已更新，当前消息数: %d", len(self._conversation_history))
+
         except Exception as e:
+            # 如果请求失败，移除刚添加的用户消息
+            if (
+                self._conversation_history
+                and len(self._conversation_history) > 0
+                and self._conversation_history[-1].get("content") == prompt
+            ):
+                self._conversation_history.pop()
+
             duration = time.time() - start_time
             log_exception(self.logger, "OpenAI 流式聊天 API 请求失败", e)
             # 记录失败的API请求
@@ -88,6 +122,15 @@ class OpenAIClient(LLMClientBase):
                 error=str(e),
             )
             raise
+
+    def reset_conversation(self) -> None:
+        """
+        重置对话上下文
+
+        清空历史记录，开始新的对话会话。
+        """
+        self._conversation_history.clear()
+        self.logger.info("OpenAI 客户端对话历史记录已重置")
 
     async def get_available_models(self) -> list[str]:
         """
