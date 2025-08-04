@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from backend.base import LLMClientBase
 from backend.hermes.client import HermesChatClient
 from backend.openai import OpenAIClient
 from config.model import Backend
 
 if TYPE_CHECKING:
+    from backend.base import LLMClientBase
     from config.manager import ConfigManager
 
 
@@ -29,6 +29,7 @@ class BackendFactory:
 
         Raises:
             ValueError: 当后端类型不支持时
+
         """
         backend = config_manager.get_backend()
 
@@ -38,11 +39,10 @@ class BackendFactory:
                 model=config_manager.get_model(),
                 api_key=config_manager.get_api_key(),
             )
-        elif backend == Backend.EULERINTELLI:
+        if backend == Backend.EULERINTELLI:
             return HermesChatClient(
                 base_url=config_manager.get_eulerintelli_url(),
                 auth_token=config_manager.get_eulerintelli_key(),
             )
-        else:
-            msg = f"不支持的后端类型: {backend}"
-            raise ValueError(msg)
+        msg = f"不支持的后端类型: {backend}"
+        raise ValueError(msg)

@@ -6,7 +6,7 @@ import json
 import re
 import time
 from typing import TYPE_CHECKING, Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from typing_extensions import Self
@@ -177,6 +177,184 @@ class HermesChatClient(LLMClientBase):
 
         self.logger.info("Hermes 客户端初始化成功 - URL: %s", base_url)
 
+    def reset_conversation(self) -> None:
+        """重置会话，下次聊天时会创建新的会话"""
+        self._conversation_id = None
+
+    async def get_llm_response(self, prompt: str) -> AsyncGenerator[str, None]:
+        """
+        生成命令建议
+
+        为了兼容现有的 OpenAI 客户端接口，提供简化的聊天接口。
+
+        Args:
+            prompt: 用户输入的提示语
+
+        Yields:
+            str: 流式响应的文本内容
+
+        Raises:
+            HermesAPIError: 当 API 调用失败时
+
+        """
+        self.logger.info("开始 Hermes 流式聊天请求")
+        start_time = time.time()
+
+        try:
+            # 确保有会话 ID
+            conversation_id = await self._ensure_conversation()
+
+            # 创建聊天请求
+            app = HermesApp("default-app")
+            request = HermesChatRequest(
+                app=app,
+                conversation_id=conversation_id,
+                question=prompt,
+                features=HermesFeatures(),
+                language="zh_cn",
+            )
+
+            # 直接传递异常，不在这里处理
+            async for text in self._chat_stream(request):
+                yield text
+
+            duration = time.time() - start_time
+            self.logger.info("Hermes 流式聊天请求完成 - 耗时: %.3fs", duration)
+
+        except Exception as e:
+            duration = time.time() - start_time
+            log_exception(self.logger, "Hermes 流式聊天请求失败", e)
+            raise
+
+    async def get_available_models(self) -> list[str]:
+        """
+        获取当前 LLM 服务中可用的模型，返回名称列表
+
+        通过调用 /api/llm 接口获取可用的大模型列表。
+        如果调用失败或没有返回，使用空列表，后端接口会自动使用默认模型。
+        """
+        start_time = time.time()
+        self.logger.info("开始请求 Hermes 模型列表 API")
+
+        try:
+            client = await self._get_client()
+            llm_url = urljoin(self.base_url, "/api/llm")
+
+            headers = {
+                "Host": self._get_host_header(),
+            }
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+            response = await client.get(llm_url, headers=headers)
+
+            duration = time.time() - start_time
+
+            if response.status_code != HTTP_OK:
+                # 如果接口调用失败，返回空列表
+                log_api_request(
+                    self.logger,
+                    "GET",
+                    llm_url,
+                    response.status_code,
+                    duration,
+                    error="API 调用失败",
+                )
+                self.logger.warning("Hermes 模型列表 API 调用失败，返回空列表")
+                return []
+
+            data = response.json()
+
+            # 检查响应格式
+            if not isinstance(data, dict) or "result" not in data:
+                log_api_request(
+                    self.logger,
+                    "GET",
+                    llm_url,
+                    response.status_code,
+                    duration,
+                    error="响应格式无效",
+                )
+                self.logger.warning("Hermes 模型列表 API 响应格式无效，返回空列表")
+                return []
+
+            result = data["result"]
+            if not isinstance(result, list):
+                log_api_request(
+                    self.logger,
+                    "GET",
+                    llm_url,
+                    response.status_code,
+                    duration,
+                    error="result字段不是数组",
+                )
+                self.logger.warning("Hermes 模型列表 API result字段不是数组，返回空列表")
+                return []
+
+            # 提取模型名称
+            models = []
+            for llm_info in result:
+                if isinstance(llm_info, dict):
+                    # 优先使用 modelName，如果没有则使用 llmId
+                    model_name = llm_info.get("modelName") or llm_info.get("llmId")
+                    if model_name:
+                        models.append(model_name)
+
+            # 记录成功的API请求
+            log_api_request(
+                self.logger,
+                "GET",
+                llm_url,
+                response.status_code,
+                duration,
+                model_count=len(models),
+            )
+
+            self.logger.info("获取到 %d 个可用模型", len(models))
+
+        except (
+            httpx.HTTPError,
+            httpx.InvalidURL,
+            json.JSONDecodeError,
+            KeyError,
+            ValueError,
+        ) as e:
+            # 如果发生网络错误、JSON解析错误或其他预期错误，返回空列表
+            duration = time.time() - start_time
+            log_exception(self.logger, "Hermes 模型列表 API 请求异常", e)
+            log_api_request(
+                self.logger,
+                "GET",
+                f"{self.base_url}/api/llm",
+                500,
+                duration,
+                error=str(e),
+            )
+            self.logger.warning("Hermes 模型列表 API 请求异常，返回空列表")
+            return []
+        else:
+            return models
+
+    async def close(self) -> None:
+        """关闭 HTTP 客户端"""
+        try:
+            if self.client and not self.client.is_closed:
+                await self.client.aclose()
+                self.logger.info("Hermes 客户端已关闭")
+        except Exception as e:
+            log_exception(self.logger, "关闭 Hermes 客户端失败", e)
+            raise
+
+    def _get_host_header(self) -> str:
+        """
+        从base_url中提取主机名用于Host头部
+
+        Returns:
+            str: 主机名，如 'www.eulercopilot.io'
+
+        """
+        parsed_url = urlparse(self.base_url)
+        return parsed_url.netloc
+
     async def _get_client(self) -> httpx.AsyncClient:
         """获取或创建 HTTP 客户端"""
         if self.client is None or self.client.is_closed:
@@ -217,7 +395,9 @@ class HermesChatClient(LLMClientBase):
         if llm_id:
             params["llm_id"] = llm_id
 
-        headers = {}
+        headers = {
+            "Host": self._get_host_header(),
+        }
         if self.auth_token:
             headers["Authorization"] = f"Bearer {self.auth_token}"
 
@@ -321,7 +501,10 @@ class HermesChatClient(LLMClientBase):
 
     async def _ensure_conversation(self, llm_id: str = "") -> str:
         """
-        确保有可用的会话 ID，如果没有则创建新会话
+        确保有可用的会话 ID，智能重用空对话或创建新会话
+
+        优先使用已存在的空对话，如果没有空对话或获取失败，则创建新对话。
+        这样可以避免产生过多的空对话记录。
 
         Args:
             llm_id: 指定的 LLM ID
@@ -331,12 +514,32 @@ class HermesChatClient(LLMClientBase):
 
         """
         if self._conversation_id is None:
-            self._conversation_id = await self._create_conversation(llm_id)
-        return self._conversation_id
+            try:
+                # 先尝试获取现有对话列表
+                conversation_list = await self._get_conversation_list()
 
-    def reset_conversation(self) -> None:
-        """重置会话，下次聊天时会创建新的会话"""
-        self._conversation_id = None
+                # 如果有对话，检查最新的对话是否为空
+                if conversation_list:
+                    latest_conversation_id = conversation_list[0]  # 已经按时间排序，第一个是最新的
+                    try:
+                        # 检查最新对话是否为空
+                        if await self._is_conversation_empty(latest_conversation_id):
+                            self.logger.info("重用空对话 - ID: %s", latest_conversation_id)
+                            self._conversation_id = latest_conversation_id
+                            return self._conversation_id
+                    except HermesAPIError:
+                        # 如果检查对话记录失败，继续创建新对话
+                        self.logger.warning("检查对话记录失败，将创建新对话")
+
+                # 如果没有对话或最新对话不为空，创建新对话
+                self._conversation_id = await self._create_conversation(llm_id)
+
+            except HermesAPIError:
+                # 如果获取对话列表失败，直接创建新对话
+                self.logger.warning("获取对话列表失败，将创建新对话")
+                self._conversation_id = await self._create_conversation(llm_id)
+
+        return self._conversation_id
 
     async def _chat_stream(
         self,
@@ -358,7 +561,9 @@ class HermesChatClient(LLMClientBase):
         client = await self._get_client()
         chat_url = urljoin(self.base_url, "/api/chat")
 
-        headers = {}
+        headers = {
+            "Host": self._get_host_header(),
+        }
         if self.auth_token:
             headers["Authorization"] = f"Bearer {self.auth_token}"
 
@@ -398,165 +603,266 @@ class HermesChatClient(LLMClientBase):
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             raise HermesAPIError(500, f"Data parsing error: {e!s}") from e
 
-    async def get_llm_response(self, prompt: str) -> AsyncGenerator[str, None]:
+    async def _get_conversation_list(self) -> list[str]:
         """
-        生成命令建议
+        获取会话ID列表，按创建时间从新到旧排序
 
-        为了兼容现有的 OpenAI 客户端接口，提供简化的聊天接口。
+        通过调用 /api/conversation 接口获取用户的所有会话，
+        提取 conversationId 并按 createdTime 从新到旧排序。
 
-        Args:
-            prompt: 用户输入的提示语
-
-        Yields:
-            str: 流式响应的文本内容
+        Returns:
+            list[str]: 会话ID列表，按创建时间排序（新到旧）
 
         Raises:
             HermesAPIError: 当 API 调用失败时
 
         """
-        self.logger.info("开始 Hermes 流式聊天请求")
         start_time = time.time()
+        self.logger.info("开始请求 Hermes 会话列表 API")
 
-        try:
-            # 确保有会话 ID
-            conversation_id = await self._ensure_conversation()
+        client = await self._get_client()
+        conversation_url = urljoin(self.base_url, "/api/conversation")
 
-            # 创建聊天请求
-            app = HermesApp("default-app")
-            request = HermesChatRequest(
-                app=app,
-                conversation_id=conversation_id,
-                question=prompt,
-                features=HermesFeatures(),
-                language="zh_cn",
-            )
-
-            # 直接传递异常，不在这里处理
-            async for text in self._chat_stream(request):
-                yield text
-
-            duration = time.time() - start_time
-            self.logger.info("Hermes 流式聊天请求完成 - 耗时: %.3fs", duration)
-
-        except Exception as e:
-            duration = time.time() - start_time
-            log_exception(self.logger, "Hermes 流式聊天请求失败", e)
-            raise
-
-    async def get_available_models(self) -> list[str]:
-        """
-        获取当前 LLM 服务中可用的模型，返回名称列表
-
-        通过调用 /api/llm 接口获取可用的大模型列表。
-        如果调用失败或没有返回，使用空列表，后端接口会自动使用默认模型。
-        """
-        start_time = time.time()
-        self.logger.info("开始请求 Hermes 模型列表 API")
-
-        try:
-            client = await self._get_client()
-            llm_url = urljoin(self.base_url, "/api/llm")
-
-            headers = {}
+        headers = {
+            "Accept": "application/json, text/plain, */*",
+            "Host": self._get_host_header(),
+        }
+        if self.auth_token:
             headers["Authorization"] = f"Bearer {self.auth_token}"
-            response = await client.get(llm_url, headers=headers)
 
+        try:
+            response = await client.get(conversation_url, headers=headers)
             duration = time.time() - start_time
 
             if response.status_code != HTTP_OK:
-                # 如果接口调用失败，返回空列表
+                error_text = await response.aread()
                 log_api_request(
                     self.logger,
                     "GET",
-                    llm_url,
+                    conversation_url,
                     response.status_code,
                     duration,
-                    error="API 调用失败",
+                    error=error_text.decode("utf-8"),
                 )
-                self.logger.warning("Hermes 模型列表 API 调用失败，返回空列表")
-                return []
+                raise HermesAPIError(response.status_code, error_text.decode("utf-8"))
 
-            data = response.json()
+            try:
+                data = response.json()
+            except json.JSONDecodeError as e:
+                log_api_request(
+                    self.logger,
+                    "GET",
+                    conversation_url,
+                    response.status_code,
+                    duration,
+                    error="Invalid JSON response",
+                )
+                raise HermesAPIError(500, "Invalid JSON response") from e
 
             # 检查响应格式
             if not isinstance(data, dict) or "result" not in data:
                 log_api_request(
                     self.logger,
                     "GET",
-                    llm_url,
+                    conversation_url,
                     response.status_code,
                     duration,
-                    error="响应格式无效",
+                    error="Invalid API response format",
                 )
-                self.logger.warning("Hermes 模型列表 API 响应格式无效，返回空列表")
-                return []
+                raise HermesAPIError(500, "Invalid API response format")
 
             result = data["result"]
-            if not isinstance(result, list):
+            if not isinstance(result, dict) or "conversations" not in result:
                 log_api_request(
                     self.logger,
                     "GET",
-                    llm_url,
+                    conversation_url,
                     response.status_code,
                     duration,
-                    error="result字段不是数组",
+                    error="Missing conversations in response",
                 )
-                self.logger.warning("Hermes 模型列表 API result字段不是数组，返回空列表")
-                return []
+                raise HermesAPIError(500, "Missing conversations in response")
 
-            # 提取模型名称
-            models = []
-            for llm_info in result:
-                if isinstance(llm_info, dict):
-                    # 优先使用 modelName，如果没有则使用 llmId
-                    model_name = llm_info.get("modelName") or llm_info.get("llmId")
-                    if model_name:
-                        models.append(model_name)
+            conversations = result["conversations"]
+            if not isinstance(conversations, list):
+                log_api_request(
+                    self.logger,
+                    "GET",
+                    conversation_url,
+                    response.status_code,
+                    duration,
+                    error="conversations is not a list",
+                )
+                raise HermesAPIError(500, "conversations field is not a list")
+
+            # 提取会话信息并按创建时间排序
+            conversation_items = [
+                {
+                    "id": conv["conversationId"],
+                    "created_time": conv["createdTime"],
+                }
+                for conv in conversations
+                if isinstance(conv, dict) and "conversationId" in conv and "createdTime" in conv
+            ]
+
+            # 按创建时间排序（从新到旧）
+            conversation_items.sort(key=lambda x: x["created_time"], reverse=True)
+
+            # 提取排序后的会话ID列表
+            conversation_ids = [item["id"] for item in conversation_items]
 
             # 记录成功的API请求
             log_api_request(
                 self.logger,
                 "GET",
-                llm_url,
+                conversation_url,
                 response.status_code,
                 duration,
-                model_count=len(models),
+                conversation_count=len(conversation_ids),
             )
 
-            self.logger.info("获取到 %d 个可用模型", len(models))
+            self.logger.info("获取到 %d 个会话", len(conversation_ids))
 
-        except (
-            httpx.HTTPError,
-            httpx.InvalidURL,
-            json.JSONDecodeError,
-            KeyError,
-            ValueError,
-        ) as e:
-            # 如果发生网络错误、JSON解析错误或其他预期错误，返回空列表
+        except httpx.RequestError as e:
             duration = time.time() - start_time
-            log_exception(self.logger, "Hermes 模型列表 API 请求异常", e)
+            log_exception(self.logger, "Hermes 会话列表请求失败", e)
             log_api_request(
                 self.logger,
                 "GET",
-                f"{self.base_url}/api/llm",
+                conversation_url,
                 500,
                 duration,
                 error=str(e),
             )
-            self.logger.warning("Hermes 模型列表 API 请求异常，返回空列表")
-            return []
+            raise HermesAPIError(500, f"Failed to get conversation list: {e!s}") from e
         else:
-            return models
+            return conversation_ids
 
-    async def close(self) -> None:
-        """关闭 HTTP 客户端"""
+    async def _is_conversation_empty(self, conversation_id: str) -> bool:
+        """
+        检查指定对话是否为空（没有聊天记录）
+
+        通过调用 /api/record/{conversation_id} 接口检查对话的聊天记录。
+        如果 result.records 为空列表，说明这是一个新对话，可以直接使用。
+
+        Args:
+            conversation_id: 要检查的对话ID
+
+        Returns:
+            bool: True 表示对话为空，False 表示对话有内容
+
+        Raises:
+            HermesAPIError: 当 API 调用失败时
+
+        """
+        start_time = time.time()
+        self.logger.info("检查对话是否为空 - ID: %s", conversation_id)
+
+        client = await self._get_client()
+        record_url = urljoin(self.base_url, f"/api/record/{conversation_id}")
+
+        headers = {
+            "Accept": "application/json, text/plain, */*",
+            "Host": self._get_host_header(),
+        }
+        if self.auth_token:
+            headers["Authorization"] = f"Bearer {self.auth_token}"
+
         try:
-            if self.client and not self.client.is_closed:
-                await self.client.aclose()
-                self.logger.info("Hermes 客户端已关闭")
-        except Exception as e:
-            log_exception(self.logger, "关闭 Hermes 客户端失败", e)
-            raise
+            response = await client.get(record_url, headers=headers)
+            duration = time.time() - start_time
+
+            if response.status_code != HTTP_OK:
+                error_text = await response.aread()
+                log_api_request(
+                    self.logger,
+                    "GET",
+                    record_url,
+                    response.status_code,
+                    duration,
+                    error=error_text.decode("utf-8"),
+                )
+                raise HermesAPIError(response.status_code, error_text.decode("utf-8"))
+
+            try:
+                data = response.json()
+            except json.JSONDecodeError as e:
+                log_api_request(
+                    self.logger,
+                    "GET",
+                    record_url,
+                    response.status_code,
+                    duration,
+                    error="Invalid JSON response",
+                )
+                raise HermesAPIError(500, "Invalid JSON response") from e
+
+            # 检查响应格式
+            if not isinstance(data, dict) or "result" not in data:
+                log_api_request(
+                    self.logger,
+                    "GET",
+                    record_url,
+                    response.status_code,
+                    duration,
+                    error="Invalid API response format",
+                )
+                raise HermesAPIError(500, "Invalid API response format")
+
+            result = data["result"]
+            if not isinstance(result, dict) or "records" not in result:
+                log_api_request(
+                    self.logger,
+                    "GET",
+                    record_url,
+                    response.status_code,
+                    duration,
+                    error="Missing records in response",
+                )
+                raise HermesAPIError(500, "Missing records in response")
+
+            records = result["records"]
+            if not isinstance(records, list):
+                log_api_request(
+                    self.logger,
+                    "GET",
+                    record_url,
+                    response.status_code,
+                    duration,
+                    error="records is not a list",
+                )
+                raise HermesAPIError(500, "records field is not a list")
+
+            # 判断对话是否为空
+            is_empty = len(records) == 0
+
+            # 记录成功的API请求
+            log_api_request(
+                self.logger,
+                "GET",
+                record_url,
+                response.status_code,
+                duration,
+                records_count=len(records),
+                is_empty=is_empty,
+            )
+
+            self.logger.info("对话 %s %s", conversation_id, "为空" if is_empty else "有内容")
+
+        except httpx.RequestError as e:
+            duration = time.time() - start_time
+            log_exception(self.logger, "检查对话记录请求失败", e)
+            log_api_request(
+                self.logger,
+                "GET",
+                record_url,
+                500,
+                duration,
+                error=str(e),
+            )
+            raise HermesAPIError(500, f"Failed to check conversation records: {e!s}") from e
+        else:
+            return is_empty
 
     async def __aenter__(self) -> Self:
         """异步上下文管理器入口"""
