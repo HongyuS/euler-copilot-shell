@@ -8,7 +8,7 @@ class Backend(str, Enum):
     """后端类型"""
 
     OPENAI = "openai"
-    EULERCOPILOT = "eulercopilot"
+    EULERINTELLI = "eulerintelli"
 
 
 @dataclass
@@ -16,7 +16,7 @@ class OpenAIConfig:
     """OpenAI 后端配置"""
 
     base_url: str = field(default="http://127.0.0.1:1234/v1")
-    model: str = field(default="qwen2.5-14b-instruct-1m")
+    model: str = field(default="qwen/qwen3-30b-a3b-2507")
     api_key: str = field(default="lm-studio")
 
     @classmethod
@@ -37,8 +37,8 @@ class OpenAIConfig:
 class HermesConfig:
     """Hermes 后端配置"""
 
-    base_url: str = field(default="https://www.eulercopilot.com")
-    api_key: str = field(default="your-eulercopilot-api-key")
+    base_url: str = field(default="https://www.eulerintelli.com")
+    api_key: str = field(default="your-eulerintelli-api-key")
 
     @classmethod
     def from_dict(cls, d: dict) -> "HermesConfig":
@@ -59,7 +59,7 @@ class ConfigModel:
 
     backend: Backend = field(default=Backend.OPENAI)
     openai: OpenAIConfig = field(default_factory=OpenAIConfig)
-    eulercopilot: HermesConfig = field(default_factory=HermesConfig)
+    eulerintelli: HermesConfig = field(default_factory=HermesConfig)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ConfigModel":
@@ -76,7 +76,7 @@ class ConfigModel:
         return cls(
             backend=backend,
             openai=OpenAIConfig.from_dict(d.get("openai", {})),
-            eulercopilot=HermesConfig.from_dict(d.get("eulercopilot", {})),
+            eulerintelli=HermesConfig.from_dict(d.get("eulerintelli", {})),
         )
 
     def to_dict(self) -> dict:
@@ -84,5 +84,5 @@ class ConfigModel:
         return {
             "backend": self.backend.value,  # 保存枚举的值
             "openai": self.openai.to_dict(),
-            "eulercopilot": self.eulercopilot.to_dict(),
+            "eulerintelli": self.eulerintelli.to_dict(),
         }

@@ -1,15 +1,21 @@
 """设置页面"""
 
+from __future__ import annotations
+
 import asyncio
+from typing import TYPE_CHECKING
 
 from textual import on
-from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
 from textual.screen import Screen
 from textual.widgets import Button, Input, Label, Static
 
-from backend.base import LLMClientBase
 from config import Backend, ConfigManager
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
+
+    from backend.base import LLMClientBase
 
 
 class SettingsScreen(Screen):
@@ -45,7 +51,7 @@ class SettingsScreen(Screen):
                     Input(
                         value=self.config_manager.get_base_url()
                         if self.backend == Backend.OPENAI
-                        else self.config_manager.get_eulercopilot_url(),
+                        else self.config_manager.get_eulerintelli_url(),
                         id="base-url",
                     ),
                     classes="settings-option",
@@ -56,7 +62,7 @@ class SettingsScreen(Screen):
                     Input(
                         value=self.config_manager.get_api_key()
                         if self.backend == Backend.OPENAI
-                        else self.config_manager.get_eulercopilot_key(),
+                        else self.config_manager.get_eulerintelli_key(),
                         id="api-key",
                     ),
                     classes="settings-option",
@@ -99,25 +105,16 @@ class SettingsScreen(Screen):
         # 确保操作按钮始终可见
         self._ensure_buttons_visible()
 
-    def _ensure_buttons_visible(self) -> None:
-        """确保操作按钮始终可见"""
-
-        # 延迟一点执行，确保布局已完成
-        async def scroll_to_buttons() -> None:
-            await asyncio.sleep(0.1)
-            container = self.query_one("#settings-container")
-            action_buttons = self.query_one("#action-buttons")
-            if action_buttons:
-                container.scroll_to_widget(action_buttons)
-
-        task = asyncio.create_task(scroll_to_buttons())
-        self.background_tasks.add(task)
-        task.add_done_callback(self.background_tasks.discard)
-
     async def load_models(self) -> None:
-        """异步加载可用模型列表"""
+        """异步加载当前选中后端的可用模型列表"""
         try:
+            # 如果是 EULERINTELLI 后端，直接返回（不需要模型选择）
+            if self.backend == Backend.EULERINTELLI:
+                return
+
+            # 使用当前选中的客户端获取模型列表
             self.models = await self.llm_client.get_available_models()
+
             if self.models and self.selected_model not in self.models:
                 self.selected_model = self.models[0]
 
@@ -128,11 +125,17 @@ class SettingsScreen(Screen):
             model_btn = self.query_one("#model-btn", Button)
             model_btn.label = "暂无可用模型"
 
+    @on(Input.Changed, "#base-url, #api-key")
+    def on_config_changed(self) -> None:
+        """当 Base URL 或 API Key 改变时更新客户端"""
+        if self.backend == Backend.OPENAI:
+            self._update_llm_client()
+
     @on(Button.Pressed, "#backend-btn")
     def toggle_backend(self) -> None:
         """切换后端"""
         current = self.backend
-        new = Backend.EULERCOPILOT if current == Backend.OPENAI else Backend.OPENAI
+        new = Backend.EULERINTELLI if current == Backend.OPENAI else Backend.OPENAI
         self.backend = new
 
         # 更新按钮文本
@@ -146,6 +149,9 @@ class SettingsScreen(Screen):
         if new == Backend.OPENAI:
             base_url.value = self.config_manager.get_base_url()
             api_key.value = self.config_manager.get_api_key()
+
+            # 创建新的 OpenAI 客户端
+            self._update_llm_client()
 
             # 添加模型选择部分
             if not self.query("#model-section"):
@@ -170,8 +176,11 @@ class SettingsScreen(Screen):
                 self.background_tasks.add(task)
                 task.add_done_callback(self.background_tasks.discard)
         else:
-            base_url.value = self.config_manager.get_eulercopilot_url()
-            api_key.value = self.config_manager.get_eulercopilot_key()
+            base_url.value = self.config_manager.get_eulerintelli_url()
+            api_key.value = self.config_manager.get_eulerintelli_key()
+
+            # 创建新的 Hermes 客户端
+            self._update_llm_client()
 
             # 移除模型选择部分
             model_section = self.query("#model-section")
@@ -218,9 +227,9 @@ class SettingsScreen(Screen):
             self.config_manager.set_base_url(base_url)
             self.config_manager.set_api_key(api_key)
             self.config_manager.set_model(self.selected_model)
-        else:  # eulercopilot
-            self.config_manager.set_eulercopilot_url(base_url)
-            self.config_manager.set_eulercopilot_key(api_key)
+        else:  # eulerintelli
+            self.config_manager.set_eulerintelli_url(base_url)
+            self.config_manager.set_eulerintelli_key(api_key)
 
         self.app.pop_screen()
 
@@ -228,3 +237,39 @@ class SettingsScreen(Screen):
     def cancel_settings(self) -> None:
         """取消设置"""
         self.app.pop_screen()
+
+    def _ensure_buttons_visible(self) -> None:
+        """确保操作按钮始终可见"""
+
+        # 延迟一点执行，确保布局已完成
+        async def scroll_to_buttons() -> None:
+            await asyncio.sleep(0.1)
+            container = self.query_one("#settings-container")
+            action_buttons = self.query_one("#action-buttons")
+            if action_buttons:
+                container.scroll_to_widget(action_buttons)
+
+        task = asyncio.create_task(scroll_to_buttons())
+        self.background_tasks.add(task)
+        task.add_done_callback(self.background_tasks.discard)
+
+    def _update_llm_client(self) -> None:
+        """根据当前UI中的配置更新LLM客户端"""
+        base_url_input = self.query_one("#base-url", Input)
+        api_key_input = self.query_one("#api-key", Input)
+
+        if self.backend == Backend.OPENAI:
+            from backend.openai import OpenAIClient
+
+            self.llm_client = OpenAIClient(
+                base_url=base_url_input.value,
+                model=self.selected_model,
+                api_key=api_key_input.value,
+            )
+        else:  # EULERINTELLI
+            from backend.hermes.client import HermesChatClient
+
+            self.llm_client = HermesChatClient(
+                base_url=base_url_input.value,
+                auth_token=api_key_input.value,
+            )
