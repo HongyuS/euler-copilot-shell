@@ -14,7 +14,6 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Footer, Header, Input, Label, Static
 
 from app.settings import SettingsScreen
-from backend.base import LLMClientBase
 from backend.factory import BackendFactory
 from config import ConfigManager
 from tool.command_processor import process_command
@@ -23,6 +22,8 @@ if TYPE_CHECKING:
     from textual.events import Key as KeyEvent
     from textual.events import Mount
     from textual.visual import VisualType
+
+    from backend.base import LLMClientBase
 
 
 class FocusableContainer(Container):

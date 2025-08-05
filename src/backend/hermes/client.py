@@ -197,6 +197,9 @@ class HermesChatClient(LLMClientBase):
             HermesAPIError: 当 API 调用失败时
 
         """
+        # 如果有未完成的会话，先停止它
+        await self._stop()
+
         self.logger.info("开始 Hermes 流式聊天请求")
         start_time = time.time()
 
@@ -336,6 +339,8 @@ class HermesChatClient(LLMClientBase):
 
     async def close(self) -> None:
         """关闭 HTTP 客户端"""
+        # 如果有未完成的会话，先停止它
+        await self._stop()
         try:
             if self.client and not self.client.is_closed:
                 await self.client.aclose()
@@ -863,6 +868,29 @@ class HermesChatClient(LLMClientBase):
             raise HermesAPIError(500, f"Failed to check conversation records: {e!s}") from e
         else:
             return is_empty
+
+    async def _stop(self) -> None:
+        """停止当前会话"""
+        if self.client is None or self.client.is_closed:
+            return
+
+        try:
+            stop_url = urljoin(self.base_url, "/api/stop")
+            headers = {
+                "Host": self._get_host_header(),
+            }
+            if self.auth_token:
+                headers["Authorization"] = f"Bearer {self.auth_token}"
+
+            response = await self.client.post(stop_url, headers=headers)
+
+            if response.status_code != HTTP_OK:
+                error_text = await response.aread()
+                raise HermesAPIError(response.status_code, error_text.decode("utf-8"))
+
+        except httpx.RequestError as e:
+            log_exception(self.logger, "停止会话请求失败", e)
+            raise HermesAPIError(500, f"Failed to stop conversation: {e!s}") from e
 
     async def __aenter__(self) -> Self:
         """异步上下文管理器入口"""
