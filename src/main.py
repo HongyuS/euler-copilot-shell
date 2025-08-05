@@ -4,7 +4,7 @@ import argparse
 import atexit
 import sys
 
-from app.tui import Hermes
+from app.tui import IntelligentTerminal
 from log.manager import (
     cleanup_empty_logs,
     disable_console_output,
@@ -62,7 +62,7 @@ def main() -> None:
     atexit.register(cleanup_empty_logs)
 
     try:
-        app = Hermes()
+        app = IntelligentTerminal()
         app.run()
     except Exception:
         logger.exception("智能 Shell 应用发生致命错误")

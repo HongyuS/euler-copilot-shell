@@ -231,6 +231,11 @@ class SettingsScreen(Screen):
             self.config_manager.set_eulerintelli_url(base_url)
             self.config_manager.set_eulerintelli_key(api_key)
 
+        # 通知主应用刷新客户端
+        from app.tui import IntelligentTerminal
+        if isinstance(self.app, IntelligentTerminal):
+            self.app.refresh_llm_client()
+
         self.app.pop_screen()
 
     @on(Button.Pressed, "#cancel-btn")
