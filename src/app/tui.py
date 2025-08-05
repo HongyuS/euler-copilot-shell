@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, NamedTuple
 
 from rich.markdown import Markdown as RichMarkdown
 from textual import on
@@ -24,6 +24,15 @@ if TYPE_CHECKING:
     from textual.visual import VisualType
 
     from backend.base import LLMClientBase
+
+
+class ContentChunkParams(NamedTuple):
+    """内容块处理参数"""
+
+    content: str
+    is_llm_output: bool
+    current_content: str
+    is_first_content: bool
 
 
 class FocusableContainer(Container):
@@ -175,13 +184,14 @@ class ExitDialog(ModalScreen):
         self.app.exit()
 
 
-class Hermes(App):
+class IntelligentTerminal(App):
     """基于 Textual 的智能终端应用"""
 
     CSS_PATH = "css/styles.tcss"
 
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding(key="ctrl+s", action="settings", description="设置"),
+        Binding(key="ctrl+r", action="reset_conversation", description="重置对话"),
         Binding(key="esc", action="request_quit", description="退出"),
         Binding(key="tab", action="toggle_focus", description="切换焦点"),
     ]
@@ -189,10 +199,14 @@ class Hermes(App):
     def __init__(self) -> None:
         """初始化应用"""
         super().__init__()
+        # 设置应用标题
+        self.title = "openEuler 智能 Shell"
         self.config_manager = ConfigManager()
         self.processing: bool = False
         # 添加保存任务的集合到类属性
         self.background_tasks: set[asyncio.Task] = set()
+        # 创建并保持单一的 LLM 客户端实例以维持对话历史
+        self._llm_client: LLMClientBase | None = None
 
     def compose(self) -> ComposeResult:
         """构建界面"""
@@ -209,6 +223,13 @@ class Hermes(App):
     def action_request_quit(self) -> None:
         """请求退出应用"""
         self.push_screen(ExitDialog())
+
+    def action_reset_conversation(self) -> None:
+        """重置对话历史记录的动作"""
+        self.reset_conversation()
+        # 清除屏幕上的所有内容
+        output_container = self.query_one("#output-container")
+        output_container.remove_children()
 
     def on_mount(self) -> None:
         """初始化完成时设置焦点"""
@@ -264,61 +285,115 @@ class Hermes(App):
     async def _process_command(self, user_input: str) -> None:
         """异步处理命令"""
         try:
-            current_line: OutputLine | MarkdownOutputLine | None = None
-            current_content = ""  # 用于累积内容
             output_container = self.query_one("#output-container", Container)
-            is_first_content = True  # 标记是否是第一段内容
+            received_any_content = await self._handle_command_stream(user_input, output_container)
 
-            # 通过process_command获取命令处理结果和输出类型
-            async for output_tuple in process_command(user_input, self._get_llm_client()):
-                content, is_llm_output = output_tuple  # 解包输出内容和类型标志
-
-                # 处理第一段内容，创建适当的输出组件
-                if is_first_content:
-                    is_first_content = False
-
-                    if is_llm_output:
-                        # LLM输出，使用富文本渲染
-                        current_line = MarkdownOutputLine(content)
-                        current_content = content
-                    else:
-                        # 系统命令输出，使用纯文本
-                        current_line = OutputLine(content)
-                        current_content = content
-
-                    # 将组件添加到输出容器
-                    output_container.mount(current_line)
-                # 处理后续内容
-                elif is_llm_output and isinstance(current_line, MarkdownOutputLine):
-                    # 继续累积LLM富文本内容
-                    current_content += content
-                    current_line.update_markdown(current_content)
-                elif not is_llm_output and isinstance(current_line, OutputLine):
-                    # 继续累积命令输出纯文本
-                    current_text = current_line.get_content()
-                    current_line.update(current_text + content)
-                else:
-                    # 输出类型发生变化，创建新的输出组件
-                    if is_llm_output:
-                        current_line = MarkdownOutputLine(content)
-                        current_content = content
-                    else:
-                        current_line = OutputLine(content)
-                        current_content = content
-
-                    output_container.mount(current_line)
-
-                # 滚动到底部
-                await self._scroll_to_end()
+            # 如果没有收到任何内容，显示错误信息
+            if not received_any_content:
+                output_container.mount(
+                    OutputLine("没有收到响应，请检查网络连接或稍后重试", command=False),
+                )
 
         except (asyncio.CancelledError, OSError, ValueError) as e:
             # 添加异常处理，显示错误信息
             output_container = self.query_one("#output-container", Container)
-            output_container.mount(OutputLine(f"处理命令时出错: {e!s}", command=False))
+            error_msg = self._format_error_message(e)
+            output_container.mount(OutputLine(error_msg, command=False))
         finally:
             # 重新聚焦到输入框
             self.query_one(CommandInput).focus()
             # 注意：不在这里重置processing标志，由回调函数处理
+
+    async def _handle_command_stream(self, user_input: str, output_container: Container) -> bool:
+        """处理命令流式响应"""
+        current_line: OutputLine | MarkdownOutputLine | None = None
+        current_content = ""  # 用于累积内容
+        is_first_content = True  # 标记是否是第一段内容
+        received_any_content = False  # 标记是否收到任何内容
+        start_time = asyncio.get_event_loop().time()
+        timeout_seconds = 30.0  # 30秒超时
+
+        # 通过 process_command 获取命令处理结果和输出类型
+        async for output_tuple in process_command(user_input, self._get_llm_client()):
+            content, is_llm_output = output_tuple  # 解包输出内容和类型标志
+            received_any_content = True
+
+            # 检查超时
+            if asyncio.get_event_loop().time() - start_time > timeout_seconds:
+                output_container.mount(OutputLine("请求超时，已停止处理", command=False))
+                break
+
+            # 处理内容
+            params = ContentChunkParams(
+                content=content,
+                is_llm_output=is_llm_output,
+                current_content=current_content,
+                is_first_content=is_first_content,
+            )
+            current_line = await self._process_content_chunk(
+                params,
+                current_line,
+                output_container,
+            )
+
+            # 更新状态
+            if is_first_content:
+                is_first_content = False
+                current_content = content
+            elif isinstance(current_line, MarkdownOutputLine) and is_llm_output:
+                current_content += content
+
+            # 滚动到底部
+            await self._scroll_to_end()
+
+        return received_any_content
+
+    async def _process_content_chunk(
+        self,
+        params: ContentChunkParams,
+        current_line: OutputLine | MarkdownOutputLine | None,
+        output_container: Container,
+    ) -> OutputLine | MarkdownOutputLine:
+        """处理单个内容块"""
+        content = params.content
+        is_llm_output = params.is_llm_output
+        current_content = params.current_content
+        is_first_content = params.is_first_content
+
+        # 处理第一段内容，创建适当的输出组件
+        if is_first_content:
+            new_line: OutputLine | MarkdownOutputLine = (
+                MarkdownOutputLine(content) if is_llm_output else OutputLine(content)
+            )
+            output_container.mount(new_line)
+            return new_line
+
+        # 处理后续内容
+        if is_llm_output and isinstance(current_line, MarkdownOutputLine):
+            # 继续累积LLM富文本内容
+            updated_content = current_content + content
+            current_line.update_markdown(updated_content)
+            return current_line
+
+        if not is_llm_output and isinstance(current_line, OutputLine):
+            # 继续累积命令输出纯文本
+            current_text = current_line.get_content()
+            current_line.update(current_text + content)
+            return current_line
+
+        # 输出类型发生变化，创建新的输出组件
+        new_line = MarkdownOutputLine(content) if is_llm_output else OutputLine(content)
+        output_container.mount(new_line)
+        return new_line
+
+    def _format_error_message(self, error: BaseException) -> str:
+        """格式化错误消息"""
+        error_str = str(error).lower()
+        if "timeout" in error_str:
+            return "请求超时，请稍后重试"
+        if any(keyword in error_str for keyword in ["network", "connection"]):
+            return "网络连接错误，请检查网络后重试"
+        return f"处理命令时出错: {error!s}"
 
     async def _scroll_to_end(self) -> None:
         """滚动到容器底部的辅助方法"""
@@ -330,8 +405,19 @@ class Hermes(App):
         await asyncio.sleep(0.01)
 
     def _get_llm_client(self) -> LLMClientBase:
-        """获取大模型客户端"""
-        return BackendFactory.create_client(self.config_manager)
+        """获取大模型客户端，使用单例模式维持对话历史"""
+        if self._llm_client is None:
+            self._llm_client = BackendFactory.create_client(self.config_manager)
+        return self._llm_client
+
+    def refresh_llm_client(self) -> None:
+        """刷新 LLM 客户端实例，用于配置更改后重新创建客户端"""
+        self._llm_client = BackendFactory.create_client(self.config_manager)
+
+    def reset_conversation(self) -> None:
+        """重置对话历史记录"""
+        if self._llm_client is not None and hasattr(self._llm_client, "reset_conversation"):
+            self._llm_client.reset_conversation()
 
     def action_toggle_focus(self) -> None:
         """在命令输入框和文本区域之间切换焦点"""
