@@ -374,40 +374,50 @@ class IntelligentTerminal(App):
         is_first_content = True  # 标记是否是第一段内容
         received_any_content = False  # 标记是否收到任何内容
         start_time = asyncio.get_event_loop().time()
-        timeout_seconds = 30.0  # 30秒超时
+        timeout_seconds = 60.0  # 60秒超时
 
-        # 通过 process_command 获取命令处理结果和输出类型
-        async for output_tuple in process_command(user_input, self._get_llm_client()):
-            content, is_llm_output = output_tuple  # 解包输出内容和类型标志
-            received_any_content = True
+        try:
+            # 通过 process_command 获取命令处理结果和输出类型
+            async for output_tuple in process_command(user_input, self._get_llm_client()):
+                content, is_llm_output = output_tuple  # 解包输出内容和类型标志
+                received_any_content = True
 
-            # 检查超时
-            if asyncio.get_event_loop().time() - start_time > timeout_seconds:
-                output_container.mount(OutputLine("请求超时，已停止处理", command=False))
-                break
+                # 检查超时
+                if asyncio.get_event_loop().time() - start_time > timeout_seconds:
+                    output_container.mount(OutputLine("请求超时，已停止处理", command=False))
+                    break
 
-            # 处理内容
-            params = ContentChunkParams(
-                content=content,
-                is_llm_output=is_llm_output,
-                current_content=current_content,
-                is_first_content=is_first_content,
-            )
-            current_line = await self._process_content_chunk(
-                params,
-                current_line,
-                output_container,
-            )
+                # 处理内容
+                params = ContentChunkParams(
+                    content=content,
+                    is_llm_output=is_llm_output,
+                    current_content=current_content,
+                    is_first_content=is_first_content,
+                )
+                current_line = await self._process_content_chunk(
+                    params,
+                    current_line,
+                    output_container,
+                )
 
-            # 更新状态
-            if is_first_content:
-                is_first_content = False
-                current_content = content
-            elif isinstance(current_line, MarkdownOutputLine) and is_llm_output:
-                current_content += content
+                # 更新状态
+                if is_first_content:
+                    is_first_content = False
+                    current_content = content
+                elif isinstance(current_line, MarkdownOutputLine) and is_llm_output:
+                    current_content += content
 
-            # 滚动到底部
-            await self._scroll_to_end()
+                # 滚动到底部
+                await self._scroll_to_end()
+
+        except asyncio.TimeoutError:
+            self.logger.warning("Command stream timed out")
+            if hasattr(self, "is_running") and self.is_running:
+                output_container.mount(OutputLine("请求超时，请稍后重试", command=False))
+        except asyncio.CancelledError:
+            self.logger.info("Command stream was cancelled")
+            if received_any_content and hasattr(self, "is_running") and self.is_running:
+                output_container.mount(OutputLine("[处理被中断]", command=False))
 
         return received_any_content
 
