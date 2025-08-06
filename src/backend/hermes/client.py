@@ -207,11 +207,13 @@ class HermesChatClient(LLMClientBase):
         await self._stop()
 
         self.logger.info("开始 Hermes 流式聊天请求")
+        self.logger.debug("提示内容长度: %d", len(prompt))
         start_time = time.time()
 
         try:
             # 确保有会话 ID
             conversation_id = await self._ensure_conversation()
+            self.logger.info("使用会话ID: %s", conversation_id)
 
             # 创建聊天请求
             app = HermesApp("")
@@ -685,6 +687,10 @@ class HermesChatClient(LLMClientBase):
         chat_url = urljoin(self.base_url, "/api/chat")
         headers = self._build_chat_headers()
 
+        self.logger.info("准备发送聊天请求 - URL: %s, 会话ID: %s", chat_url, request.conversation_id)
+        self.logger.debug("请求头: %s", headers)
+        self.logger.debug("请求内容: %s", request.to_dict())
+
         try:
             async with client.stream(
                 "POST",
@@ -692,6 +698,7 @@ class HermesChatClient(LLMClientBase):
                 json=request.to_dict(),
                 headers=headers,
             ) as response:
+                self.logger.info("收到聊天响应 - 状态码: %d", response.status_code)
                 await self._validate_chat_response(response)
                 async for text in self._process_stream_events(response):
                     yield text
@@ -703,12 +710,8 @@ class HermesChatClient(LLMClientBase):
 
     def _log_text_content(self, text_content: str) -> None:
         """记录文本内容到日志"""
-        max_log_length = 50
-        display_text = (
-            text_content[:max_log_length] + "..."
-            if len(text_content) > max_log_length
-            else text_content
-        )
+        max_log_length = 100
+        display_text = text_content[:max_log_length] + "..." if len(text_content) > max_log_length else text_content
         self.logger.debug("产生文本内容: %s", display_text)
 
     async def _get_conversation_list(self) -> list[str]:
