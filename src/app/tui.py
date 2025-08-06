@@ -16,6 +16,7 @@ from textual.widgets import Button, Footer, Header, Input, Label, Static
 from app.settings import SettingsScreen
 from backend.factory import BackendFactory
 from config import ConfigManager
+from log.manager import get_logger, log_exception
 from tool.command_processor import process_command
 
 if TYPE_CHECKING:
@@ -207,6 +208,8 @@ class IntelligentTerminal(App):
         self.background_tasks: set[asyncio.Task] = set()
         # 创建并保持单一的 LLM 客户端实例以维持对话历史
         self._llm_client: LLMClientBase | None = None
+        # 创建日志实例
+        self.logger = get_logger(__name__)
 
     def compose(self) -> ComposeResult:
         """构建界面"""
@@ -226,10 +229,23 @@ class IntelligentTerminal(App):
 
     def action_reset_conversation(self) -> None:
         """重置对话历史记录的动作"""
-        self.reset_conversation()
+        if self._llm_client is not None and hasattr(self._llm_client, "reset_conversation"):
+            self._llm_client.reset_conversation()
         # 清除屏幕上的所有内容
         output_container = self.query_one("#output-container")
         output_container.remove_children()
+
+    def action_toggle_focus(self) -> None:
+        """在命令输入框和文本区域之间切换焦点"""
+        # 获取当前聚焦的组件
+        focused = self.focused
+        if isinstance(focused, CommandInput):
+            # 如果当前聚焦在命令输入框，则聚焦到输出容器
+            output_container = self.query_one("#output-container", FocusableContainer)
+            output_container.focus()
+        else:
+            # 否则聚焦到命令输入框
+            self.query_one(CommandInput).focus()
 
     def on_mount(self) -> None:
         """初始化完成时设置焦点"""
@@ -241,6 +257,23 @@ class IntelligentTerminal(App):
         for task in self.background_tasks:
             if not task.done():
                 task.cancel()
+
+        # 清理 LLM 客户端连接
+        if self._llm_client is not None:
+            try:
+                # 创建新的事件循环来处理异步清理
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self._llm_client.close())
+                    self.log.info("LLM 客户端已安全关闭")
+                finally:
+                    loop.close()
+            except (OSError, RuntimeError, ValueError) as e:
+                # 使用项目的日志异常处理函数
+                log_exception(self.logger, "关闭 LLM 客户端时出错", e)
+
         # 调用父类的exit方法
         super().exit(*args, **kwargs)
 
@@ -266,6 +299,10 @@ class IntelligentTerminal(App):
         self.background_tasks.add(task)
         # 添加完成回调，自动从集合中移除
         task.add_done_callback(self._task_done_callback)
+
+    def refresh_llm_client(self) -> None:
+        """刷新 LLM 客户端实例，用于配置更改后重新创建客户端"""
+        self._llm_client = BackendFactory.create_client(self.config_manager)
 
     def _task_done_callback(self, task: asyncio.Task) -> None:
         """任务完成回调，从任务集合中移除"""
@@ -409,24 +446,3 @@ class IntelligentTerminal(App):
         if self._llm_client is None:
             self._llm_client = BackendFactory.create_client(self.config_manager)
         return self._llm_client
-
-    def refresh_llm_client(self) -> None:
-        """刷新 LLM 客户端实例，用于配置更改后重新创建客户端"""
-        self._llm_client = BackendFactory.create_client(self.config_manager)
-
-    def reset_conversation(self) -> None:
-        """重置对话历史记录"""
-        if self._llm_client is not None and hasattr(self._llm_client, "reset_conversation"):
-            self._llm_client.reset_conversation()
-
-    def action_toggle_focus(self) -> None:
-        """在命令输入框和文本区域之间切换焦点"""
-        # 获取当前聚焦的组件
-        focused = self.focused
-        if isinstance(focused, CommandInput):
-            # 如果当前聚焦在命令输入框，则聚焦到输出容器
-            output_container = self.query_one("#output-container", FocusableContainer)
-            output_container.focus()
-        else:
-            # 否则聚焦到命令输入框
-            self.query_one(CommandInput).focus()
