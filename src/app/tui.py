@@ -260,22 +260,33 @@ class IntelligentTerminal(App):
 
         # 清理 LLM 客户端连接
         if self._llm_client is not None:
-            try:
-                # 创建新的事件循环来处理异步清理
-                import asyncio
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(self._llm_client.close())
-                    self.log.info("LLM 客户端已安全关闭")
-                finally:
-                    loop.close()
-            except (OSError, RuntimeError, ValueError) as e:
-                # 使用项目的日志异常处理函数
-                log_exception(self.logger, "关闭 LLM 客户端时出错", e)
+            # 创建清理任务并在当前事件循环中执行
+            cleanup_task = asyncio.create_task(self._cleanup_llm_client())
+            self.background_tasks.add(cleanup_task)
+            cleanup_task.add_done_callback(self._cleanup_task_done_callback)
 
         # 调用父类的exit方法
         super().exit(*args, **kwargs)
+
+    async def _cleanup_llm_client(self) -> None:
+        """异步清理 LLM 客户端"""
+        if self._llm_client is not None:
+            try:
+                await self._llm_client.close()
+                self.logger.info("LLM 客户端已安全关闭")
+            except (OSError, RuntimeError, ValueError) as e:
+                log_exception(self.logger, "关闭 LLM 客户端时出错", e)
+
+    def _cleanup_task_done_callback(self, task: asyncio.Task) -> None:
+        """清理任务完成回调"""
+        if task in self.background_tasks:
+            self.background_tasks.remove(task)
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except (OSError, ValueError, RuntimeError):
+            self.logger.exception("LLM client cleanup error")
 
     @on(Input.Submitted, "#command-input")
     def handle_input(self, event: Input.Submitted) -> None:
@@ -312,9 +323,10 @@ class IntelligentTerminal(App):
         try:
             task.result()
         except asyncio.CancelledError:
+            # 任务被取消是正常情况，不需要记录错误
             pass
-        except (OSError, ValueError, RuntimeError) as e:
-            self.log.error("Command processing error: %s", e)  # noqa: TRY400
+        except (OSError, ValueError, RuntimeError):
+            self.logger.exception("Command processing error")
         finally:
             # 确保处理标志被重置
             self.processing = False
@@ -325,20 +337,34 @@ class IntelligentTerminal(App):
             output_container = self.query_one("#output-container", Container)
             received_any_content = await self._handle_command_stream(user_input, output_container)
 
-            # 如果没有收到任何内容，显示错误信息
-            if not received_any_content:
+            # 如果没有收到任何内容且应用仍在运行，显示错误信息
+            if not received_any_content and hasattr(self, "is_running") and self.is_running:
                 output_container.mount(
                     OutputLine("没有收到响应，请检查网络连接或稍后重试", command=False),
                 )
 
-        except (asyncio.CancelledError, OSError, ValueError) as e:
+        except asyncio.CancelledError:
+            # 任务被取消，通常是因为应用退出
+            self.logger.info("Command processing cancelled")
+        except (OSError, ValueError) as e:
             # 添加异常处理，显示错误信息
-            output_container = self.query_one("#output-container", Container)
-            error_msg = self._format_error_message(e)
-            output_container.mount(OutputLine(error_msg, command=False))
+            try:
+                output_container = self.query_one("#output-container", Container)
+                error_msg = self._format_error_message(e)
+                # 检查应用是否已经开始退出
+                if hasattr(self, "is_running") and self.is_running:
+                    output_container.mount(OutputLine(error_msg, command=False))
+            except (AttributeError, ValueError, RuntimeError):
+                # 如果UI组件已不可用，只记录错误日志
+                self.logger.exception("Failed to display error message")
         finally:
-            # 重新聚焦到输入框
-            self.query_one(CommandInput).focus()
+            # 重新聚焦到输入框（如果应用仍在运行）
+            try:
+                if hasattr(self, "is_running") and self.is_running:
+                    self.query_one(CommandInput).focus()
+            except (AttributeError, ValueError, RuntimeError):
+                # 应用可能正在退出，忽略聚焦错误
+                self.logger.debug("Failed to focus input widget, app may be exiting")
             # 注意：不在这里重置processing标志，由回调函数处理
 
     async def _handle_command_stream(self, user_input: str, output_container: Container) -> bool:
