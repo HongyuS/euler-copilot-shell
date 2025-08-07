@@ -225,81 +225,6 @@ class IntelligentTerminal(App):
         self.background_tasks.add(task)
         task.add_done_callback(self._task_done_callback)
 
-    async def _show_agent_selection(self) -> None:
-        """显示智能体选择对话框"""
-        try:
-            llm_client = self._get_llm_client()
-
-            # 构建智能体列表 - 默认第一项为"智能问答"（无智能体）
-            agent_list = [("", "智能问答")]
-
-            # 尝试获取可用智能体
-            if hasattr(llm_client, "get_available_agents"):
-                try:
-                    available_agents = await llm_client.get_available_agents()  # type: ignore[attr-defined]
-                    # 添加获取到的智能体
-                    agent_list.extend(
-                        [
-                            (agent.app_id, agent.name)
-                            for agent in available_agents
-                            if hasattr(agent, "app_id") and hasattr(agent, "name")
-                        ],
-                    )
-                except (AttributeError, OSError, ValueError, RuntimeError) as e:
-                    self.logger.warning("获取智能体列表失败，使用默认选项: %s", str(e))
-                    # 继续使用默认的智能问答选项
-            else:
-                self.logger.info("当前客户端不支持智能体功能，显示默认选项")
-
-            # 显示选择对话框（至少包含"智能问答"选项）
-            await self._display_agent_dialog(agent_list, llm_client)
-
-        except (OSError, ValueError, RuntimeError) as e:
-            log_exception(self.logger, "显示智能体选择对话框失败", e)
-            # 即使出错也显示默认选项
-            agent_list = [("", "智能问答")]
-            try:
-                llm_client = self._get_llm_client()
-                await self._display_agent_dialog(agent_list, llm_client)
-            except (OSError, ValueError, RuntimeError, AttributeError):
-                self._show_error_message("无法显示智能体选择对话框")
-
-    async def _display_agent_dialog(self, agent_list: list[tuple[str, str]], llm_client: LLMClientBase) -> None:
-        """显示智能体选择对话框"""
-
-        def on_agent_selected(selected_agent: tuple[str, str]) -> None:
-            """智能体选择回调"""
-            self.current_agent = selected_agent
-            app_id, name = selected_agent
-
-            # 设置智能体到客户端
-            if hasattr(llm_client, "set_current_agent"):
-                llm_client.set_current_agent(app_id)  # type: ignore[attr-defined]
-
-            # 显示选择结果
-            self._show_info_message(f"已选择智能体: {name}")
-
-        dialog = AgentSelectionDialog(agent_list, on_agent_selected)
-        self.push_screen(dialog)
-
-    def _show_error_message(self, message: str) -> None:
-        """显示错误消息"""
-        try:
-            output_container = self.query_one("#output-container")
-            output_container.mount(OutputLine(message, command=False))
-        except (AttributeError, ValueError, RuntimeError):
-            # 如果UI组件已不可用，只记录错误日志
-            self.logger.exception("Failed to display error message")
-
-    def _show_info_message(self, message: str) -> None:
-        """显示信息消息"""
-        try:
-            output_container = self.query_one("#output-container")
-            output_container.mount(OutputLine(message, command=False))
-        except (AttributeError, ValueError, RuntimeError):
-            # 如果UI组件已不可用，只记录错误日志
-            self.logger.exception("Failed to display info message")
-
     def action_toggle_focus(self) -> None:
         """在命令输入框和文本区域之间切换焦点"""
         # 获取当前聚焦的组件
@@ -315,34 +240,10 @@ class IntelligentTerminal(App):
     def on_mount(self) -> None:
         """初始化完成时设置焦点和绑定"""
         self.query_one(CommandInput).focus()
-        self._update_bindings()
-
-    def _update_bindings(self) -> None:
-        """根据后端类型更新键绑定"""
-        from config.model import Backend
-
-        # 移除现有的智能体选择绑定
-        bindings_to_keep = [binding for binding in self.BINDINGS if getattr(binding, "action", None) != "choose_agent"]
-
-        # 只有 Hermes 后端才添加智能体选择
-        if self.config_manager.get_backend() == Backend.EULERINTELLI:
-            # 在"重置对话"后插入智能体选择
-            agent_binding = Binding(key="ctrl+t", action="choose_agent", description="选择智能体")
-            # 找到重置对话的位置
-            for i, binding in enumerate(bindings_to_keep):
-                if getattr(binding, "action", None) == "reset_conversation":
-                    bindings_to_keep.insert(i + 1, agent_binding)
-                    break
-
-        # 更新绑定列表
-        self.BINDINGS.clear()
-        self.BINDINGS.extend(bindings_to_keep)
 
     def refresh_llm_client(self) -> None:
         """刷新 LLM 客户端实例，用于配置更改后重新创建客户端"""
         self._llm_client = BackendFactory.create_client(self.config_manager)
-        # 配置更改后重新更新绑定
-        self._update_bindings()
 
     def exit(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
         """退出应用前取消所有后台任务"""
@@ -360,26 +261,6 @@ class IntelligentTerminal(App):
 
         # 调用父类的exit方法
         super().exit(*args, **kwargs)
-
-    async def _cleanup_llm_client(self) -> None:
-        """异步清理 LLM 客户端"""
-        if self._llm_client is not None:
-            try:
-                await self._llm_client.close()
-                self.logger.info("LLM 客户端已安全关闭")
-            except (OSError, RuntimeError, ValueError) as e:
-                log_exception(self.logger, "关闭 LLM 客户端时出错", e)
-
-    def _cleanup_task_done_callback(self, task: asyncio.Task) -> None:
-        """清理任务完成回调"""
-        if task in self.background_tasks:
-            self.background_tasks.remove(task)
-        try:
-            task.result()
-        except asyncio.CancelledError:
-            pass
-        except (OSError, ValueError, RuntimeError):
-            self.logger.exception("LLM client cleanup error")
 
     @on(Input.Submitted, "#command-input")
     def handle_input(self, event: Input.Submitted) -> None:
@@ -571,3 +452,76 @@ class IntelligentTerminal(App):
         if self._llm_client is None:
             self._llm_client = BackendFactory.create_client(self.config_manager)
         return self._llm_client
+
+    async def _cleanup_llm_client(self) -> None:
+        """异步清理 LLM 客户端"""
+        if self._llm_client is not None:
+            try:
+                await self._llm_client.close()
+                self.logger.info("LLM 客户端已安全关闭")
+            except (OSError, RuntimeError, ValueError) as e:
+                log_exception(self.logger, "关闭 LLM 客户端时出错", e)
+
+    def _cleanup_task_done_callback(self, task: asyncio.Task) -> None:
+        """清理任务完成回调"""
+        if task in self.background_tasks:
+            self.background_tasks.remove(task)
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except (OSError, ValueError, RuntimeError):
+            self.logger.exception("LLM client cleanup error")
+
+    async def _show_agent_selection(self) -> None:
+        """显示智能体选择对话框"""
+        try:
+            llm_client = self._get_llm_client()
+
+            # 构建智能体列表 - 默认第一项为"智能问答"（无智能体）
+            agent_list = [("", "智能问答")]
+
+            # 尝试获取可用智能体
+            if hasattr(llm_client, "get_available_agents"):
+                try:
+                    available_agents = await llm_client.get_available_agents()  # type: ignore[attr-defined]
+                    # 添加获取到的智能体
+                    agent_list.extend(
+                        [
+                            (agent.app_id, agent.name)
+                            for agent in available_agents
+                            if hasattr(agent, "app_id") and hasattr(agent, "name")
+                        ],
+                    )
+                except (AttributeError, OSError, ValueError, RuntimeError) as e:
+                    self.logger.warning("获取智能体列表失败，使用默认选项: %s", str(e))
+                    # 继续使用默认的智能问答选项
+            else:
+                self.logger.info("当前客户端不支持智能体功能，显示默认选项")
+
+            await self._display_agent_dialog(agent_list, llm_client)
+
+        except (OSError, ValueError, RuntimeError) as e:
+            log_exception(self.logger, "显示智能体选择对话框失败", e)
+            # 即使出错也显示默认选项
+            agent_list = [("", "智能问答")]
+            try:
+                llm_client = self._get_llm_client()
+                await self._display_agent_dialog(agent_list, llm_client)
+            except (OSError, ValueError, RuntimeError, AttributeError):
+                self.logger.exception("无法显示智能体选择对话框")
+
+    async def _display_agent_dialog(self, agent_list: list[tuple[str, str]], llm_client: LLMClientBase) -> None:
+        """显示智能体选择对话框"""
+
+        def on_agent_selected(selected_agent: tuple[str, str]) -> None:
+            """智能体选择回调"""
+            self.current_agent = selected_agent
+            app_id, name = selected_agent
+
+            # 设置智能体到客户端
+            if hasattr(llm_client, "set_current_agent"):
+                llm_client.set_current_agent(app_id)  # type: ignore[attr-defined]
+
+        dialog = AgentSelectionDialog(agent_list, on_agent_selected, self.current_agent)
+        self.push_screen(dialog)
