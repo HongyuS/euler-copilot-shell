@@ -87,6 +87,60 @@ class DeploymentConfig:
 
         return len(errors) == 0, errors
 
+    async def validate_llm_connectivity(self) -> tuple[bool, str, dict]:
+        """
+        验证 LLM API 连接性和功能
+
+        单独验证 LLM 配置的有效性，包括模型可用性和 function_call 支持。
+        当 LLM 的3个核心字段（endpoint、api_key、model）填完后调用。
+
+        Returns:
+            tuple[bool, str, dict]: (是否验证成功, 消息, 验证详细信息)
+
+        """
+        from .validators import APIValidator
+
+        # 检查必要字段是否完整
+        if not (self.llm.endpoint.strip() and self.llm.api_key.strip() and self.llm.model.strip()):
+            return False, "LLM 基础配置不完整", {}
+
+        validator = APIValidator()
+        llm_valid, llm_msg, llm_info = await validator.validate_llm_config(
+            self.llm.endpoint,
+            self.llm.api_key,
+            self.llm.model,
+            self.llm.request_timeout,
+        )
+
+        return llm_valid, llm_msg, llm_info
+
+    async def validate_embedding_connectivity(self) -> tuple[bool, str, dict]:
+        """
+        验证 Embedding API 连接性和功能
+
+        单独验证 Embedding 配置的有效性。
+        当 Embedding 的3个核心字段（endpoint、api_key、model）填完后调用。
+
+        Returns:
+            tuple[bool, str, dict]: (是否验证成功, 消息, 验证详细信息)
+
+        """
+        from .validators import APIValidator
+
+        # 检查必要字段是否完整
+        if not (self.embedding.endpoint.strip() and self.embedding.api_key.strip() and self.embedding.model.strip()):
+            return False, "Embedding 基础配置不完整", {}
+
+        validator = APIValidator()
+        embed_valid, embed_msg, embed_info = await validator.validate_embedding_config(
+            self.embedding.endpoint,
+            self.embedding.api_key,
+            self.embedding.model,
+            self.llm.request_timeout,  # 使用相同的超时设置
+        )
+
+        return embed_valid, embed_msg, embed_info
+
     def _validate_basic_fields(self) -> list[str]:
         """验证基础字段"""
         errors = []
