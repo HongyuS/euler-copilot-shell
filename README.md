@@ -73,7 +73,30 @@ python src/main.py
 python src/main.py --logs
 ```
 
+初始化 openEuler Intelligence 后端（仅支持 openEuler 操作系统）:
+
+```sh
+python src/main.py --init
+```
+
 应用启动后，您可以直接在输入框中输入命令。如果命令无效或无法执行，应用程序将基于您的输入提供智能建议。
+
+### --init 命令详细说明
+
+`--init` 命令用于在 openEuler 操作系统上自动安装和配置 openEuler Intelligence 后端，它将执行以下步骤：
+
+1. **系统检测**: 检测当前操作系统是否为 openEuler
+2. **环境检查**: 验证 dnf 包管理器和管理员权限
+3. **包安装**: 通过 dnf 安装 `openeuler-intelligence-installer` RPM 包
+4. **服务部署**: 运行部署脚本完成系统初始化
+
+**使用要求**:
+
+- 仅支持 openEuler 操作系统
+- 需要管理员权限（sudo）
+- 需要网络连接以下载 RPM 包
+
+**注意**: 此命令会自动安装系统服务，请在生产环境使用前仔细评估。
 
 ## 大型语言模型集成
 
