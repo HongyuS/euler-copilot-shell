@@ -59,6 +59,9 @@ class HermesChatClient(LLMClientBase):
         self._conversation_manager: HermesConversationManager | None = None
         self._stream_processor: HermesStreamProcessor | None = None
 
+        # 当前选择的智能体ID
+        self._current_agent_id: str = ""
+
         self.logger.info("Hermes 客户端初始化成功 - URL: %s", base_url)
 
     @property
@@ -92,6 +95,27 @@ class HermesChatClient(LLMClientBase):
             from .stream import HermesStreamProcessor
             self._stream_processor = HermesStreamProcessor()
         return self._stream_processor
+
+    def set_current_agent(self, agent_id: str) -> None:
+        """
+        设置当前使用的智能体
+
+        Args:
+            agent_id: 智能体ID，空字符串表示不使用智能体
+
+        """
+        self._current_agent_id = agent_id
+        self.logger.info("设置当前智能体ID: %s", agent_id or "无智能体")
+
+    def get_current_agent(self) -> str:
+        """
+        获取当前使用的智能体ID
+
+        Returns:
+            str: 当前智能体ID，空字符串表示不使用智能体
+
+        """
+        return self._current_agent_id
 
     def reset_conversation(self) -> None:
         """重置会话，下次聊天时会创建新的会话"""
@@ -128,7 +152,7 @@ class HermesChatClient(LLMClientBase):
 
             # 创建聊天请求
             from .models import HermesApp, HermesChatRequest, HermesFeatures
-            app = HermesApp("")
+            app = HermesApp(self._current_agent_id)
             request = HermesChatRequest(
                 app=app,
                 conversation_id=conversation_id,

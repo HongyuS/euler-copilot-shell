@@ -139,3 +139,95 @@ Static {
     height: 3;
     margin-top: 1;
 }
+
+/* 智能体选择对话框屏幕样式 */
+#agent-dialog-screen {
+    align: center middle;
+    width: 100%;
+    height: 100%;
+}
+
+/* 智能体选择对话框样式 */
+#agent-dialog {
+    align: center middle;
+    width: 60%;
+    height: 70%;
+    border: solid #4963b1;
+    color: #ffffff;
+    margin: 1 1;
+    padding: 1;
+}
+
+/* 智能体对话框标题样式 */
+#agent-dialog-title {
+    text-align: center;
+    margin-bottom: 1;
+    padding: 1;
+    color: #688efd;
+    text-style: bold;
+}
+
+/* 智能体内容显示区域 */
+#agent-content {
+    height: 1fr;
+    width: 100%;
+    background: #1a1a1a;
+    color: #ffffff;
+    padding: 2;
+    border: solid #688efd;
+    margin: 1 0;
+    overflow: auto;
+}
+
+/* 智能体对话框帮助文本样式 */
+#agent-dialog-help {
+    text-align: center;
+    margin-top: 1;
+    padding: 1;
+    color: #aaaaaa;
+    text-style: italic;
+}
+
+/* 后端要求对话框屏幕样式 */
+#backend-dialog-screen {
+    align: center middle;
+    width: 100%;
+    height: 100%;
+}
+
+/* 后端要求对话框样式 */
+#backend-dialog {
+    align: center middle;
+    width: 50%;
+    height: 15;
+    border: solid #ff9800;
+    color: #ffffff;
+    margin: 1 1;
+    padding: 1;
+}
+
+/* 后端对话框标题样式 */
+#backend-dialog-title {
+    text-align: center;
+    margin-bottom: 1;
+    padding: 1;
+    color: #ff9800;
+    text-style: bold;
+}
+
+/* 后端对话框文本样式 */
+#backend-dialog-text {
+    text-align: center;
+    margin-bottom: 1;
+    padding: 1;
+    color: #ffffff;
+}
+
+/* 后端对话框帮助文本样式 */
+#backend-dialog-help {
+    text-align: center;
+    margin-top: 1;
+    padding: 1;
+    color: #aaaaaa;
+    text-style: italic;
+}
