@@ -92,12 +92,18 @@ class DeploymentConfigScreen(ModalScreen[bool]):
         margin: 0 1;
         background: $error;
     }
+
+    #llm_validation_status, #embedding_validation_status {
+        text-style: italic;
+    }
     """
 
     def __init__(self) -> None:
         """初始化部署配置屏幕"""
         super().__init__()
         self.config = DeploymentConfig()
+        self._llm_validation_task: asyncio.Task[None] | None = None
+        self._embedding_validation_task: asyncio.Task[None] | None = None
 
     def compose(self) -> ComposeResult:
         """组合界面组件"""
@@ -168,6 +174,11 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                     classes="form-input",
                 )
 
+            # LLM 验证状态显示
+            with Horizontal(classes="form-row"):
+                yield Label("验证状态:", classes="form-label")
+                yield Static("未验证", id="llm_validation_status", classes="form-input")
+
             with Horizontal(classes="form-row"):
                 yield Label("最大 Token 数:", classes="form-label")
                 yield Input(
@@ -231,6 +242,11 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                     classes="form-input",
                 )
 
+            # Embedding 验证状态显示
+            with Horizontal(classes="form-row"):
+                yield Label("验证状态:", classes="form-label")
+                yield Static("未验证", id="embedding_validation_status", classes="form-input")
+
     def _compose_deployment_options(self) -> ComposeResult:
         """组合部署选项组件"""
         with Vertical(classes="form-section"):
@@ -287,6 +303,147 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             # 轻量部署时禁用 Web 和 RAG
             self.query_one("#enable_web", Switch).value = False
             self.query_one("#enable_rag", Switch).value = False
+
+    @on(Input.Changed, "#llm_endpoint, #llm_api_key, #llm_model")
+    async def on_llm_field_changed(self, event: Input.Changed) -> None:
+        """处理 LLM 字段变化，检查是否需要自动验证"""
+        # 取消之前的验证任务
+        if self._llm_validation_task and not self._llm_validation_task.done():
+            self._llm_validation_task.cancel()
+
+        # 检查是否所有核心字段都已填写
+        if self._should_validate_llm():
+            # 延迟 1 秒后进行验证，避免用户快速输入时频繁触发
+            self._llm_validation_task = asyncio.create_task(self._delayed_llm_validation())
+
+    @on(Input.Changed, "#embedding_endpoint, #embedding_api_key, #embedding_model")
+    async def on_embedding_field_changed(self, event: Input.Changed) -> None:
+        """处理 Embedding 字段变化，检查是否需要自动验证"""
+        # 取消之前的验证任务
+        if self._embedding_validation_task and not self._embedding_validation_task.done():
+            self._embedding_validation_task.cancel()
+
+        # 检查是否所有核心字段都已填写
+        if self._should_validate_embedding():
+            # 延迟 1 秒后进行验证，避免用户快速输入时频繁触发
+            self._embedding_validation_task = asyncio.create_task(self._delayed_embedding_validation())
+
+    def _should_validate_llm(self) -> bool:
+        """检查是否应该验证 LLM 配置"""
+        try:
+            endpoint = self.query_one("#llm_endpoint", Input).value.strip()
+            api_key = self.query_one("#llm_api_key", Input).value.strip()
+            model = self.query_one("#llm_model", Input).value.strip()
+            return bool(endpoint and api_key and model)
+        except (AttributeError, ValueError):
+            return False
+
+    def _should_validate_embedding(self) -> bool:
+        """检查是否应该验证 Embedding 配置"""
+        try:
+            endpoint = self.query_one("#embedding_endpoint", Input).value.strip()
+            api_key = self.query_one("#embedding_api_key", Input).value.strip()
+            model = self.query_one("#embedding_model", Input).value.strip()
+            return bool(endpoint and api_key and model)
+        except (AttributeError, ValueError):
+            return False
+
+    async def _delayed_llm_validation(self) -> None:
+        """延迟 LLM 验证"""
+        try:
+            await asyncio.sleep(1)  # 等待 1 秒
+            await self._validate_llm_config()
+        except asyncio.CancelledError:
+            pass
+
+    async def _delayed_embedding_validation(self) -> None:
+        """延迟 Embedding 验证"""
+        try:
+            await asyncio.sleep(1)  # 等待 1 秒
+            await self._validate_embedding_config()
+        except asyncio.CancelledError:
+            pass
+
+    async def _validate_llm_config(self) -> None:
+        """验证 LLM 配置"""
+        # 更新状态为验证中
+        status_widget = self.query_one("#llm_validation_status", Static)
+        status_widget.update("[yellow]验证中...[/yellow]")
+
+        # 收集当前 LLM 配置
+        self._collect_llm_config()
+
+        try:
+            # 执行验证
+            is_valid, message, info = await self.config.validate_llm_connectivity()
+
+            # 更新验证状态
+            if is_valid:
+                status_widget.update(f"[green]✓ {message}[/green]")
+                # 检查是否支持 function_call
+                if info.get("supports_function_call"):
+                    self.notify("LLM 验证成功，支持 function_call 功能", severity="information")
+                else:
+                    self.notify("LLM 验证成功，但不支持 function_call 功能", severity="warning")
+            else:
+                status_widget.update(f"[red]✗ {message}[/red]")
+                self.notify(f"LLM 验证失败: {message}", severity="error")
+
+        except (OSError, ValueError, TypeError) as e:
+            status_widget.update(f"[red]✗ 验证异常: {e}[/red]")
+            self.notify(f"LLM 验证过程中出现异常: {e}", severity="error")
+
+    async def _validate_embedding_config(self) -> None:
+        """验证 Embedding 配置"""
+        # 更新状态为验证中
+        status_widget = self.query_one("#embedding_validation_status", Static)
+        status_widget.update("[yellow]验证中...[/yellow]")
+
+        # 收集当前 Embedding 配置
+        self._collect_embedding_config()
+
+        try:
+            # 执行验证
+            is_valid, message, info = await self.config.validate_embedding_connectivity()
+
+            # 更新验证状态
+            if is_valid:
+                status_widget.update(f"[green]✓ {message}[/green]")
+                # 显示维度信息
+                dimension = info.get("dimension", "未知")
+                self.notify(f"Embedding 验证成功，向量维度: {dimension}", severity="information")
+            else:
+                status_widget.update(f"[red]✗ {message}[/red]")
+                self.notify(f"Embedding 验证失败: {message}", severity="error")
+
+        except (OSError, ValueError, TypeError) as e:
+            status_widget.update(f"[red]✗ 验证异常: {e}[/red]")
+            self.notify(f"Embedding 验证过程中出现异常: {e}", severity="error")
+
+    def _collect_llm_config(self) -> None:
+        """收集 LLM 配置"""
+        try:
+            self.config.llm.endpoint = self.query_one("#llm_endpoint", Input).value.strip()
+            self.config.llm.api_key = self.query_one("#llm_api_key", Input).value.strip()
+            self.config.llm.model = self.query_one("#llm_model", Input).value.strip()
+            self.config.llm.max_tokens = int(self.query_one("#llm_max_tokens", Input).value or "8192")
+            self.config.llm.temperature = float(self.query_one("#llm_temperature", Input).value or "0.7")
+            self.config.llm.request_timeout = int(self.query_one("#llm_timeout", Input).value or "300")
+        except (ValueError, AttributeError):
+            # 如果转换失败，使用默认值
+            pass
+
+    def _collect_embedding_config(self) -> None:
+        """收集 Embedding 配置"""
+        try:
+            embedding_type_value = self.query_one("#embedding_type", Select).value
+            self.config.embedding.type = str(embedding_type_value) if embedding_type_value else "openai"
+            self.config.embedding.endpoint = self.query_one("#embedding_endpoint", Input).value.strip()
+            self.config.embedding.api_key = self.query_one("#embedding_api_key", Input).value.strip()
+            self.config.embedding.model = self.query_one("#embedding_model", Input).value.strip()
+        except AttributeError:
+            # 如果获取失败，使用默认值
+            pass
 
     def _collect_config(self) -> bool:
         """收集用户配置"""
