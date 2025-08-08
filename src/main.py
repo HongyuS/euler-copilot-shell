@@ -5,6 +5,7 @@ import atexit
 import sys
 
 from app.tui import IntelligentTerminal
+from config.manager import ConfigManager
 from log.manager import (
     cleanup_empty_logs,
     disable_console_output,
@@ -29,13 +30,23 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="初始化 openEuler Intelligence 后端（仅支持 openEuler 操作系统）",
     )
+    parser.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        help="设置日志级别",
+    )
+
+    # 注册清理函数，确保在程序异常退出时也能清理空日志文件
+    atexit.register(cleanup_empty_logs)
+
     return parser.parse_args()
 
 
 def show_logs() -> None:
     """显示最新的日志内容"""
-    # 初始化日志系统以确保日志管理器可用
-    setup_logging()
+    # 初始化配置和日志系统
+    config_manager = ConfigManager()
+    setup_logging(config_manager)
     # 显示日志时启用控制台输出
     enable_console_output()
 
@@ -61,15 +72,37 @@ def main() -> None:
         oi_backend_init()
         return
 
-    # 初始化日志系统
-    setup_logging()
+    # 初始化配置和日志系统
+    config_manager = ConfigManager()
+
+    # 处理命令行参数设置的日志级别
+    if args.log_level:
+        from config.model import LogLevel
+        if args.log_level not in LogLevel.__members__:
+            sys.stderr.write(f"无效的日志级别: {args.log_level}\n")
+            sys.exit(1)
+        config_manager.set_log_level(LogLevel(args.log_level))
+
+        # 初始化日志系统并验证设置
+        setup_logging(config_manager)
+        enable_console_output()  # 启用控制台输出以显示验证信息
+
+        logger = get_logger(__name__)
+        logger.info("日志级别已设置为: %s", args.log_level)
+        logger.debug("这是一条 DEBUG 级别的测试消息")
+        logger.info("这是一条 INFO 级别的测试消息")
+        logger.warning("这是一条 WARNING 级别的测试消息")
+        logger.error("这是一条 ERROR 级别的测试消息")
+
+        sys.stdout.write(f"✓ 日志级别已成功设置为: {args.log_level}\n")
+        sys.stdout.write("✓ 日志系统初始化完成\n")
+        return
+
+    setup_logging(config_manager)
     # 在 TUI 模式下禁用控制台日志输出，避免干扰界面
     disable_console_output()
 
     logger = get_logger(__name__)
-
-    # 注册退出时清理空日志文件
-    atexit.register(cleanup_empty_logs)
 
     try:
         app = IntelligentTerminal()
