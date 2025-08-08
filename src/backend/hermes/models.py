@@ -28,7 +28,7 @@ class HermesAgent:
     favorited: bool
     """是否已收藏"""
 
-    published: bool | None = None
+    published: bool = True
     """是否已发布"""
 
     @classmethod
@@ -41,7 +41,7 @@ class HermesAgent:
             description=data.get("description", ""),
             icon=data.get("icon", ""),
             favorited=data.get("favorited", False),
-            published=data.get("published"),
+            published=data.get("published", True),
         )
 
 
