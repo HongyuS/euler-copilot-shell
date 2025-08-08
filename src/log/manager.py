@@ -6,17 +6,21 @@ import contextlib
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from config.manager import ConfigManager
 
 
 class LogManager:
     """日志管理器"""
 
-    def __init__(self) -> None:
+    def __init__(self, config_manager: ConfigManager | None = None) -> None:
         """初始化日志管理器"""
         self._log_dir = Path.home() / ".cache" / "openEuler Intelligence" / "logs"
         self._log_dir.mkdir(parents=True, exist_ok=True)
         self._current_log_file: Path | None = None
+        self._config_manager = config_manager
         self._setup_logging()
         self._cleanup_old_logs()
 
@@ -107,11 +111,24 @@ class LogManager:
         log_filename = f"smart-shell-{current_time.strftime('%Y%m%d-%H%M%S')}.log"
         self._current_log_file = self._log_dir / log_filename
 
+        # 从配置中获取日志级别
+        log_level = logging.INFO  # 默认级别
+        if self._config_manager is not None:
+            try:
+                config_log_level = self._config_manager.get_log_level()
+                log_level = getattr(logging, config_log_level.value)
+            except (AttributeError, ValueError, TypeError) as e:
+                # 如果配置管理器不可用或配置有误，使用默认级别
+                # 在这里我们还不能使用 logger，因为 logging 还没完全设置好
+                import sys
+                sys.stderr.write(f"警告: 获取日志级别配置失败: {e}, 使用默认级别 INFO\n")
+                log_level = logging.INFO
+
         # 配置根日志记录器
         handlers = [logging.FileHandler(self._current_log_file, encoding="utf-8")]
 
         logging.basicConfig(
-            level=logging.INFO,
+            level=log_level,
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             handlers=handlers,
         )
@@ -165,10 +182,10 @@ class _LogManagerSingleton:
     def __init__(self) -> None:
         self._instance: LogManager | None = None
 
-    def get_instance(self) -> LogManager:
+    def get_instance(self, config_manager: ConfigManager | None = None) -> LogManager:
         """获取日志管理器实例"""
         if self._instance is None:
-            self._instance = LogManager()
+            self._instance = LogManager(config_manager)
         return self._instance
 
 
@@ -176,9 +193,9 @@ class _LogManagerSingleton:
 _singleton = _LogManagerSingleton()
 
 
-def setup_logging() -> None:
+def setup_logging(config_manager: ConfigManager | None = None) -> None:
     """初始化日志系统"""
-    _singleton.get_instance()
+    _singleton.get_instance(config_manager)
 
 
 def get_logger(name: str) -> logging.Logger:

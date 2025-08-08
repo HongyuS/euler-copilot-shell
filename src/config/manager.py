@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from config.model import Backend, ConfigModel
+from config.model import Backend, ConfigModel, LogLevel
 
 
 class ConfigManager:
@@ -72,6 +72,15 @@ class ConfigManager:
     def set_eulerintelli_key(self, key: str) -> None:
         """更新 Hermes api_key 并保存"""
         self.data.eulerintelli.api_key = key
+        self._save_settings()
+
+    def get_log_level(self) -> LogLevel:
+        """获取当前日志级别"""
+        return self.data.log_level
+
+    def set_log_level(self, level: LogLevel) -> None:
+        """更新日志级别并保存"""
+        self.data.log_level = level
         self._save_settings()
 
     def _load_settings(self) -> None:

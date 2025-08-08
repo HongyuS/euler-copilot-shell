@@ -127,7 +127,6 @@ class HermesAgentManager:
 
         # 构建查询参数
         params = {
-            "appType": "agent",  # 只获取智能体类型的应用
             "page": page,  # 当前页码
         }
 
@@ -169,20 +168,13 @@ class HermesAgentManager:
             self.logger.warning("第 %d 页响应格式无效：不是字典", page)
             return False
 
-        # 检查响应码
-        code = data.get("code")
-        if code != 0:
-            message = data.get("message", "未知错误")
-            self.logger.warning("第 %d 页 API 返回错误: code=%s, message=%s", page, code, message)
-            return False
-
-        # 检查result字段
+        # 检查 result 字段
         result = data.get("result")
         if not isinstance(result, dict):
             self.logger.warning("第 %d 页 result 字段不是对象", page)
             return False
 
-        # 检查applications字段
+        # 检查 applications 字段
         applications = result.get("applications")
         if not isinstance(applications, list):
             self.logger.warning("第 %d 页 applications 字段不是数组", page)
@@ -202,11 +194,6 @@ class HermesAgentManager:
 
             for app_data in applications:
                 if not isinstance(app_data, dict):
-                    continue
-
-                # 只处理Agent类型的应用
-                app_type = app_data.get("appType")
-                if app_type != "agent":
                     continue
 
                 try:

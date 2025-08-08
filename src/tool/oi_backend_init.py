@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from log.manager import get_logger
 
-logger = get_logger(__name__)
-
 
 def oi_backend_init() -> None:
     """初始化后端系统 - 启动 TUI 部署助手"""
+    logger = get_logger(__name__)
+
     try:
         from typing import TYPE_CHECKING
 
