@@ -8,6 +8,7 @@
 - 命令验证和执行支持
 - 集成大型语言模型提供智能命令建议
 - 提供本地或在线模型服务集成选项
+- 完整的日志记录功能，支持问题诊断和性能监控
 
 ## 项目结构
 
@@ -23,12 +24,20 @@ euler-copilot-shell/
     │   ├── settings.py           # 设置界面逻辑
     │   └── tui.py                # 主界面布局和组件定义
     ├── backend
+    │   ├── hermes
+    │   │   ├── __init__.py
+    │   │   └── client.py         # Hermes API 客户端
     │   ├── __init__.py
-    │   └── openai.py             # 与 OpenAI API 交互的逻辑
+    │   ├── base.py               # 后端客户端基类
+    │   ├── factory.py            # 后端工厂类
+    │   └── openai.py             # OpenAI API 客户端
     ├── config
     │   ├── __init__.py
     │   ├── manager.py            # 配置管理
     │   └── model.py              # 配置模型定义
+    ├── log
+    │   ├── __init__.py
+    │   └── manager.py            # 日志管理器
     ├── main.py                   # TUI 应用程序入口点
     └── tool
         ├── __init__.py
@@ -58,6 +67,12 @@ euler-copilot-shell/
 python src/main.py
 ```
 
+查看最新的日志内容:
+
+```sh
+python src/main.py --logs
+```
+
 应用启动后，您可以直接在输入框中输入命令。如果命令无效或无法执行，应用程序将基于您的输入提供智能建议。
 
 ## 大型语言模型集成
@@ -73,7 +88,23 @@ python src/main.py
 - API 密钥
 - 模型选择（OpenAI 后端）
 
-配置会保存在`~/.config/eulercopilot/smart-shell.json`。
+配置会保存在`~/.config/eulerintelli/smart-shell.json`。
+
+## 日志功能
+
+应用程序提供完整的日志记录功能：
+
+- **日志位置**: `~/.cache/openEuler Intelligence/logs/`
+- **日志格式**: `smart-shell-YYYYMMDD-HHMMSS.log`（使用本地时区时间）
+- **自动清理**: 每次启动时自动删除7天前的旧日志和空日志文件
+- **命令行查看**: 使用 `python src/main.py --logs` 查看最新日志内容
+- **记录内容**:
+  - 程序启动和退出
+  - API请求详情（URL、状态码、耗时等）
+  - 异常和错误信息
+  - 模块级别的操作日志
+
+日志文件同时输出到控制台和文件，便于开发调试和生产环境监控。详细说明请参考 [日志功能文档](docs/development/日志功能说明.md)。
 
 ## RPM打包
 

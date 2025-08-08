@@ -38,10 +38,10 @@ class BackendFactory:
                 model=config_manager.get_model(),
                 api_key=config_manager.get_api_key(),
             )
-        elif backend == Backend.EULERCOPILOT:
+        elif backend == Backend.EULERINTELLI:
             return HermesChatClient(
-                base_url=config_manager.get_eulercopilot_url(),
-                auth_token=config_manager.get_eulercopilot_key(),
+                base_url=config_manager.get_eulerintelli_url(),
+                auth_token=config_manager.get_eulerintelli_key(),
             )
         else:
             msg = f"不支持的后端类型: {backend}"

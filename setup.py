@@ -1,13 +1,13 @@
 """
 setup.py
 
-This is a setup script for the eulercopilot package.
+This is a setup script for the oi-cli package.
 """
 
 from setuptools import find_packages, setup
 
 setup(
-    name="eulercopilot",
+    name="oi-cli",
     version="0.9.6",
     description="智能 Shell 命令行工具",
     author="openEuler",
@@ -24,7 +24,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "eulercopilot=main:main",
+            "oi=main:main",
         ],
     },
     classifiers=[
