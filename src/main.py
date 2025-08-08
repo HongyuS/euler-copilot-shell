@@ -13,6 +13,7 @@ from log.manager import (
     get_logger,
     setup_logging,
 )
+from tool.oi_backend_init import oi_backend_init
 
 
 def parse_args() -> argparse.Namespace:
@@ -22,6 +23,11 @@ def parse_args() -> argparse.Namespace:
         "--logs",
         action="store_true",
         help="显示最新的日志内容（最多1000行）",
+    )
+    parser.add_argument(
+        "--init",
+        action="store_true",
+        help="初始化 openEuler Intelligence 后端（仅支持 openEuler 操作系统）",
     )
     return parser.parse_args()
 
@@ -49,6 +55,10 @@ def main() -> None:
 
     if args.logs:
         show_logs()
+        return
+
+    if args.init:
+        oi_backend_init()
         return
 
     # 初始化日志系统
