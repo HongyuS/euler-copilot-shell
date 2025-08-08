@@ -77,7 +77,7 @@ class AgentSelectionDialog(ModalScreen):
                 agent_text_lines.append(f"[white on green]► ✓ {name}[/white on green]")
             elif is_cursor:
                 # 光标在其他智能体上：蓝底白字
-                agent_text_lines.append(f"[white on blue]► {name}[/white on blue]")
+                agent_text_lines.append(f"[white on blue]►   {name}[/white on blue]")
             elif is_current:
                 # 当前已选中但光标不在这里：显示勾选符号
                 agent_text_lines.append(f"[bright_green]  ✓ {name}[/bright_green]")

@@ -231,3 +231,62 @@ Static {
     color: #aaaaaa;
     text-style: italic;
 }
+
+/* MCP 组件样式 */
+#mcp-confirm, #mcp-parameter {
+    height: auto;
+    padding: 1;
+    border: solid #ff9800;
+    background: #1a1a1a;
+}
+
+/* MCP 确认组件样式 */
+.confirm-title {
+    text-align: center;
+    text-style: bold;
+    color: #ff9800;
+    margin-bottom: 1;
+}
+
+.confirm-buttons {
+    height: auto;
+    align: center middle;
+    margin-top: 1;
+}
+
+.risk-low {
+    color: #4caf50;
+}
+
+.risk-medium {
+    color: #ff9800;
+}
+
+.risk-high {
+    color: #f44336;
+}
+
+/* MCP 参数组件样式 */
+.param-title {
+    text-align: center;
+    text-style: bold;
+    color: #2196f3;
+    margin-bottom: 1;
+}
+
+.param-message {
+    color: #ffeb3b;
+    margin-bottom: 1;
+}
+
+.param-buttons {
+    height: auto;
+    align: center middle;
+    margin-top: 1;
+}
+
+/* MCP 按钮样式 */
+#mcp-confirm-yes, #mcp-confirm-no, #mcp-param-submit, #mcp-param-cancel {
+    margin: 0 1;
+    width: auto;
+}

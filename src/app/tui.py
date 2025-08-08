@@ -10,11 +10,14 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Container
+from textual.message import Message
 from textual.widgets import Footer, Header, Input, Static
 
 from app.dialogs import AgentSelectionDialog, BackendRequiredDialog, ExitDialog
+from app.mcp_widgets import MCPConfirmResult, MCPConfirmWidget, MCPParameterResult, MCPParameterWidget
 from app.settings import SettingsScreen
 from backend.factory import BackendFactory
+from backend.hermes import HermesChatClient
 from config import ConfigManager
 from log.manager import get_logger, log_exception
 from tool.command_processor import process_command
@@ -169,6 +172,22 @@ class IntelligentTerminal(App):
         Binding(key="tab", action="toggle_focus", description="切换焦点"),
     ]
 
+    class SwitchToMCPConfirm(Message):
+        """切换到 MCP 确认界面的消息"""
+
+        def __init__(self, event) -> None:  # noqa: ANN001
+            """初始化消息"""
+            super().__init__()
+            self.event = event
+
+    class SwitchToMCPParameter(Message):
+        """切换到 MCP 参数输入界面的消息"""
+
+        def __init__(self, event) -> None:  # noqa: ANN001
+            """初始化消息"""
+            super().__init__()
+            self.event = event
+
     def __init__(self) -> None:
         """初始化应用"""
         super().__init__()
@@ -182,6 +201,9 @@ class IntelligentTerminal(App):
         self._llm_client: LLMClientBase | None = None
         # 当前选择的智能体
         self.current_agent: tuple[str, str] = ("", "智能问答")
+        # MCP 状态
+        self._mcp_mode: str = "normal"  # "normal", "confirm", "parameter"
+        self._current_mcp_task_id: str = ""
         # 创建日志实例
         self.logger = get_logger(__name__)
 
@@ -195,7 +217,7 @@ class IntelligentTerminal(App):
 
     def action_settings(self) -> None:
         """打开设置页面"""
-        self.push_screen(SettingsScreen(self.config_manager, self._get_llm_client()))
+        self.push_screen(SettingsScreen(self.config_manager, self.get_llm_client()))
 
     def action_request_quit(self) -> None:
         """请求退出应用"""
@@ -212,7 +234,7 @@ class IntelligentTerminal(App):
     def action_choose_agent(self) -> None:
         """选择智能体的动作"""
         # 获取 Hermes 客户端
-        llm_client = self._get_llm_client()
+        llm_client = self.get_llm_client()
 
         # 检查客户端类型
         if not hasattr(llm_client, "get_available_agents"):
@@ -240,6 +262,20 @@ class IntelligentTerminal(App):
     def on_mount(self) -> None:
         """初始化完成时设置焦点和绑定"""
         self.query_one(CommandInput).focus()
+
+    def get_llm_client(self) -> LLMClientBase:
+        """获取大模型客户端，使用单例模式维持对话历史"""
+        if self._llm_client is None:
+            self._llm_client = BackendFactory.create_client(self.config_manager)
+
+        # 为 Hermes 客户端设置 MCP 事件处理器以支持 MCP 交互
+        if isinstance(self._llm_client, HermesChatClient):
+            from app.tui_mcp_handler import TUIMCPEventHandler
+
+            mcp_handler = TUIMCPEventHandler(self, self._llm_client)
+            self._llm_client.set_mcp_handler(mcp_handler)
+
+        return self._llm_client
 
     def refresh_llm_client(self) -> None:
         """刷新 LLM 客户端实例，用于配置更改后重新创建客户端"""
@@ -284,6 +320,39 @@ class IntelligentTerminal(App):
         self.background_tasks.add(task)
         # 添加完成回调，自动从集合中移除
         task.add_done_callback(self._task_done_callback)
+
+    @on(SwitchToMCPConfirm)
+    def handle_switch_to_mcp_confirm(self, message: SwitchToMCPConfirm) -> None:
+        """处理切换到 MCP 确认界面的消息"""
+        self._mcp_mode = "confirm"
+        self._current_mcp_task_id = message.event.get_task_id()
+        self._replace_input_with_mcp_widget(MCPConfirmWidget(message.event, widget_id="mcp-confirm"))
+
+    @on(SwitchToMCPParameter)
+    def handle_switch_to_mcp_parameter(self, message: SwitchToMCPParameter) -> None:
+        """处理切换到 MCP 参数输入界面的消息"""
+        self._mcp_mode = "parameter"
+        self._current_mcp_task_id = message.event.get_task_id()
+        self._replace_input_with_mcp_widget(MCPParameterWidget(message.event, widget_id="mcp-parameter"))
+
+    @on(MCPConfirmResult)
+    def handle_mcp_confirm_result(self, message: MCPConfirmResult) -> None:
+        """处理 MCP 确认结果"""
+        if message.task_id == self._current_mcp_task_id:
+            # 发送 MCP 响应并处理结果
+            task = asyncio.create_task(self._send_mcp_response(message.task_id, message.confirmed))
+            self.background_tasks.add(task)
+            task.add_done_callback(self._task_done_callback)
+
+    @on(MCPParameterResult)
+    def handle_mcp_parameter_result(self, message: MCPParameterResult) -> None:
+        """处理 MCP 参数结果"""
+        if message.task_id == self._current_mcp_task_id:
+            # 发送 MCP 响应并处理结果
+            params = message.params if message.params is not None else False
+            task = asyncio.create_task(self._send_mcp_response(message.task_id, params))
+            self.background_tasks.add(task)
+            task.add_done_callback(self._task_done_callback)
 
     def _task_done_callback(self, task: asyncio.Task) -> None:
         """任务完成回调，从任务集合中移除"""
@@ -348,7 +417,7 @@ class IntelligentTerminal(App):
 
         try:
             # 通过 process_command 获取命令处理结果和输出类型
-            async for output_tuple in process_command(user_input, self._get_llm_client()):
+            async for output_tuple in process_command(user_input, self.get_llm_client()):
                 content, is_llm_output = output_tuple  # 解包输出内容和类型标志
                 received_any_content = True
 
@@ -447,12 +516,6 @@ class IntelligentTerminal(App):
         # 等待一个小的延迟，确保UI有时间更新
         await asyncio.sleep(0.01)
 
-    def _get_llm_client(self) -> LLMClientBase:
-        """获取大模型客户端，使用单例模式维持对话历史"""
-        if self._llm_client is None:
-            self._llm_client = BackendFactory.create_client(self.config_manager)
-        return self._llm_client
-
     async def _cleanup_llm_client(self) -> None:
         """异步清理 LLM 客户端"""
         if self._llm_client is not None:
@@ -476,7 +539,7 @@ class IntelligentTerminal(App):
     async def _show_agent_selection(self) -> None:
         """显示智能体选择对话框"""
         try:
-            llm_client = self._get_llm_client()
+            llm_client = self.get_llm_client()
 
             # 构建智能体列表 - 默认第一项为"智能问答"（无智能体）
             agent_list = [("", "智能问答")]
@@ -506,7 +569,7 @@ class IntelligentTerminal(App):
             # 即使出错也显示默认选项
             agent_list = [("", "智能问答")]
             try:
-                llm_client = self._get_llm_client()
+                llm_client = self.get_llm_client()
                 await self._display_agent_dialog(agent_list, llm_client)
             except (OSError, ValueError, RuntimeError, AttributeError):
                 self.logger.exception("无法显示智能体选择对话框")
@@ -525,3 +588,131 @@ class IntelligentTerminal(App):
 
         dialog = AgentSelectionDialog(agent_list, on_agent_selected, self.current_agent)
         self.push_screen(dialog)
+
+    def _replace_input_with_mcp_widget(self, widget) -> None:  # noqa: ANN001
+        """替换输入容器中的组件为 MCP 交互组件"""
+        try:
+            input_container = self.query_one("#input-container")
+            # 移除所有子组件
+            input_container.remove_children()
+            # 添加新的 MCP 组件
+            input_container.mount(widget)
+            # 聚焦到新组件
+            widget.focus()
+        except Exception:
+            self.logger.exception("替换输入组件失败")
+
+    def _restore_normal_input(self) -> None:
+        """恢复正常的命令输入组件"""
+        try:
+            input_container = self.query_one("#input-container")
+            # 移除所有子组件
+            input_container.remove_children()
+            # 添加正常的命令输入组件
+            input_container.mount(CommandInput())
+            # 聚焦到输入框
+            self.query_one(CommandInput).focus()
+            # 重置 MCP 状态
+            self._mcp_mode = "normal"
+            self._current_mcp_task_id = ""
+        except Exception:
+            self.logger.exception("恢复正常输入组件失败")
+
+    async def _send_mcp_response(self, task_id: str, params: bool | dict) -> None:
+        """发送 MCP 响应并处理结果"""
+        try:
+            # 恢复正常输入界面
+            self._restore_normal_input()
+
+            # 获取输出容器
+            output_container = self.query_one("#output-container")
+
+            # 发送 MCP 响应并处理流式回复
+            llm_client = self.get_llm_client()
+            if hasattr(llm_client, "send_mcp_response"):
+                success = await self._handle_mcp_response_stream(
+                    task_id,
+                    params,
+                    output_container,
+                    llm_client,  # type: ignore[arg-type]
+                )
+                if not success:
+                    # 如果没有收到任何响应内容，显示默认消息
+                    output_container.mount(OutputLine("💡 MCP 响应已发送"))
+            else:
+                self.logger.error("当前客户端不支持 MCP 响应功能")
+                output_container.mount(OutputLine("❌ 当前客户端不支持 MCP 响应功能"))
+
+        except Exception as e:
+            self.logger.exception("发送 MCP 响应失败")
+            # 确保恢复正常界面
+            self._restore_normal_input()
+            # 显示错误信息
+            output_container = self.query_one("#output-container")
+            error_message = self._format_error_message(e)
+            output_container.mount(OutputLine(f"❌ 发送 MCP 响应失败: {error_message}"))
+        finally:
+            self.processing = False
+
+    async def _handle_mcp_response_stream(
+        self,
+        task_id: str,
+        params: bool | dict,
+        output_container,  # noqa: ANN001
+        llm_client,  # noqa: ANN001
+    ) -> bool:
+        """处理 MCP 响应的流式回复"""
+        current_line: OutputLine | MarkdownOutputLine | None = None
+        current_content = ""
+        is_first_content = True
+        received_any_content = False
+        timeout_seconds = 60.0
+
+        try:
+            # 使用 asyncio.wait_for 包装整个流处理过程
+            async def _process_stream() -> bool:
+                nonlocal current_line, current_content, is_first_content, received_any_content
+
+                async for content in llm_client.send_mcp_response(task_id, params):
+                    if not content.strip():
+                        continue
+
+                    received_any_content = True
+
+                    # 判断是否为 LLM 输出内容
+                    is_llm_output = not content.startswith((">", "❌", "⚠️", "💡"))
+
+                    # 更新累积内容
+                    current_content += content
+
+                    # 处理内容块
+                    params_obj = ContentChunkParams(
+                        content=content,
+                        is_llm_output=is_llm_output,
+                        current_content=current_content,
+                        is_first_content=is_first_content,
+                    )
+                    current_line = await self._process_content_chunk(
+                        params_obj,
+                        current_line,
+                        output_container,
+                    )
+
+                    # 第一段内容后设置标记
+                    if is_first_content:
+                        is_first_content = False
+
+                    # 滚动到末尾
+                    await self._scroll_to_end()
+
+                return received_any_content
+
+            # 执行流处理，添加超时
+            return await asyncio.wait_for(_process_stream(), timeout=timeout_seconds)
+
+        except asyncio.TimeoutError:
+            output_container.mount(OutputLine(f"⏱️ MCP 响应超时 ({timeout_seconds}秒)"))
+            return received_any_content
+        except asyncio.CancelledError:
+            output_container.mount(OutputLine("🚫 MCP 响应被取消"))
+            raise
