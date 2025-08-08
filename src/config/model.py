@@ -11,6 +11,15 @@ class Backend(str, Enum):
     EULERINTELLI = "eulerintelli"
 
 
+class LogLevel(str, Enum):
+    """日志级别"""
+
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+
+
 @dataclass
 class OpenAIConfig:
     """OpenAI 后端配置"""
@@ -60,6 +69,7 @@ class ConfigModel:
     backend: Backend = field(default=Backend.OPENAI)
     openai: OpenAIConfig = field(default_factory=OpenAIConfig)
     eulerintelli: HermesConfig = field(default_factory=HermesConfig)
+    log_level: LogLevel = field(default=LogLevel.INFO)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ConfigModel":
@@ -73,10 +83,23 @@ class ConfigModel:
         else:
             backend = Backend.OPENAI
 
+        log_level_value = d.get("log_level", LogLevel.INFO)
+        # 确保 log_level 始终是 LogLevel 枚举类型
+        if isinstance(log_level_value, LogLevel):
+            log_level = log_level_value
+        elif isinstance(log_level_value, str):
+            try:
+                log_level = LogLevel(log_level_value)
+            except ValueError:
+                log_level = LogLevel.INFO
+        else:
+            log_level = LogLevel.INFO
+
         return cls(
             backend=backend,
             openai=OpenAIConfig.from_dict(d.get("openai", {})),
             eulerintelli=HermesConfig.from_dict(d.get("eulerintelli", {})),
+            log_level=log_level,
         )
 
     def to_dict(self) -> dict:
@@ -85,4 +108,5 @@ class ConfigModel:
             "backend": self.backend.value,  # 保存枚举的值
             "openai": self.openai.to_dict(),
             "eulerintelli": self.eulerintelli.to_dict(),
+            "log_level": self.log_level.value,
         }
