@@ -61,7 +61,7 @@ class HermesMessage:
 class HermesFeatures:
     """Hermes 功能特性配置"""
 
-    def __init__(self, max_tokens: int = 2048, context_num: int = 2) -> None:
+    def __init__(self, max_tokens: int = 8192, context_num: int = 10) -> None:
         """初始化功能特性配置"""
         self.max_tokens = max_tokens
         self.context_num = context_num
