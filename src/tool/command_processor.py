@@ -5,6 +5,7 @@ import subprocess
 from collections.abc import AsyncGenerator
 
 from backend.base import LLMClientBase
+from log.manager import get_logger
 
 # 定义危险命令黑名单
 BLACKLIST = ["rm", "sudo", "shutdown", "reboot", "mkfs"]
@@ -55,6 +56,9 @@ async def process_command(command: str, llm_client: LLMClientBase) -> AsyncGener
     - content: 输出内容
     - is_llm_output: 是否是LLM输出（True表示LLM输出，应使用富文本；False表示命令输出，应使用纯文本）
     """
+    logger = get_logger(__name__)
+    logger.debug("开始处理命令: %s", command)
+
     tokens = command.split()
     if not tokens:
         yield ("请输入有效命令或问题。", True)  # 作为LLM输出处理
@@ -62,20 +66,26 @@ async def process_command(command: str, llm_client: LLMClientBase) -> AsyncGener
 
     prog = tokens[0]
     if shutil.which(prog) is not None:
+        logger.info("检测到系统命令: %s", prog)
         # 检查命令安全性
         if not is_command_safe(command):
+            logger.warning("命令被安全检查阻止: %s", command)
             yield ("检测到不安全命令，已阻止执行。", True)  # 作为LLM输出处理
             return
 
+        logger.info("执行系统命令: %s", command)
         success, output = execute_command(command)
         if success:
+            logger.debug("命令执行成功，输出长度: %d", len(output))
             yield (output, False)  # 系统命令输出，使用纯文本
         else:
             # 执行失败，将错误信息反馈给大模型
+            logger.info("命令执行失败，向 LLM 请求建议")
             query = f"命令 '{command}' 执行失败，错误信息如下：\n{output}\n请帮忙分析原因并提供解决建议。"
             async for suggestion in llm_client.get_llm_response(query):
                 yield (suggestion, True)  # LLM输出，使用富文本
     else:
         # 不是已安装的命令，直接询问大模型
+        logger.debug("向 LLM 发送问题: %s", command)
         async for suggestion in llm_client.get_llm_response(command):
             yield (suggestion, True)  # LLM输出，使用富文本

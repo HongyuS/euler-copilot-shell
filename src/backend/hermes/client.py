@@ -207,14 +207,16 @@ class HermesChatClient(LLMClientBase):
         await self._stop()
 
         self.logger.info("开始 Hermes 流式聊天请求")
+        self.logger.debug("提示内容长度: %d", len(prompt))
         start_time = time.time()
 
         try:
             # 确保有会话 ID
             conversation_id = await self._ensure_conversation()
+            self.logger.info("使用会话ID: %s", conversation_id)
 
             # 创建聊天请求
-            app = HermesApp("default-app")
+            app = HermesApp("")
             request = HermesChatRequest(
                 app=app,
                 conversation_id=conversation_id,
@@ -378,7 +380,13 @@ class HermesChatClient(LLMClientBase):
             if self.auth_token:
                 headers["Authorization"] = f"Bearer {self.auth_token}"
 
-            self.client = httpx.AsyncClient(headers=headers, timeout=30.0)
+            timeout = httpx.Timeout(
+                connect=30.0,  # 连接超时，允许30秒建立连接
+                read=1800.0,  # 读取超时，支持长时间SSE流（30分钟）
+                write=30.0,  # 写入超时
+                pool=30.0,  # 连接池超时
+            )
+            self.client = httpx.AsyncClient(headers=headers, timeout=timeout)
         return self.client
 
     async def _create_conversation(self, llm_id: str = "") -> str:
@@ -575,54 +583,88 @@ class HermesChatClient(LLMClientBase):
         has_content = False
         event_count = 0
 
-        async for line in response.aiter_lines():
-            stripped_line = line.strip()
-            if not stripped_line:
-                continue
+        self.logger.info("开始处理流式响应事件")
 
-            self.logger.debug("收到 SSE 行: %s", stripped_line)
-            event = HermesStreamEvent.from_line(stripped_line)
-            if event is None:
-                self.logger.debug("无法解析 SSE 事件")
-                continue
+        try:
+            async for line in response.aiter_lines():
+                stripped_line = line.strip()
+                if not stripped_line:
+                    continue
 
-            event_count += 1
-            self.logger.debug("解析到事件 #%d - 类型: %s", event_count, event.event_type)
+                self.logger.debug("收到 SSE 行: %s", stripped_line)
+                event = HermesStreamEvent.from_line(stripped_line)
+                if event is None:
+                    self.logger.warning("无法解析 SSE 事件")
+                    continue
 
-            # 处理完成事件
-            if event.event_type == "done":
-                self.logger.debug("收到完成事件，结束流式响应")
-                break
+                event_count += 1
+                self.logger.info("解析到事件 #%d - 类型: %s", event_count, event.event_type)
 
-            # 处理错误事件
-            if event.event_type == "error":
-                self.logger.error("收到后端错误事件: %s", event.data.get("error", "Unknown error"))
-                yield "抱歉，后端服务出现错误，请稍后重试。"
-                break
+                # 处理特殊事件类型
+                should_break, break_message = self._handle_special_events(event)
+                if should_break:
+                    if break_message:
+                        yield break_message
+                    break
 
-            # 处理敏感内容事件
-            if event.event_type == "sensitive":
-                self.logger.warning("收到敏感内容事件: %s", event.data.get("message", "Sensitive content detected"))
-                yield "抱歉，响应内容包含敏感信息，已被系统屏蔽。"
-                break
+                # 处理文本内容
+                text_content = event.get_text_content()
+                if text_content:
+                    has_content = True
+                    self._log_text_content(text_content)
+                    yield text_content
+                else:
+                    self.logger.info("事件无文本内容")
 
-            # 获取文本内容
-            text_content = event.get_text_content()
-            if text_content:
-                has_content = True
-                self._log_text_content(text_content)
-                yield text_content
-            else:
-                self.logger.debug("事件无文本内容")
+            self.logger.info("流式响应处理完成 - 事件数量: %d, 有内容: %s", event_count, has_content)
 
-        # 检查是否产生了任何内容
+        except Exception:
+            self.logger.exception("处理流式响应事件时出错")
+            raise
+
+        # 处理无内容的情况
         if not has_content:
-            self.logger.warning(
-                "流式响应完成但未产生任何文本内容 - 事件总数: %d",
-                event_count,
-            )
-            # 如果没有产生任何内容，yield 一个错误信息
-            yield "抱歉，服务暂时无法响应您的请求，请稍后重试。"
+            yield self._get_no_content_message(event_count)
+
+    def _handle_special_events(self, event: HermesStreamEvent) -> tuple[bool, str | None]:
+        """处理特殊事件类型，返回(是否中断, 中断消息)"""
+        if event.event_type == "done":
+            self.logger.debug("收到完成事件，结束流式响应")
+            return True, None
+
+        if event.event_type == "error":
+            self.logger.error("收到后端错误事件: %s", event.data.get("error", "Unknown error"))
+            return True, "抱歉，后端服务出现错误，请稍后重试。"
+
+        if event.event_type == "sensitive":
+            self.logger.warning("收到敏感内容事件: %s", event.data.get("message", "Sensitive content detected"))
+            return True, "抱歉，响应内容包含敏感信息，已被系统屏蔽。"
+
+        return False, None
+
+    async def _handle_stream_error(self, error: Exception, *, has_content: bool) -> AsyncGenerator[str, None]:
+        """处理流式响应网络错误"""
+        self.logger.exception("处理流式响应时出现网络错误: %s", error)
+        if has_content:
+            yield "\n\n[连接中断，但已获得部分响应]"
+        else:
+            raise HermesAPIError(500, f"Network error during streaming: {error!s}") from error
+
+    async def _handle_unexpected_error(self, error: Exception, *, has_content: bool) -> AsyncGenerator[str, None]:
+        """处理流式响应未知错误"""
+        self.logger.exception("处理流式响应时出现未知错误: %s", error)
+        if has_content:
+            yield "\n\n[处理响应时出现错误，但已获得部分内容]"
+        else:
+            raise HermesAPIError(500, f"Unexpected error during streaming: {error!s}") from error
+
+    def _get_no_content_message(self, event_count: int) -> str:
+        """获取无内容时的消息"""
+        self.logger.warning(
+            "流式响应完成但未产生任何文本内容 - 事件总数: %d",
+            event_count,
+        )
+        return "抱歉，服务暂时无法响应您的请求，请稍后重试。"
 
     async def _chat_stream(
         self,
@@ -645,6 +687,10 @@ class HermesChatClient(LLMClientBase):
         chat_url = urljoin(self.base_url, "/api/chat")
         headers = self._build_chat_headers()
 
+        self.logger.info("准备发送聊天请求 - URL: %s, 会话ID: %s", chat_url, request.conversation_id)
+        self.logger.debug("请求头: %s", headers)
+        self.logger.debug("请求内容: %s", request.to_dict())
+
         try:
             async with client.stream(
                 "POST",
@@ -652,6 +698,7 @@ class HermesChatClient(LLMClientBase):
                 json=request.to_dict(),
                 headers=headers,
             ) as response:
+                self.logger.info("收到聊天响应 - 状态码: %d", response.status_code)
                 await self._validate_chat_response(response)
                 async for text in self._process_stream_events(response):
                     yield text
@@ -663,12 +710,8 @@ class HermesChatClient(LLMClientBase):
 
     def _log_text_content(self, text_content: str) -> None:
         """记录文本内容到日志"""
-        max_log_length = 50
-        display_text = (
-            text_content[:max_log_length] + "..."
-            if len(text_content) > max_log_length
-            else text_content
-        )
+        max_log_length = 100
+        display_text = text_content[:max_log_length] + "..." if len(text_content) > max_log_length else text_content
         self.logger.debug("产生文本内容: %s", display_text)
 
     async def _get_conversation_list(self) -> list[str]:
