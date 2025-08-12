@@ -20,7 +20,7 @@ from tool.oi_backend_init import oi_backend_init
 
 def parse_args() -> argparse.Namespace:
     """解析命令行参数"""
-    parser = argparse.ArgumentParser(description="openEuler 智能 Shell")
+    parser = argparse.ArgumentParser(description="openEuler Intelligence")
     parser.add_argument(
         "--logs",
         action="store_true",
@@ -29,7 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--init",
         action="store_true",
-        help="初始化 openEuler Intelligence 后端（仅支持 openEuler 操作系统）",
+        help="初始化 openEuler Intelligence 后端",
     )
     parser.add_argument(
         "--log-level",

@@ -5,6 +5,7 @@ import subprocess
 from collections.abc import AsyncGenerator
 
 from backend.base import LLMClientBase
+from backend.hermes.mcp_helpers import is_mcp_message
 from log.manager import get_logger
 
 # 定义危险命令黑名单
@@ -83,9 +84,13 @@ async def process_command(command: str, llm_client: LLMClientBase) -> AsyncGener
             logger.info("命令执行失败，向 LLM 请求建议")
             query = f"命令 '{command}' 执行失败，错误信息如下：\n{output}\n请帮忙分析原因并提供解决建议。"
             async for suggestion in llm_client.get_llm_response(query):
-                yield (suggestion, True)  # LLM输出，使用富文本
+                # 检查是否为 MCP 状态消息，如果是则使用特殊的处理方式
+                is_mcp_message_flag = is_mcp_message(suggestion)
+                yield (suggestion, not is_mcp_message_flag)  # MCP消息不作为LLM输出处理
     else:
         # 不是已安装的命令，直接询问大模型
         logger.debug("向 LLM 发送问题: %s", command)
         async for suggestion in llm_client.get_llm_response(command):
-            yield (suggestion, True)  # LLM输出，使用富文本
+            # 检查是否为 MCP 状态消息，如果是则使用特殊的处理方式
+            is_mcp_message_flag = is_mcp_message(suggestion)
+            yield (suggestion, not is_mcp_message_flag)  # MCP消息不作为LLM输出处理
