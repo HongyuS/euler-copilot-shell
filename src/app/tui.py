@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import re
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 from rich.markdown import Markdown as RichMarkdown
@@ -20,6 +19,14 @@ from app.settings import SettingsScreen
 from app.tui_mcp_handler import TUIMCPEventHandler
 from backend.factory import BackendFactory
 from backend.hermes import HermesChatClient
+from backend.hermes.mcp_helpers import (
+    MCPIndicators,
+    MCPTags,
+    extract_mcp_tag,
+    format_error_message,
+    is_final_mcp_message,
+    is_progress_message,
+)
 from config import ConfigManager
 from log.manager import get_logger, log_exception
 from tool.command_processor import process_command
@@ -443,8 +450,11 @@ class IntelligentTerminal(App):
         except asyncio.CancelledError:
             # 任务被取消是正常情况，不需要记录错误
             pass
-        except (OSError, ValueError, RuntimeError):
-            self.logger.exception("Command processing error")
+        except Exception as e:
+            # 记录错误日志
+            self.logger.exception("Task execution error occurred")
+            # 尝试在前端显示错误信息
+            self._display_error_in_ui(e)
         finally:
             # 确保处理标志被重置
             self.processing = False
@@ -464,14 +474,16 @@ class IntelligentTerminal(App):
         except asyncio.CancelledError:
             # 任务被取消，通常是因为应用退出
             self.logger.info("Command processing cancelled")
-        except (OSError, ValueError) as e:
+        except Exception as e:
+            # 记录错误日志
+            self.logger.exception("Command processing error occurred")
             # 添加异常处理，显示错误信息
             try:
                 output_container = self.query_one("#output-container", Container)
                 error_msg = self._format_error_message(e)
                 # 检查应用是否已经开始退出
                 if hasattr(self, "is_running") and self.is_running:
-                    output_container.mount(OutputLine(error_msg, command=False))
+                    output_container.mount(OutputLine(format_error_message(error_msg), command=False))
             except (AttributeError, ValueError, RuntimeError):
                 # 如果UI组件已不可用，只记录错误日志
                 self.logger.exception("Failed to display error message")
@@ -596,16 +608,24 @@ class IntelligentTerminal(App):
             output_container,
         )
 
+        # 检查是否是 MCP 消息处理（返回值为 None 表示是 MCP 消息）
+        is_mcp_detected = processed_line is None and (
+            MCPTags.MCP_PREFIX in content
+            or MCPTags.REPLACE_PREFIX in content
+            or any(indicator in content for indicator in MCPIndicators.PROGRESS_INDICATORS)
+        )
+
         # 只有当返回值不为None时才更新current_line
         if processed_line is not None:
             stream_state["current_line"] = processed_line
 
-        # 更新状态
-        if stream_state["is_first_content"]:
-            stream_state["is_first_content"] = False
-            stream_state["current_content"] = content
-        elif isinstance(stream_state["current_line"], MarkdownOutputLine) and is_llm_output:
-            stream_state["current_content"] += content
+        # 更新状态 - 但是不要让 MCP 消息影响流状态
+        if not is_mcp_detected:
+            if stream_state["is_first_content"]:
+                stream_state["is_first_content"] = False
+                stream_state["current_content"] = content
+            elif isinstance(stream_state["current_line"], MarkdownOutputLine) and is_llm_output:
+                stream_state["current_content"] += content
 
     def _handle_timeout_error(self, output_container: Container, stream_state: dict) -> bool:
         """处理超时错误"""
@@ -635,81 +655,35 @@ class IntelligentTerminal(App):
         is_first_content = params.is_first_content
 
         # 检查是否包含MCP标记（替换标记或MCP标记）
+        tool_name, cleaned_content = extract_mcp_tag(content)
         replace_tool_name = None
         mcp_tool_name = None
-        cleaned_content = content
 
-        # 寻找替换标记，可能不在开头
-        replace_match = re.search(r"\[REPLACE:([^\]]+)\]", content)
-        if replace_match:
-            replace_tool_name = replace_match.group(1)
-            # 移除替换标记，保留其他内容
-            cleaned_content = re.sub(r"\[REPLACE:[^\]]+\]", "", content).strip()
-            self.logger.debug(
-                "检测到替换标记，工具: %s, 原内容长度: %d, 清理后长度: %d",
+        # 根据原始内容判断标记类型
+        if tool_name:
+            if MCPTags.REPLACE_PREFIX in content:
+                replace_tool_name = tool_name
+            elif MCPTags.MCP_PREFIX in content:
+                mcp_tool_name = tool_name
+
+        # 检查是否为 MCP 进度消息
+        tool_name = replace_tool_name or mcp_tool_name
+        is_progress_message = tool_name is not None and self._is_progress_message(cleaned_content)
+
+        # 如果是进度消息，使用专门的处理方法，无论 is_llm_output 的值
+        if is_progress_message and tool_name:
+            return self._handle_mcp_progress_message(
+                cleaned_content,
+                tool_name,
                 replace_tool_name,
-                len(content),
-                len(cleaned_content),
-            )
-            self.logger.debug("原内容片段: %s", content[:100])
-            self.logger.debug("清理后片段: %s", cleaned_content[:100])
-
-        # 寻找MCP标记，表示这是一个MCP状态消息但不需要替换
-        mcp_match = re.search(r"\[MCP:([^\]]+)\]", cleaned_content)
-        if mcp_match:
-            mcp_tool_name = mcp_match.group(1)
-            # 移除MCP标记，保留其他内容
-            cleaned_content = re.sub(r"\[MCP:[^\]]+\]", "", cleaned_content).strip()
-            self.logger.debug(
-                "检测到MCP标记，工具: %s, 清理后长度: %d",
                 mcp_tool_name,
-                len(cleaned_content),
+                output_container,
             )
 
         # 使用清理后的内容进行后续处理
         content = cleaned_content
 
         self.logger.debug("[TUI] 处理内容: %s", content.strip()[:50])
-
-        # 检查是否为 MCP 进度消息
-        # 修复：带有替换标记或MCP标记的内容都被认为是MCP进度消息
-        tool_name = replace_tool_name or mcp_tool_name
-        is_progress_message = tool_name is not None and self._is_progress_message(content)
-
-        # 如果是进度消息，根据标记类型进行处理
-        if is_progress_message and tool_name:
-            # 检查是否为最终状态消息
-            is_final_message = self._is_final_progress_message(content)
-
-            # 检查是否有现有的进度消息
-            existing_progress = self._current_progress_lines.get(tool_name)
-
-            # 如果有替换标记，则尝试替换现有消息
-            if replace_tool_name and existing_progress is not None:
-                # 替换现有的进度消息（包括最终状态）
-                existing_progress.update_markdown(content)
-                self.logger.debug("替换工具 %s 的进度消息: %s", tool_name, content.strip()[:50])
-
-                # 如果是最终状态，清理进度跟踪（但保留替换后的消息）
-                if is_final_message:
-                    self._current_progress_lines.pop(tool_name, None)
-                    self.logger.debug("工具 %s 到达最终状态，清理进度跟踪", tool_name)
-
-                # 重要：对于MCP消息，直接返回None，避免影响后续的LLM输出处理
-                # 因为MCP消息是独立的状态更新，不应该成为content accumulation的一部分
-                return None
-
-            # 创建新的进度消息（适用于首次MCP标记或没有现有进度的替换标记）
-            new_progress_line = ProgressOutputLine(content, step_id=tool_name)
-
-            # 如果不是最终状态，加入进度跟踪
-            if not is_final_message:
-                self._current_progress_lines[tool_name] = new_progress_line
-
-            output_container.mount(new_progress_line)
-            self.logger.debug("创建工具 %s 的新进度消息: %s", tool_name, content.strip()[:50])
-            # 同样返回None，避免影响后续内容处理
-            return None
 
         # 处理第一段内容，创建适当的输出组件
         if is_first_content:
@@ -737,93 +711,160 @@ class IntelligentTerminal(App):
         output_container.mount(new_line)
         return new_line
 
+    def _handle_mcp_progress_message(
+        self,
+        content: str,
+        tool_name: str,
+        replace_tool_name: str | None,
+        mcp_tool_name: str | None,
+        output_container: Container,
+    ) -> None:
+        """处理 MCP 进度消息"""
+        # 检查是否为最终状态消息
+        is_final_message = self._is_final_progress_message(content)
+
+        # 检查是否有现有的进度消息
+        existing_progress = self._current_progress_lines.get(tool_name)
+
+        # 如果有替换标记，则尝试替换现有消息
+        if replace_tool_name and existing_progress is not None:
+            # 替换现有的进度消息
+            existing_progress.update_markdown(content)
+            self.logger.debug("替换工具 %s 的进度消息: %s", tool_name, content.strip()[:50])
+
+            # 如果是最终状态，清理进度跟踪
+            if is_final_message:
+                self._current_progress_lines.pop(tool_name, None)
+                self.logger.debug("工具 %s 到达最终状态，清理进度跟踪", tool_name)
+
+            return
+
+        # 如果有MCP标记但已存在相同工具的进度消息，则替换而不是创建新的
+        if mcp_tool_name and existing_progress is not None:
+            # 这种情况可能是因为消息处理顺序问题导致的重复，应该替换现有消息
+            existing_progress.update_markdown(content)
+            self.logger.debug("替换已存在的工具 %s 进度消息: %s", tool_name, content.strip()[:50])
+
+            # 如果是最终状态，清理进度跟踪
+            if is_final_message:
+                self._current_progress_lines.pop(tool_name, None)
+                self.logger.debug("工具 %s 到达最终状态，清理进度跟踪", tool_name)
+
+            return
+
+        # 创建新的进度消息
+        new_progress_line = ProgressOutputLine(content, step_id=tool_name)
+
+        # 如果不是最终状态，加入进度跟踪
+        if not is_final_message:
+            self._current_progress_lines[tool_name] = new_progress_line
+
+        output_container.mount(new_progress_line)
+        self.logger.debug("创建工具 %s 的新进度消息: %s", tool_name, content.strip()[:50])
+
     def _is_progress_message(self, content: str) -> bool:
         """判断是否为进度消息"""
-        # 必须包含工具相关的关键词，避免误识别其他消息
-        tool_related_patterns = [
-            r"工具.*`[^`]+`",  # 包含工具和反引号的内容
-            r"正在初始化工具:",
-            r"等待用户确认执行工具",
-            r"等待用户输入参数",
-        ]
-
-        # 检查是否包含工具相关内容
-        has_tool_content = any(re.search(pattern, content) for pattern in tool_related_patterns)
-
-        if not has_tool_content:
-            return False
-
-        # 具体的进度指示符
-        progress_indicators = [
-            "🔧 正在初始化工具",
-            "📥 工具",
-            "正在执行...",
-            "⏸️ **等待用户确认执行工具**",
-            "📝 **等待用户输入参数**",
-            "✅ 工具",
-            "执行完成",
-            "❌ 工具",
-            "已取消",
-            "⚠️ 工具",
-            "执行失败",
-        ]
-
-        return any(indicator in content for indicator in progress_indicators)
+        return is_progress_message(content)
 
     def _is_final_progress_message(self, content: str) -> bool:
         """判断是否为最终进度消息（执行完成、失败、取消等）"""
-        final_indicators = [
-            "✅ 工具",
-            "执行完成",
-            "❌ 工具",
-            "已取消",
-            "⚠️ 工具",
-            "执行失败",
-        ]
-        return any(indicator in content for indicator in final_indicators)
-
-    def _extract_tool_name_from_content(self, content: str) -> str:
-        """从内容中提取工具名称"""
-        # 尝试从内容中提取工具名称
-        patterns = [
-            r"工具:\s*`([^`]+)`",
-            r"工具名称:\s*`([^`]+)`",
-            r"正在初始化工具:\s*`([^`]+)`",
-            r"工具\s*`([^`]+)`\s*正在执行",
-            r"✅ 工具\s*`([^`]+)`",
-            r"❌ 工具\s*`([^`]+)`",
-            r"⚠️ 工具\s*`([^`]+)`",
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, content)
-            if match:
-                return match.group(1).strip()  # 使用工具名称作为步骤标识
-
-        return ""
-
-    def _cleanup_progress_message(self, step_id: str) -> None:
-        """清理指定步骤的进度消息"""
-        if step_id in self._current_progress_lines:
-            self._current_progress_lines.pop(step_id)
-            # 对于完成状态，我们保留消息但从跟踪中移除
-            self.logger.debug("清理步骤 %s 的进度消息跟踪", step_id)
+        return is_final_mcp_message(content)
 
     def _format_error_message(self, error: BaseException) -> str:
         """格式化错误消息"""
         error_str = str(error).lower()
+        error_type = type(error).__name__.lower()
 
-        # 处理网络连接异常
-        if "remoteprotocolerror" in error_str or "peer closed connection" in error_str:
-            return "网络连接异常中断，请稍后重试"
-        if "timeout" in error_str:
-            return "请求超时，请稍后重试"
-        if any(keyword in error_str for keyword in ["network", "connection", "unreachable"]):
-            return "网络连接错误，请检查网络后重试"
-        if "httperror" in error_str or "http" in error_str:
+        # 处理 HermesAPIError 特殊情况
+        if hasattr(error, "status_code") and hasattr(error, "message"):
+            if error.status_code == 500:  # type: ignore[attr-defined]  # noqa: PLR2004
+                return f"服务端错误: {error.message}"  # type: ignore[attr-defined]
+            if error.status_code >= 400:  # type: ignore[attr-defined]  # noqa: PLR2004
+                return f"请求失败: {error.message}"  # type: ignore[attr-defined]
+
+        # 定义错误匹配规则和对应的用户友好消息
+        error_patterns = {
+            "网络连接异常中断，请检查网络连接后重试": [
+                "remoteprotocolerror",
+                "server disconnected",
+                "peer closed connection",
+                "connection reset",
+                "connection refused",
+                "broken pipe",
+            ],
+            "请求超时，请稍后重试": [
+                "timeout",
+                "timed out",
+            ],
+            "网络连接错误，请检查网络后重试": [
+                "network",
+                "connection",
+                "unreachable",
+                "resolve",
+                "dns",
+                "httperror",
+                "requestserror",
+            ],
+            "服务端响应异常，请稍后重试": [
+                "http",
+                "status",
+                "response",
+            ],
+            "数据格式错误，请稍后重试": [
+                "json",
+                "decode",
+                "parse",
+                "invalid",
+                "malformed",
+            ],
+            "认证失败，请检查配置": [
+                "auth",
+                "unauthorized",
+                "forbidden",
+                "token",
+            ],
+        }
+
+        # 检查错误字符串匹配
+        for message, patterns in error_patterns.items():
+            if any(pattern in error_str for pattern in patterns):
+                return message
+
+        # 检查错误类型匹配（用于服务端响应异常）
+        if any(
+            keyword in error_type
+            for keyword in [
+                "httperror",
+                "httpstatuserror",
+                "requesterror",
+            ]
+        ):
             return "服务端响应异常，请稍后重试"
 
         return f"处理命令时出错: {error!s}"
+
+    def _display_error_in_ui(self, error: BaseException) -> None:
+        """在UI界面显示错误信息"""
+        try:
+            # 检查应用是否仍在运行
+            if not (hasattr(self, "is_running") and self.is_running):
+                return
+
+            # 获取输出容器
+            output_container = self.query_one("#output-container", Container)
+
+            # 格式化错误消息
+            error_msg = self._format_error_message(error)
+
+            # 显示错误信息
+            output_container.mount(OutputLine(f"❌ {error_msg}", command=False))
+
+            # 滚动到底部以确保用户看到错误信息
+            self.call_after_refresh(lambda: output_container.scroll_end(animate=False))
+
+        except Exception:
+            # 如果UI显示失败，至少记录错误日志
+            self.logger.exception("无法在UI中显示错误信息")
 
     def _focus_current_input_widget(self) -> None:
         """聚焦到当前的输入组件，考虑 MCP 模式状态"""

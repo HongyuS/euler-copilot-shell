@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from textual.app import ComposeResult
     from textual.events import Key as KeyEvent
 
@@ -138,7 +140,7 @@ class AgentSelectionDialog(ModalScreen):
                 agent_text_lines.append(f"[white on green]► ✓ {name}[/white on green]")
             elif is_cursor:
                 # 光标在其他智能体上：蓝底白字
-                agent_text_lines.append(f"[white on blue]► {name}[/white on blue]")
+                agent_text_lines.append(f"[white on blue]►   {name}[/white on blue]")
             elif is_current:
                 # 当前已选中但光标不在这里：显示勾选符号
                 agent_text_lines.append(f"[bright_green]  ✓ {name}[/bright_green]")

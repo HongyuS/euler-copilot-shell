@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 from textual import on
@@ -86,12 +87,12 @@ class MCPConfirmWidget(Container):
 
     def on_key(self, event) -> None:  # noqa: ANN001
         """处理键盘事件"""
-        if event.key == "enter" or event.key == "y":
+        if event.key in {"enter", "y"}:
             # Enter 或 Y 键确认
             self.confirm_execution()
             event.prevent_default()
             event.stop()
-        elif event.key == "escape" or event.key == "n":
+        elif event.key in {"escape", "n"}:
             # Escape 或 N 键取消
             self.cancel_execution()
             event.prevent_default()
@@ -105,10 +106,9 @@ class MCPConfirmWidget(Container):
                     current_index = list(buttons).index(current_focus)
                     next_index = (current_index + 1) % len(buttons)
                     buttons[next_index].focus()
-                else:
-                    # 如果没有按钮聚焦，聚焦到第一个按钮
-                    if buttons:
-                        buttons[0].focus()
+                # 如果没有按钮聚焦，聚焦到第一个按钮
+                elif buttons:
+                    buttons[0].focus()
                 event.prevent_default()
                 event.stop()
             except (AttributeError, ValueError, IndexError):
@@ -129,10 +129,8 @@ class MCPConfirmWidget(Container):
                 self.focus()
         except Exception:
             # 如果聚焦失败，至少确保组件本身有焦点
-            try:
+            with contextlib.suppress(Exception):
                 self.focus()
-            except Exception:
-                pass
 
 
 class MCPParameterWidget(Container):

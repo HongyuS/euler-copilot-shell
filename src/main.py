@@ -6,6 +6,7 @@ import sys
 
 from app.tui import IntelligentTerminal
 from config.manager import ConfigManager
+from config.model import LogLevel
 from log.manager import (
     cleanup_empty_logs,
     disable_console_output,
@@ -19,7 +20,7 @@ from tool.oi_backend_init import oi_backend_init
 
 def parse_args() -> argparse.Namespace:
     """解析命令行参数"""
-    parser = argparse.ArgumentParser(description="openEuler 智能 Shell")
+    parser = argparse.ArgumentParser(description="openEuler Intelligence")
     parser.add_argument(
         "--logs",
         action="store_true",
@@ -28,7 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--init",
         action="store_true",
-        help="初始化 openEuler Intelligence 后端（仅支持 openEuler 操作系统）",
+        help="初始化 openEuler Intelligence 后端",
     )
     parser.add_argument(
         "--log-level",
@@ -77,7 +78,6 @@ def main() -> None:
 
     # 处理命令行参数设置的日志级别
     if args.log_level:
-        from config.model import LogLevel
         if args.log_level not in LogLevel.__members__:
             sys.stderr.write(f"无效的日志级别: {args.log_level}\n")
             sys.exit(1)
