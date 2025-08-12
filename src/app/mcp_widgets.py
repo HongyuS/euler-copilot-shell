@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from textual import on
 from textual.containers import Container, Horizontal, Vertical
 from textual.message import Message
-from textual.widgets import Button, Input, Label, Static
+from textual.widgets import Button, Input, Static
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -29,6 +29,8 @@ class MCPConfirmWidget(Container):
         """初始化确认组件"""
         super().__init__(name=name, id=widget_id, classes=classes)
         self.event = event
+        # 设置为可聚焦，以便键盘导航
+        self.can_focus = True
 
     def compose(self) -> ComposeResult:
         """构建确认界面"""
@@ -37,23 +39,40 @@ class MCPConfirmWidget(Container):
         risk = content.get("risk", "unknown")
         reason = content.get("reason", "需要用户确认是否执行此工具")
 
-        # 风险级别文本
-        risk_text = {
-            "low": "低风险",
-            "medium": "中等风险",
-            "high": "高风险",
-        }.get(risk, "未知风险")
+        # 风险级别文本和图标
+        risk_info = {
+            "low": ("🟢", "低风险"),
+            "medium": ("🟡", "中等风险"),
+            "high": ("🔴", "高风险"),
+        }.get(risk, ("⚪", "未知风险"))
+
+        risk_icon, risk_text = risk_info
 
         with Vertical():
-            yield Static("⚠️ 工具执行确认", classes="confirm-title")
-            yield Static(f"工具名称: {step_name}")
-            yield Static(f"风险级别: {risk_text}", classes=f"risk-{risk}")
-            yield Static(f"原因: {reason}")
-            yield Static("")
+            # 紧凑的工具确认信息显示
+            yield Static(
+                f"🔧 {step_name} {risk_icon} {risk_text}",
+                classes=f"confirm-info risk-{risk}",
+                markup=False,
+            )
+            # 显示简化的说明文字，确保按钮可见
+            if len(reason) > 30:
+                # 如果说明太长，显示更短的简化版本
+                yield Static(
+                    "💭 请确认执行",
+                    classes="confirm-reason",
+                    markup=False,
+                )
+            else:
+                yield Static(
+                    f"💭 {reason}",
+                    classes="confirm-reason",
+                    markup=False,
+                )
+            # 确保按钮始终显示
             with Horizontal(classes="confirm-buttons"):
-                yield Button("确认执行 (Y)", variant="success", id="mcp-confirm-yes")
-                yield Button("取消 (N)", variant="error", id="mcp-confirm-no")
-            yield Static("请选择: Y(确认) / N(取消)")
+                yield Button("✓ 确认", variant="success", id="mcp-confirm-yes")
+                yield Button("✗ 取消", variant="error", id="mcp-confirm-no")
 
     @on(Button.Pressed, "#mcp-confirm-yes")
     def confirm_execution(self) -> None:
@@ -64,6 +83,56 @@ class MCPConfirmWidget(Container):
     def cancel_execution(self) -> None:
         """取消执行"""
         self.post_message(MCPConfirmResult(confirmed=False, task_id=self.event.get_task_id()))
+
+    def on_key(self, event) -> None:  # noqa: ANN001
+        """处理键盘事件"""
+        if event.key == "enter" or event.key == "y":
+            # Enter 或 Y 键确认
+            self.confirm_execution()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "escape" or event.key == "n":
+            # Escape 或 N 键取消
+            self.cancel_execution()
+            event.prevent_default()
+            event.stop()
+        elif event.key == "tab":
+            # Tab 键在按钮间切换焦点
+            try:
+                buttons = self.query("Button")
+                current_focus = self.app.focused
+                if current_focus is not None and current_focus in buttons:
+                    current_index = list(buttons).index(current_focus)
+                    next_index = (current_index + 1) % len(buttons)
+                    buttons[next_index].focus()
+                else:
+                    # 如果没有按钮聚焦，聚焦到第一个按钮
+                    if buttons:
+                        buttons[0].focus()
+                event.prevent_default()
+                event.stop()
+            except (AttributeError, ValueError, IndexError):
+                pass
+
+    def on_mount(self) -> None:
+        """组件挂载时自动聚焦"""
+        # 延迟聚焦，确保组件完全渲染
+        self.set_timer(0.1, self._focus_first_button)
+
+    def _focus_first_button(self) -> None:
+        """聚焦到第一个按钮"""
+        try:
+            buttons = self.query("Button")
+            if buttons:
+                buttons[0].focus()
+                # 确保组件本身也有焦点，以便键盘事件能正确处理
+                self.focus()
+        except Exception:
+            # 如果聚焦失败，至少确保组件本身有焦点
+            try:
+                self.focus()
+            except Exception:
+                pass
 
 
 class MCPParameterWidget(Container):
@@ -81,6 +150,8 @@ class MCPParameterWidget(Container):
         super().__init__(name=name, id=widget_id, classes=classes)
         self.event = event
         self.param_inputs: dict[str, Input] = {}
+        # 设置为可聚焦，以便键盘导航
+        self.can_focus = True
 
     def compose(self) -> ComposeResult:
         """构建参数输入界面"""
@@ -90,34 +161,38 @@ class MCPParameterWidget(Container):
         params = content.get("params", {})
 
         with Vertical():
-            yield Static("📝 参数补充", classes="param-title")
-            yield Static(f"工具名称: {step_name}")
-            yield Static(message, classes="param-message")
-            yield Static("")
+            # 紧凑的参数输入标题
+            yield Static("📝 参数输入", classes="param-header", markup=False)
+            yield Static(f"🔧 {step_name}", classes="param-tool", markup=False)
+            # 只在说明较短时显示
+            if len(message) <= 30:
+                yield Static(f"💭 {message}", classes="param-message", markup=False)
 
-            # 为每个需要填写的参数创建输入框
+            # 垂直布局的参数输入，更节省空间
             for param_name, param_value in params.items():
                 if param_value is None or param_value == "":
-                    yield Label(f"{param_name}:")
                     param_input = Input(
                         placeholder=f"请输入 {param_name}",
                         id=f"param_{param_name}",
+                        classes="param-input-compact",
                     )
                     self.param_inputs[param_name] = param_input
                     yield param_input
 
-            # 额外信息输入框
-            yield Label("补充说明（可选）:")
-            description_input = Input(
-                placeholder="请输入补充说明信息",
-                id="param_description",
-            )
-            self.param_inputs["description"] = description_input
-            yield description_input
+            # 简化的补充说明输入
+            if params:  # 只有在有其他参数时才显示补充说明
+                description_input = Input(
+                    placeholder="补充说明（可选）",
+                    id="param_description",
+                    classes="param-input-compact",
+                )
+                self.param_inputs["description"] = description_input
+                yield description_input
 
+            # 紧凑的按钮行
             with Horizontal(classes="param-buttons"):
-                yield Button("提交", variant="success", id="mcp-param-submit")
-                yield Button("取消", variant="error", id="mcp-param-cancel")
+                yield Button("✓ 提交", variant="success", id="mcp-param-submit")
+                yield Button("✗ 取消", variant="error", id="mcp-param-cancel")
 
     @on(Button.Pressed, "#mcp-param-submit")
     def submit_parameters(self) -> None:
