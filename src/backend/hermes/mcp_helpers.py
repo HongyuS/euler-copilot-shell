@@ -142,6 +142,8 @@ class MCPIndicators:
         MCPEmojis.OUTPUT,
         MCPEmojis.CANCEL,
         MCPEmojis.ERROR,
+        MCPEmojis.WAITING_START,
+        MCPEmojis.WAITING_PARAM,
     ]
 
 
@@ -231,12 +233,17 @@ def is_final_mcp_message(content: str) -> bool:
 
 def is_progress_message(content: str) -> bool:
     """检查内容是否为进度状态消息"""
-    # 检查是否包含进度表情符号
-    if any(emoji in content for emoji in MCPIndicators.PROGRESS_INDICATORS):
+    # 首先检查是否包含 MCP 或 REPLACE 标记
+    if MCPTags.MCP_PREFIX in content or MCPTags.REPLACE_PREFIX in content:
         return True
 
-    # 检查是否包含 MCP 或 REPLACE 标记
-    return MCPTags.MCP_PREFIX in content or MCPTags.REPLACE_PREFIX in content
+    # 检查是否包含明确的 MCP 状态指示符（更严格的匹配）
+    if any(indicator in content for indicator in MCPIndicators.ALL_INDICATORS):
+        return True
+
+    # 检查是否为标准的工具状态消息格式：表情符号 + "工具" + 工具名称
+    tool_message_pattern = r"[🔧📥✅❌⚠️⏸️📝]\s*(工具\s*`[^`]+`|正在初始化工具|\*\*等待用户[^*]*\*\*)"
+    return bool(re.search(tool_message_pattern, content))
 
 
 def classify_mcp_message(content: str) -> str:

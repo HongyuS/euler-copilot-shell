@@ -169,10 +169,24 @@ class HermesStreamProcessor:
 
         # 处理特殊的等待状态事件
         if event_type == "step.waiting_for_start":
-            return self._format_waiting_for_start(content, step_name, step_id, should_replace=should_replace)
+            base_message = self._format_waiting_for_start(content, step_name)
+            return self._handle_progress_message(
+                event_type,
+                step_name,
+                step_id,
+                base_message,
+                should_replace=should_replace,
+            )
 
         if event_type == "step.waiting_for_param":
-            return self._format_waiting_for_param(content, step_name, step_id, should_replace=should_replace)
+            base_message = self._format_waiting_for_param(content, step_name)
+            return self._handle_progress_message(
+                event_type,
+                step_name,
+                step_id,
+                base_message,
+                should_replace=should_replace,
+            )
 
         # 处理其他事件类型
         return self._format_standard_status(event_type, step_name, step_id, should_replace=should_replace)
@@ -181,50 +195,21 @@ class HermesStreamProcessor:
         self,
         content: dict[str, Any],
         step_name: str,
-        step_id: str,
-        *,
-        should_replace: bool,
     ) -> str:
         """格式化等待开始执行的消息"""
         risk = content.get("risk", MCPRiskLevels.UNKNOWN)
         reason = content.get("reason", "需要用户确认是否执行此工具")
-
-        # 使用统一的风险级别显示
         risk_info = MCPRiskLevels.get_risk_display(risk)
-
-        message = MCPMessageTemplates.waiting_start_message(step_name, risk_info, reason)
-
-        # 记录进度信息
-        if step_id:
-            self._current_tool_progress[step_id] = {
-                "message": message,
-                "should_replace": should_replace,
-                "is_progress": True,
-            }
-
-        return message
+        return MCPMessageTemplates.waiting_start_message(step_name, risk_info, reason)
 
     def _format_waiting_for_param(
         self,
         content: dict[str, Any],
         step_name: str,
-        step_id: str,
-        *,
-        should_replace: bool,
     ) -> str:
         """格式化等待参数输入的消息"""
         message_content = content.get("message", "需要补充参数")
-        message = MCPMessageTemplates.waiting_param_message(step_name, message_content)
-
-        # 记录进度信息
-        if step_id:
-            self._current_tool_progress[step_id] = {
-                "message": message,
-                "should_replace": should_replace,
-                "is_progress": True,
-            }
-
-        return message
+        return MCPMessageTemplates.waiting_param_message(step_name, message_content)
 
     def _format_standard_status(
         self,
