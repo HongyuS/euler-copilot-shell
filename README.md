@@ -284,17 +284,40 @@ oi --init
 
 日志文件同时输出到控制台和文件，便于开发调试和生产环境监控。详细说明请参考 [日志功能文档](docs/development/日志功能说明.md)。
 
-## RPM 打包
+## 在 openEuler 系统下的 RPM 打包
 
-我们提供了一个 spec 文件，可以使用 PyInstaller 打包并生成 RPM 包:
+以下步骤演示如何在 openEuler 24.03 LTS 或更高版本上，使用自带脚本打包生成 RPM 包。
 
-```sh
-# 创建源代码归档
-tar czf euler-copilot-shell-0.10.0.tar.gz --transform 's,^smart-shell,euler-copilot-shell-0.10.0,' smart-shell
+前提条件：
 
-# 构建RPM包(需要已安装rpm-build工具)
-rpmbuild -ba distribution/linux/euler-copilot-shell.spec
-```
+- 操作系统：openEuler 24.03 LTS 或更高版本
+- 工具依赖：rpmdevtools、git、bash
+- 具有管理员权限（sudo）
+
+构建步骤：
+
+1. 克隆仓库并切换到对应分支：
+
+   ```sh
+   git clone https://gitee.com/openeuler/euler-copilot-shell.git
+   cd euler-copilot-shell
+   git checkout main
+   ```
+
+2. 为构建脚本添加可执行权限：
+
+   ```sh
+   chmod +x scripts/build/create_tarball.sh scripts/build/build_rpm.sh
+   ```
+
+3. 运行 RPM 构建脚本：
+
+   ```sh
+   cd scripts/build
+   ./build_rpm.sh
+   ```
+
+   脚本执行完成后，会在临时构建目录下的 `RPMS` 和 `SRPMS` 子目录中生成相应的二进制包和源码包，并在终端输出具体路径。
 
 ## 高级功能
 
