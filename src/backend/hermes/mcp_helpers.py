@@ -142,6 +142,8 @@ class MCPIndicators:
         MCPEmojis.OUTPUT,
         MCPEmojis.CANCEL,
         MCPEmojis.ERROR,
+        MCPEmojis.WAITING_START,
+        MCPEmojis.WAITING_PARAM,
     ]
 
 
@@ -202,17 +204,6 @@ class MCPRiskLevels:
         return cls.RISK_DISPLAY_MAP.get(risk_level, cls.RISK_DISPLAY_MAP[cls.UNKNOWN])
 
 
-# MCP 消息类型枚举
-class MCPMessageType:
-    """MCP 消息类型常量"""
-
-    NORMAL = "normal"  # 普通消息
-    MCP_TAGGED = "mcp_tagged"  # 带有 [MCP:] 标记的消息
-    REPLACE_TAGGED = "replace_tagged"  # 带有 [REPLACE:] 标记的消息
-    PROGRESS = "progress"  # 进度状态消息
-    FINAL = "final"  # 最终状态消息
-
-
 # 工具函数
 def is_mcp_message(content: str) -> bool:
     """检查内容是否为 MCP 状态消息"""
@@ -227,33 +218,6 @@ def is_mcp_message(content: str) -> bool:
 def is_final_mcp_message(content: str) -> bool:
     """检查内容是否为最终状态的 MCP 消息"""
     return any(indicator in content for indicator in MCPIndicators.FINAL_INDICATORS)
-
-
-def is_progress_message(content: str) -> bool:
-    """检查内容是否为进度状态消息"""
-    # 检查是否包含进度表情符号
-    if any(emoji in content for emoji in MCPIndicators.PROGRESS_INDICATORS):
-        return True
-
-    # 检查是否包含 MCP 或 REPLACE 标记
-    return MCPTags.MCP_PREFIX in content or MCPTags.REPLACE_PREFIX in content
-
-
-def classify_mcp_message(content: str) -> str:
-    """分类 MCP 消息类型"""
-    if MCPTags.REPLACE_PREFIX in content:
-        return MCPMessageType.REPLACE_TAGGED
-
-    if MCPTags.MCP_PREFIX in content:
-        return MCPMessageType.MCP_TAGGED
-
-    if is_final_mcp_message(content):
-        return MCPMessageType.FINAL
-
-    if is_progress_message(content):
-        return MCPMessageType.PROGRESS
-
-    return MCPMessageType.NORMAL
 
 
 def extract_mcp_tag(content: str) -> tuple[str | None, str]:
