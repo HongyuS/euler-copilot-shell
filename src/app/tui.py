@@ -25,7 +25,7 @@ from backend.hermes.mcp_helpers import (
     extract_mcp_tag,
     format_error_message,
     is_final_mcp_message,
-    is_progress_message,
+    is_mcp_message,
 )
 from config import ConfigManager
 from log.manager import get_logger, log_exception
@@ -668,7 +668,7 @@ class IntelligentTerminal(App):
 
         # 检查是否为 MCP 进度消息
         tool_name = replace_tool_name or mcp_tool_name
-        is_progress_message = tool_name is not None and self._is_progress_message(cleaned_content)
+        is_progress_message = tool_name is not None and is_mcp_message(content)
 
         # 如果是进度消息，使用专门的处理方法，无论 is_llm_output 的值
         if is_progress_message and tool_name:
@@ -721,7 +721,7 @@ class IntelligentTerminal(App):
     ) -> None:
         """处理 MCP 进度消息"""
         # 检查是否为最终状态消息
-        is_final_message = self._is_final_progress_message(content)
+        is_final_message = is_final_mcp_message(content)
 
         # 检查是否有现有的进度消息
         existing_progress = self._current_progress_lines.get(tool_name)
@@ -761,14 +761,6 @@ class IntelligentTerminal(App):
 
         output_container.mount(new_progress_line)
         self.logger.debug("创建工具 %s 的新进度消息: %s", tool_name, content.strip()[:50])
-
-    def _is_progress_message(self, content: str) -> bool:
-        """判断是否为进度消息"""
-        return is_progress_message(content)
-
-    def _is_final_progress_message(self, content: str) -> bool:
-        """判断是否为最终进度消息（执行完成、失败、取消等）"""
-        return is_final_mcp_message(content)
 
     def _format_error_message(self, error: BaseException) -> str:
         """格式化错误消息"""
