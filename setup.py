@@ -17,10 +17,10 @@ setup(
     package_dir={"": "src"},
     include_package_data=True,
     install_requires=[
-        "httpx>=0.28.0",
-        "openai>=1.97.0",
-        "rich>=14.1.0",
-        "textual>=3.0.0",
+        "httpx==0.28.1",
+        "openai==1.99.6",
+        "rich==14.1.0",
+        "textual==5.3.0",
     ],
     entry_points={
         "console_scripts": [
@@ -33,5 +33,5 @@ setup(
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MulanPSL-2.0 License",
     ],
-    python_requires=">=3.9",
+    python_requires=">=3.11",
 )
