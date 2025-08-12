@@ -6,6 +6,7 @@ import sys
 
 from app.tui import IntelligentTerminal
 from config.manager import ConfigManager
+from config.model import LogLevel
 from log.manager import (
     cleanup_empty_logs,
     disable_console_output,
@@ -77,7 +78,6 @@ def main() -> None:
 
     # 处理命令行参数设置的日志级别
     if args.log_level:
-        from config.model import LogLevel
         if args.log_level not in LogLevel.__members__:
             sys.stderr.write(f"无效的日志级别: {args.log_level}\n")
             sys.exit(1)
