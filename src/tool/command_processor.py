@@ -33,7 +33,7 @@ def execute_command(command: str) -> tuple[bool, str]:
             shell=True,
             capture_output=True,
             text=True,
-            timeout=600,
+            timeout=1800,
             check=False,
         )
         success = result.returncode == 0

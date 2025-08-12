@@ -5,18 +5,22 @@ from __future__ import annotations
 import json
 import re
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 from urllib.parse import urljoin
 
 import httpx
-from typing_extensions import Self
 
 from backend.base import LLMClientBase
 from log.manager import get_logger, log_exception
 
 from .constants import HTTP_OK
 from .exceptions import HermesAPIError
+from .models import HermesApp, HermesChatRequest, HermesFeatures
+from .services.agent import HermesAgentManager
+from .services.conversation import HermesConversationManager
 from .services.http import HermesHttpManager
+from .services.model import HermesModelManager
+from .stream import HermesStreamEvent, HermesStreamProcessor
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -24,11 +28,7 @@ if TYPE_CHECKING:
 
     from backend.mcp_handler import MCPEventHandler
 
-    from .models import HermesAgent, HermesChatRequest
-    from .services.agent import HermesAgentManager
-    from .services.conversation import HermesConversationManager
-    from .services.model import HermesModelManager
-    from .stream import HermesStreamEvent, HermesStreamProcessor
+    from .models import HermesAgent
 
 
 def validate_url(url: str) -> bool:
@@ -73,8 +73,6 @@ class HermesChatClient(LLMClientBase):
     def model_manager(self) -> HermesModelManager:
         """获取模型管理器（延迟初始化）"""
         if self._model_manager is None:
-            from .services.model import HermesModelManager
-
             self._model_manager = HermesModelManager(self.http_manager)
         return self._model_manager
 
@@ -82,8 +80,6 @@ class HermesChatClient(LLMClientBase):
     def agent_manager(self) -> HermesAgentManager:
         """获取智能体管理器（延迟初始化）"""
         if self._agent_manager is None:
-            from .services.agent import HermesAgentManager
-
             self._agent_manager = HermesAgentManager(self.http_manager)
         return self._agent_manager
 
@@ -91,8 +87,6 @@ class HermesChatClient(LLMClientBase):
     def conversation_manager(self) -> HermesConversationManager:
         """获取会话管理器（延迟初始化）"""
         if self._conversation_manager is None:
-            from .services.conversation import HermesConversationManager
-
             self._conversation_manager = HermesConversationManager(self.http_manager)
         return self._conversation_manager
 
@@ -100,8 +94,6 @@ class HermesChatClient(LLMClientBase):
     def stream_processor(self) -> HermesStreamProcessor:
         """获取流处理器（延迟初始化）"""
         if self._stream_processor is None:
-            from .stream import HermesStreamProcessor
-
             self._stream_processor = HermesStreamProcessor()
         return self._stream_processor
 
@@ -154,6 +146,9 @@ class HermesChatClient(LLMClientBase):
         # 如果有未完成的会话，先停止它
         await self._stop()
 
+        # 不在这里重置状态跟踪，让进度状态能够跨流保持
+        # 只有在真正的新对话开始时才重置（由上层调用方决定）
+
         self.logger.info("开始 Hermes 流式聊天请求")
         self.logger.debug("提示内容长度: %d", len(prompt))
         start_time = time.time()
@@ -164,8 +159,6 @@ class HermesChatClient(LLMClientBase):
             self.logger.info("使用会话ID: %s", conversation_id)
 
             # 创建聊天请求
-            from .models import HermesApp, HermesChatRequest, HermesFeatures
-
             app = HermesApp(self._current_agent_id)
             request = HermesChatRequest(
                 app=app,
@@ -211,7 +204,7 @@ class HermesChatClient(LLMClientBase):
         """
         return await self.agent_manager.get_available_agents()
 
-    async def send_mcp_response(self, task_id: str, params: bool | dict) -> AsyncGenerator[str, None]:
+    async def send_mcp_response(self, task_id: str, *, params: bool | dict) -> AsyncGenerator[str, None]:
         """
         发送 MCP 响应并获取流式回复
 
@@ -226,6 +219,7 @@ class HermesChatClient(LLMClientBase):
             HermesAPIError: 当 API 调用失败时
 
         """
+        # 不在 MCP 响应时重置状态跟踪，保持去重机制有效
         self.logger.info("发送 MCP 响应 - 任务ID: %s", task_id)
         start_time = time.time()
 
@@ -327,8 +321,6 @@ class HermesChatClient(LLMClientBase):
 
     async def _process_stream_events(self, response: httpx.Response) -> AsyncGenerator[str, None]:
         """处理流式响应事件"""
-        from .stream import HermesStreamEvent
-
         has_content = False
         event_count = 0
         has_error_message = False  # 标记是否已经产生错误消息
@@ -386,28 +378,21 @@ class HermesChatClient(LLMClientBase):
             yield mcp_status
 
         # 处理 MCP 交互事件
-        if event.event_type == "step.waiting_for_start":
-            # 通知 TUI 切换到确认界面
-            if self._mcp_handler is not None:
+        if self._mcp_handler is not None:
+            if event.event_type == "step.waiting_for_start":
+                # 通知 TUI 切换到确认界面
                 await self._mcp_handler.handle_waiting_for_start(event)
-            content = event.get_content()
-            step_name = event.get_step_name()
-            reason = content.get("reason", "需要用户确认")
-            yield f"⏸️ 等待用户确认执行工具 '{step_name}': {reason}"
-        elif event.event_type == "step.waiting_for_param":
-            # 通知 TUI 切换到参数输入界面
-            if self._mcp_handler is not None:
+            elif event.event_type == "step.waiting_for_param":
+                # 通知 TUI 切换到参数输入界面
                 await self._mcp_handler.handle_waiting_for_param(event)
-            content = event.get_content()
-            step_name = event.get_step_name()
-            message = content.get("message", "需要补充参数")
-            yield f"📝 等待用户输入参数 - 工具 '{step_name}': {message}"
 
-        # 处理文本内容
-        text_content = event.get_text_content()
-        if text_content:
-            self.stream_processor.log_text_content(text_content)
-            yield text_content
+        # 处理文本内容：只有当不是 MCP 步骤事件时才输出文本内容
+        # 这避免了 MCP 状态消息和文本内容的重复输出
+        if not event.is_mcp_step_event():
+            text_content = event.get_text_content()
+            if text_content:
+                self.stream_processor.log_text_content(text_content)
+                yield text_content
 
     async def _stop(self) -> None:
         """停止当前会话"""
