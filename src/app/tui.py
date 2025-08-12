@@ -443,8 +443,11 @@ class IntelligentTerminal(App):
         except asyncio.CancelledError:
             # 任务被取消是正常情况，不需要记录错误
             pass
-        except (OSError, ValueError, RuntimeError):
-            self.logger.exception("Command processing error")
+        except Exception as e:
+            # 记录错误日志
+            self.logger.exception("Task execution error occurred")
+            # 尝试在前端显示错误信息
+            self._display_error_in_ui(e)
         finally:
             # 确保处理标志被重置
             self.processing = False
@@ -464,14 +467,16 @@ class IntelligentTerminal(App):
         except asyncio.CancelledError:
             # 任务被取消，通常是因为应用退出
             self.logger.info("Command processing cancelled")
-        except (OSError, ValueError) as e:
+        except Exception as e:
+            # 记录错误日志
+            self.logger.exception("Command processing error occurred")
             # 添加异常处理，显示错误信息
             try:
                 output_container = self.query_one("#output-container", Container)
                 error_msg = self._format_error_message(e)
                 # 检查应用是否已经开始退出
                 if hasattr(self, "is_running") and self.is_running:
-                    output_container.mount(OutputLine(error_msg, command=False))
+                    output_container.mount(OutputLine(f"❌ {error_msg}", command=False))
             except (AttributeError, ValueError, RuntimeError):
                 # 如果UI组件已不可用，只记录错误日志
                 self.logger.exception("Failed to display error message")
@@ -812,18 +817,95 @@ class IntelligentTerminal(App):
     def _format_error_message(self, error: BaseException) -> str:
         """格式化错误消息"""
         error_str = str(error).lower()
+        error_type = type(error).__name__.lower()
 
-        # 处理网络连接异常
-        if "remoteprotocolerror" in error_str or "peer closed connection" in error_str:
-            return "网络连接异常中断，请稍后重试"
-        if "timeout" in error_str:
-            return "请求超时，请稍后重试"
-        if any(keyword in error_str for keyword in ["network", "connection", "unreachable"]):
-            return "网络连接错误，请检查网络后重试"
-        if "httperror" in error_str or "http" in error_str:
+        # 处理 HermesAPIError 特殊情况
+        if hasattr(error, "status_code") and hasattr(error, "message"):
+            if error.status_code == 500:  # type: ignore[attr-defined]  # noqa: PLR2004
+                return f"服务端错误: {error.message}"  # type: ignore[attr-defined]
+            if error.status_code >= 400:  # type: ignore[attr-defined]  # noqa: PLR2004
+                return f"请求失败: {error.message}"  # type: ignore[attr-defined]
+
+        # 定义错误匹配规则和对应的用户友好消息
+        error_patterns = {
+            "网络连接异常中断，请检查网络连接后重试": [
+                "remoteprotocolerror",
+                "server disconnected",
+                "peer closed connection",
+                "connection reset",
+                "connection refused",
+                "broken pipe",
+            ],
+            "请求超时，请稍后重试": [
+                "timeout",
+                "timed out",
+            ],
+            "网络连接错误，请检查网络后重试": [
+                "network",
+                "connection",
+                "unreachable",
+                "resolve",
+                "dns",
+                "httperror",
+                "requestserror",
+            ],
+            "服务端响应异常，请稍后重试": [
+                "http",
+                "status",
+                "response",
+            ],
+            "数据格式错误，请稍后重试": [
+                "json",
+                "decode",
+                "parse",
+                "invalid",
+                "malformed",
+            ],
+            "认证失败，请检查配置": [
+                "auth",
+                "unauthorized",
+                "forbidden",
+                "token",
+            ],
+        }
+
+        # 检查错误字符串匹配
+        for message, patterns in error_patterns.items():
+            if any(pattern in error_str for pattern in patterns):
+                return message
+
+        # 检查错误类型匹配（用于服务端响应异常）
+        if any(keyword in error_type for keyword in [
+            "httperror",
+            "httpstatuserror",
+            "requesterror",
+        ]):
             return "服务端响应异常，请稍后重试"
 
         return f"处理命令时出错: {error!s}"
+
+    def _display_error_in_ui(self, error: BaseException) -> None:
+        """在UI界面显示错误信息"""
+        try:
+            # 检查应用是否仍在运行
+            if not (hasattr(self, "is_running") and self.is_running):
+                return
+
+            # 获取输出容器
+            output_container = self.query_one("#output-container", Container)
+
+            # 格式化错误消息
+            error_msg = self._format_error_message(error)
+
+            # 显示错误信息
+            output_container.mount(OutputLine(f"❌ {error_msg}", command=False))
+
+            # 滚动到底部以确保用户看到错误信息
+            self.call_after_refresh(lambda: output_container.scroll_end(animate=False))
+
+        except Exception:
+            # 如果UI显示失败，至少记录错误日志
+            self.logger.exception("无法在UI中显示错误信息")
 
     def _focus_current_input_widget(self) -> None:
         """聚焦到当前的输入组件，考虑 MCP 模式状态"""
