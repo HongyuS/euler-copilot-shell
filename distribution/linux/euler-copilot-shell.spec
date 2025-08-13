@@ -1,4 +1,6 @@
 %global pypi_name oi-cli
+%global shortcut_name oi
+%global debug_package %{nil}
 
 Name:           euler-copilot-shell
 Version:        0.10.0
@@ -70,6 +72,9 @@ deactivate
 mkdir -p %{buildroot}%{_bindir}
 install -m 0755 dist/%{pypi_name} %{buildroot}%{_bindir}/%{pypi_name}
 
+# 创建快捷链接
+ln -sf %{pypi_name} %{buildroot}%{_bindir}/%{shortcut_name}
+
 # 安装部署脚本和资源
 mkdir -p %{buildroot}/usr/lib/openeuler-intelligence/{scripts,resources}
 mkdir -p %{buildroot}%{_bindir}
@@ -86,6 +91,7 @@ ln -sf /usr/lib/openeuler-intelligence/scripts/deploy %{buildroot}%{_bindir}/ope
 %license LICENSE
 %doc README.md
 %{_bindir}/%{pypi_name}
+%{_bindir}/%{shortcut_name}
 
 %files -n openeuler-intelligence-installer
 %license LICENSE
@@ -94,7 +100,7 @@ ln -sf /usr/lib/openeuler-intelligence/scripts/deploy %{buildroot}%{_bindir}/ope
 %{_bindir}/openeuler-intelligence-installer
 
 %changelog
-* %{_builddate} openEuler <contact@openeuler.org> - 0.10.0-1
+* Wed Aug 13 2025 openEuler <contact@openeuler.org> - 0.10.0-1
 - 重构为子包形式：openeuler-intelligence-cli 和 openeuler-intelligence-installer
 - openeuler-intelligence-cli 替换原 euler-copilot-shell 包
 - 新增 openeuler-intelligence-installer 子包，包含部署安装脚本
