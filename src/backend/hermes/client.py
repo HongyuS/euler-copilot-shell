@@ -112,16 +112,6 @@ class HermesChatClient(LLMClientBase):
         self._current_agent_id = agent_id
         self.logger.info("设置当前智能体ID: %s", agent_id or "无智能体")
 
-    def get_current_agent(self) -> str:
-        """
-        获取当前使用的智能体ID
-
-        Returns:
-            str: 当前智能体ID，空字符串表示不使用智能体
-
-        """
-        return self._current_agent_id
-
     def reset_conversation(self) -> None:
         """重置会话，下次聊天时会创建新的会话"""
         if self._conversation_manager is not None:

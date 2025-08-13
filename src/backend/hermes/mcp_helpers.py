@@ -271,21 +271,3 @@ def format_tool_message(tool_name: str, status: str, *, use_emoji: bool = True) 
         return f"{emoji_map[status]} {MCPTextFragments.TOOL_WORD} `{tool_name}` {status}"
 
     return f"{MCPTextFragments.TOOL_WORD} `{tool_name}` {status}"
-
-
-def clean_content_for_display(content: str) -> str:
-    """清理内容以用于显示，移除所有 MCP 标记"""
-    # 构建正则表达式组件
-    replace_prefix = re.escape(MCPTags.REPLACE_PREFIX)
-    mcp_prefix = re.escape(MCPTags.MCP_PREFIX)
-    tag_suffix = re.escape(MCPTags.TAG_SUFFIX)
-
-    # 移除 REPLACE 标记
-    replace_pattern = f"{replace_prefix}[^{tag_suffix}]+{tag_suffix}"
-    content = re.sub(replace_pattern, "", content)
-
-    # 移除 MCP 标记
-    mcp_pattern = f"{mcp_prefix}[^{tag_suffix}]+{tag_suffix}"
-    content = re.sub(mcp_pattern, "", content)
-
-    return content.strip()

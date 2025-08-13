@@ -15,6 +15,10 @@ if TYPE_CHECKING:
 
     from backend.hermes.stream import HermesStreamEvent
 
+# 常量定义
+MAX_DISPLAY_LENGTH = 30  # 文本显示最大长度
+TRUNCATE_LENGTH = 27     # 截断时保留的长度
+
 
 class MCPConfirmWidget(Container):
     """MCP 工具执行确认组件"""
@@ -57,10 +61,10 @@ class MCPConfirmWidget(Container):
                 markup=False,
             )
             # 显示简化的说明文字，确保按钮可见
-            if len(reason) > 30:
-                # 如果说明太长，显示更短的简化版本
+            if len(reason) > MAX_DISPLAY_LENGTH:
+                # 如果说明太长，显示省略号
                 yield Static(
-                    "💭 请确认执行",
+                    f"💭 {reason[:TRUNCATE_LENGTH]}...",
                     classes="confirm-reason",
                     markup=False,
                 )
@@ -127,7 +131,7 @@ class MCPConfirmWidget(Container):
                 buttons[0].focus()
                 # 确保组件本身也有焦点，以便键盘事件能正确处理
                 self.focus()
-        except Exception:
+        except (AttributeError, ValueError, IndexError):
             # 如果聚焦失败，至少确保组件本身有焦点
             with contextlib.suppress(Exception):
                 self.focus()
@@ -162,8 +166,10 @@ class MCPParameterWidget(Container):
             # 紧凑的参数输入标题
             yield Static("📝 参数输入", classes="param-header", markup=False)
             yield Static(f"🔧 {step_name}", classes="param-tool", markup=False)
-            # 只在说明较短时显示
-            if len(message) <= 30:
+            # 显示说明文字，超长时显示省略号
+            if len(message) > MAX_DISPLAY_LENGTH:
+                yield Static(f"💭 {message[:TRUNCATE_LENGTH]}...", classes="param-message", markup=False)
+            else:
                 yield Static(f"💭 {message}", classes="param-message", markup=False)
 
             # 垂直布局的参数输入，更节省空间
