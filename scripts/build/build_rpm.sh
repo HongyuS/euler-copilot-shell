@@ -7,7 +7,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # Create the tarball and set BUILD_DIR and TARBALL
-eval "$("${SCRIPT_DIR}/create_tarball.sh")"
+eval "$("${SCRIPT_DIR}"/create_tarball.sh)"
+set +u
+if [[ -z "${BUILD_DIR:-}" || -z "${TARBALL:-}" ]]; then
+    echo "Error: BUILD_DIR 或 TARBALL 变量未设置，create_tarball.sh 执行失败。" >&2
+    exit 1
+fi
+set -u
 
 # Spec file path
 SPEC_FILE="${REPO_ROOT}/distribution/linux/euler-copilot-shell.spec"
