@@ -168,7 +168,7 @@ class HermesStreamProcessor:
         should_replace = self._should_replace_progress(event, step_id)
 
         # 处理特殊的等待状态事件
-        if event_type == "step.waiting_for_start":
+        if event_type == MCPEventTypes.STEP_WAITING_FOR_START:
             base_message = self._format_waiting_for_start(content, step_name)
             return self._handle_progress_message(
                 event_type,
@@ -178,7 +178,7 @@ class HermesStreamProcessor:
                 should_replace=should_replace,
             )
 
-        if event_type == "step.waiting_for_param":
+        if event_type == MCPEventTypes.STEP_WAITING_FOR_PARAM:
             base_message = self._format_waiting_for_param(content, step_name)
             return self._handle_progress_message(
                 event_type,
@@ -274,7 +274,6 @@ class HermesStreamProcessor:
                 "step_id": step_id,  # 保留step_id用于调试
             }
 
-        # 核心修复：所有的MCP进度消息都应该标记为MCP状态，而不仅仅是需要替换的消息
         # 使用工具名称作为标识，确保TUI层面能正确识别为MCP消息
         if has_previous_progress:
             # 如果有之前的进度，说明这是一个状态更新，需要替换
@@ -316,7 +315,3 @@ class HermesStreamProcessor:
                 return True
 
         return False
-
-    def get_replacement_info(self, step_id: str) -> dict[str, Any] | None:
-        """获取指定步骤的替换信息"""
-        return self._current_tool_progress.get(step_id)
