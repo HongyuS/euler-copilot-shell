@@ -391,6 +391,9 @@ class IntelligentTerminal(App):
         output_container = self.query_one("#output-container")
         output_container.mount(OutputLine(f"> {user_input}", command=True))
 
+        # 滚动到输出容器的底部
+        output_container.scroll_end(animate=False)
+
         # 异步处理命令
         self.processing = True
         # 创建任务并保存到类属性中的任务集合
@@ -494,7 +497,7 @@ class IntelligentTerminal(App):
                     self._focus_current_input_widget()
             except (AttributeError, ValueError, RuntimeError):
                 # 应用可能正在退出，忽略聚焦错误
-                self.logger.debug("Failed to focus input widget, app may be exiting")
+                self.logger.debug("[TUI] Failed to focus input widget, app may be exiting")
             # 注意：不在这里重置processing标志，由回调函数处理
 
     async def _handle_command_stream(self, user_input: str, output_container: Container) -> bool:
@@ -730,12 +733,12 @@ class IntelligentTerminal(App):
         if replace_tool_name and existing_progress is not None:
             # 替换现有的进度消息
             existing_progress.update_markdown(content)
-            self.logger.debug("替换工具 %s 的进度消息: %s", tool_name, content.strip()[:50])
+            self.logger.debug("[TUI] 替换工具 %s 的进度消息: %s", tool_name, content.strip()[:50])
 
             # 如果是最终状态，清理进度跟踪
             if is_final_message:
                 self._current_progress_lines.pop(tool_name, None)
-                self.logger.debug("工具 %s 到达最终状态，清理进度跟踪", tool_name)
+                self.logger.debug("[TUI] 工具 %s 到达最终状态，清理进度跟踪", tool_name)
 
             return
 
@@ -743,12 +746,12 @@ class IntelligentTerminal(App):
         if mcp_tool_name and existing_progress is not None:
             # 这种情况可能是因为消息处理顺序问题导致的重复，应该替换现有消息
             existing_progress.update_markdown(content)
-            self.logger.debug("替换已存在的工具 %s 进度消息: %s", tool_name, content.strip()[:50])
+            self.logger.debug("[TUI] 替换已存在的工具 %s 进度消息: %s", tool_name, content.strip()[:50])
 
             # 如果是最终状态，清理进度跟踪
             if is_final_message:
                 self._current_progress_lines.pop(tool_name, None)
-                self.logger.debug("工具 %s 到达最终状态，清理进度跟踪", tool_name)
+                self.logger.debug("[TUI] 工具 %s 到达最终状态，清理进度跟踪", tool_name)
 
             return
 
@@ -760,7 +763,7 @@ class IntelligentTerminal(App):
             self._current_progress_lines[tool_name] = new_progress_line
 
         output_container.mount(new_progress_line)
-        self.logger.debug("创建工具 %s 的新进度消息: %s", tool_name, content.strip()[:50])
+        self.logger.debug("[TUI] 创建工具 %s 的新进度消息: %s", tool_name, content.strip()[:50])
 
     def _format_error_message(self, error: BaseException) -> str:
         """格式化错误消息"""
@@ -889,7 +892,7 @@ class IntelligentTerminal(App):
                 self.query_one(CommandInput).focus()
         except (AttributeError, ValueError, RuntimeError) as e:
             # 聚焦失败时记录调试信息，但不抛出异常
-            self.logger.debug("Failed to focus input widget: %s", str(e))
+            self.logger.debug("[TUI] Failed to focus input widget: %s", str(e))
 
     async def _scroll_to_end(self) -> None:
         """滚动到容器底部的辅助方法"""
