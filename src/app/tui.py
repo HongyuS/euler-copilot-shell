@@ -20,7 +20,6 @@ from app.tui_mcp_handler import TUIMCPEventHandler
 from backend.factory import BackendFactory
 from backend.hermes import HermesChatClient
 from backend.hermes.mcp_helpers import (
-    MCPIndicators,
     MCPTags,
     extract_mcp_tag,
     format_error_message,
@@ -612,11 +611,8 @@ class IntelligentTerminal(App):
         )
 
         # 检查是否是 MCP 消息处理（返回值为 None 表示是 MCP 消息）
-        is_mcp_detected = processed_line is None and (
-            MCPTags.MCP_PREFIX in content
-            or MCPTags.REPLACE_PREFIX in content
-            or any(indicator in content for indicator in MCPIndicators.PROGRESS_INDICATORS)
-        )
+        tool_name, _ = extract_mcp_tag(content)
+        is_mcp_detected = processed_line is None and tool_name is not None
 
         # 只有当返回值不为None时才更新current_line
         if processed_line is not None:
@@ -626,8 +622,14 @@ class IntelligentTerminal(App):
         if not is_mcp_detected:
             if stream_state["is_first_content"]:
                 stream_state["is_first_content"] = False
-                stream_state["current_content"] = content
+                # 第一次内容直接设置为当前内容，不需要累积
+                if is_llm_output:
+                    stream_state["current_content"] = content
+                else:
+                    # 非LLM输出，重置累积内容
+                    stream_state["current_content"] = ""
             elif isinstance(stream_state["current_line"], MarkdownOutputLine) and is_llm_output:
+                # 只有在LLM输出且有有效的 MarkdownOutputLine 时才累积
                 stream_state["current_content"] += content
 
     def _handle_timeout_error(self, output_container: Container, stream_state: dict) -> bool:
@@ -699,6 +701,7 @@ class IntelligentTerminal(App):
         # 处理后续内容
         if is_llm_output and isinstance(current_line, MarkdownOutputLine):
             # 继续累积LLM富文本内容
+            # 注意：current_content 已经包含了之前的所有内容，包括第一次的内容
             updated_content = current_content + content
             current_line.update_markdown(updated_content)
             return current_line
@@ -710,7 +713,14 @@ class IntelligentTerminal(App):
             return current_line
 
         # 输出类型发生变化，创建新的输出组件
-        new_line = MarkdownOutputLine(content) if is_llm_output else OutputLine(content)
+        # 对于输出类型变化，如果是LLM输出，应该包含累积的内容；否则只包含当前内容
+        if is_llm_output:
+            # 如果切换到LLM输出，使用累积的内容（如果有的话）
+            content_to_display = current_content + content if current_content else content
+            new_line = MarkdownOutputLine(content_to_display)
+        else:
+            # 如果切换到非LLM输出，只使用当前内容
+            new_line = OutputLine(content)
         output_container.mount(new_line)
         return new_line
 
@@ -1078,65 +1088,56 @@ class IntelligentTerminal(App):
         llm_client: LLMClientBase,
     ) -> bool:
         """处理 MCP 响应的流式回复"""
-        current_line: OutputLine | MarkdownOutputLine | None = None
-        current_content = ""
-        is_first_content = True
-        received_any_content = False
-        timeout_seconds = 1800.0  # 30分钟超时，与HTTP层面保持一致
-
         if not isinstance(llm_client, HermesChatClient):
             self.logger.error("当前客户端不支持 MCP 响应功能")
             output_container.mount(OutputLine("❌ 当前客户端不支持 MCP 响应功能"))
             return False
 
+        # 使用统一的流状态管理，与 _handle_command_stream 保持一致
+        stream_state = self._init_stream_state()
+        timeout_seconds = 1800.0  # 30分钟超时，与HTTP层面保持一致
+
         try:
             # 使用 asyncio.wait_for 包装整个流处理过程
             async def _process_stream() -> bool:
-                nonlocal current_line, current_content, is_first_content, received_any_content
-
                 async for content in llm_client.send_mcp_response(task_id, params=params):
                     if not content.strip():
                         continue
 
-                    received_any_content = True
+                    stream_state["received_any_content"] = True
+                    current_time = asyncio.get_event_loop().time()
+
+                    # 更新最后收到内容的时间
+                    if content.strip():
+                        stream_state["last_content_time"] = current_time
+
+                    # 检查超时
+                    if self._check_timeouts(current_time, stream_state, output_container):
+                        break
 
                     # 判断是否为 LLM 输出内容
-                    is_llm_output = not content.startswith((">", "❌", "⚠️", "💡"))
+                    tool_name, _ = extract_mcp_tag(content)
+                    is_llm_output = tool_name is None
 
-                    # 更新累积内容
-                    current_content += content
-
-                    # 处理内容块
-                    params_obj = ContentChunkParams(
-                        content=content,
-                        is_llm_output=is_llm_output,
-                        current_content=current_content,
-                        is_first_content=is_first_content,
-                    )
-                    processed_line = await self._process_content_chunk(
-                        params_obj,
-                        current_line,
+                    # 处理内容
+                    await self._process_stream_content(
+                        content,
+                        stream_state,
                         output_container,
+                        is_llm_output=is_llm_output,
                     )
-                    # 只有当返回值不为None时才更新current_line
-                    if processed_line is not None:
-                        current_line = processed_line
 
-                    # 第一段内容后设置标记
-                    if is_first_content:
-                        is_first_content = False
-
-                    # 滚动到末尾
+                    # 滚动到底部
                     await self._scroll_to_end()
 
-                return received_any_content
+                return stream_state["received_any_content"]
 
             # 执行流处理，添加超时
             return await asyncio.wait_for(_process_stream(), timeout=timeout_seconds)
 
         except TimeoutError:
             output_container.mount(OutputLine(f"⏱️ MCP 响应超时 ({timeout_seconds}秒)"))
-            return received_any_content
+            return stream_state["received_any_content"]
         except asyncio.CancelledError:
             output_container.mount(OutputLine("🚫 MCP 响应被取消"))
             raise
