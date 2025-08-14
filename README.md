@@ -4,13 +4,10 @@
 
 ## 核心特性
 
-- **多后端支持**: 支持 OpenAI API 和 openEuler Intelligence（Hermes）后端
+- **多后端支持**: 支持 OpenAI API 大模型和 openEuler Intelligence 后端
 - **智能终端界面**: 基于 Textual 的现代化 TUI 界面
 - **流式响应**: 实时显示 AI 回复内容
-- **会话管理**: 完整的对话历史管理功能
 - **部署助手**: 内置 openEuler Intelligence 自动部署功能
-- **配置管理**: 灵活的配置文件管理系统
-- **日志系统**: 完善的日志记录和管理功能
 
 ## 项目结构
 
@@ -19,19 +16,18 @@ smart-shell/
 ├── README.md                     # 项目说明文档
 ├── requirements.txt              # Python 依赖包列表
 ├── setup.py                      # 包安装配置文件
-├── MANIFEST.in                   # 包文件清单
 ├── LICENSE                       # 开源许可证
 ├── distribution/                 # 发布相关文件
 ├── docs/                         # 项目文档目录
 │   └── development/              # 开发设计文档
 │       └── server-side/          # 服务端相关文档
 ├── scripts/                      # 部署脚本目录
+│   └── build/                    # RPM 包构建脚本
 │   └── deploy/                   # 自动化部署脚本
 ├── tests/                        # 测试文件目录
 └── src/                          # 源代码目录
     ├── main.py                   # 应用程序入口点
     ├── app/                      # TUI 应用模块
-    │   ├── __init__.py
     │   ├── tui.py                # 主界面应用类
     │   ├── mcp_widgets.py        # MCP 交互组件
     │   ├── tui_mcp_handler.py    # MCP 事件处理器
@@ -39,42 +35,31 @@ smart-shell/
     │   ├── css/
     │   │   └── styles.tcss       # TUI 样式文件
     │   ├── deployment/           # 部署助手模块
-    │   │   ├── __init__.py
     │   │   ├── models.py         # 部署配置模型
     │   │   ├── service.py        # 部署服务逻辑
     │   │   ├── ui.py             # 部署界面组件
     │   │   └── validators.py     # 配置验证器
     │   └── dialogs/              # 对话框组件
-    │       ├── __init__.py
     │       ├── agent.py          # 智能体选择对话框
     │       └── common.py         # 通用对话框组件
     ├── backend/                  # 后端适配模块
-    │   ├── __init__.py
     │   ├── base.py               # 后端客户端基类
     │   ├── factory.py            # 后端工厂类
     │   ├── mcp_handler.py        # MCP 事件处理接口
     │   ├── openai.py             # OpenAI 兼容客户端
     │   └── hermes/               # openEuler Intelligence 客户端
-    │       ├── __init__.py
     │       ├── client.py         # Hermes API 客户端
     │       ├── constants.py      # 常量定义
     │       ├── exceptions.py     # 异常类定义
     │       ├── models.py         # 数据模型
     │       ├── stream.py         # 流式响应处理
     │       └── services/         # 服务层组件
-    │           ├── agent.py      # 智能体服务
-    │           ├── conversation.py # 对话管理服务
-    │           ├── http.py       # HTTP 请求服务
-    │           └── model.py      # 模型管理服务
     ├── config/                   # 配置管理模块
-    │   ├── __init__.py
     │   ├── manager.py            # 配置管理器
     │   └── model.py              # 配置数据模型
     ├── log/                      # 日志管理模块
-    │   ├── __init__.py
     │   └── manager.py            # 日志管理器
     └── tool/                     # 工具模块
-        ├── __init__.py
         ├── command_processor.py  # 命令处理器
         └── oi_backend_init.py    # 后端初始化工具
 ```
@@ -96,10 +81,12 @@ smart-shell/
    pip install -r requirements.txt
    ```
 
-### 方式二：使用 pip 安装
+### 方式二：通过 RPM 包安装
+
+注意：*仅适用于 openEuler 24.03 LTS SP2*
 
 ```sh
-pip install -e .
+sudo dnf install openeuler-intelligence-cli
 ```
 
 安装完成后，可以使用 `oi` 命令启动应用程序。
@@ -112,7 +99,7 @@ pip install -e .
 python src/main.py
 ```
 
-或者使用 pip 安装后:
+或者安装 RPM 包后:
 
 ```sh
 oi
@@ -178,17 +165,6 @@ oi --init
 
 **注意**: 此命令会自动安装系统服务，请在生产环境使用前仔细评估。
 
-### 自动部署助手
-
-应用程序内置了 TUI 部署助手，支持在 openEuler 系统上一键部署 openEuler Intelligence 后端：
-
-1. **系统环境检查**: 自动验证 openEuler 系统和权限
-2. **配置文件生成**: 根据用户输入自动生成配置文件
-3. **服务部署**: 支持 Web 界面和 RAG 功能的可选部署
-4. **实时进度显示**: 提供详细的部署日志和进度反馈
-
-该功能通过 `app.deployment` 模块实现，包含完整的配置验证和部署流程管理。
-
 ## 配置说明
 
 应用程序支持两种后端配置，配置文件会自动保存在 `~/.config/eulerintelli/smart-shell.json`：
@@ -206,11 +182,11 @@ oi --init
 
 - Base URL: 如 `http://localhost:1234/v1`
 - Model: 如 `qwen/qwen3-30b-a3b`
-- API Key: 如 `lm-studio`
+- API Key: 如 `sk-xxxxxx`
 
 **openEuler Intelligence 配置:**
 
-- Base URL: 如 `http://your-server:8000`
+- Base URL: 如 `http://your-server:8002`
 - API Key: 您的认证令牌
 
 ### 智能体管理
@@ -249,18 +225,22 @@ oi --init
 
 ### 基本要求
 
-- **Python**: 3.9 或更高版本
+- **Python**: 3.11 或更高版本
 - **操作系统**: openEuler 24.03 LTS 或更高版本
 - **网络**: 访问配置的 LLM API 服务
 
 ### 依赖包
 
-核心依赖（会自动安装）：
+核心依赖：
 
-- **textual**: >=3.0.0 - TUI 界面框架
-- **rich**: >=14.1.0 - 富文本渲染
-- **httpx**: >=0.28.0 - HTTP 客户端
-- **openai**: >=1.97.0 - OpenAI API 客户端
+- **textual**: 5.3.0 - TUI 界面框架
+- **rich**: 14.1.0 - 富文本渲染
+- **httpx**: 0.28.1 - HTTP 客户端
+- **openai**: 1.99.6 - OpenAI API 客户端
+
+开发依赖：
+
+- **ruff**: *Latest* - 代码检查器
 
 ### 特殊功能要求
 
@@ -270,19 +250,6 @@ oi --init
 - 需要管理员权限（sudo）
 - 需要 dnf 包管理器
 - 需要网络连接
-
-## 详细日志功能
-
-应用程序提供详细的日志记录功能，包括:
-
-- **操作日志**: 用户交互和系统状态
-- **性能监控**: 请求响应时间和系统资源使用
-- **错误追踪**: 异常和错误的详细堆栈信息  
-- **API请求详情**: URL、状态码、耗时等
-- **异常和错误信息**: 完整的错误上下文
-- **模块级别的操作日志**: 各组件的运行状态
-
-日志文件同时输出到控制台和文件，便于开发调试和生产环境监控。详细说明请参考 [日志功能文档](docs/development/日志功能说明.md)。
 
 ## 在 openEuler 系统下的 RPM 打包
 
@@ -319,69 +286,9 @@ oi --init
 
    脚本执行完成后，会在临时构建目录下的 `RPMS` 和 `SRPMS` 子目录中生成相应的二进制包和源码包，并在终端输出具体路径。
 
-## 高级功能
-
-### MCP (Model Context Protocol) 支持
-
-应用程序完整支持 Model Context Protocol，提供工具集成和交互功能：
-
-**特性**:
-
-- **内联工具确认**: 工具执行前的风险评估和确认界面
-- **动态参数收集**: 根据工具需求自动生成参数输入表单
-- **流式工具响应**: 实时显示工具执行结果
-- **事件驱动架构**: 完整的 MCP 事件处理流程
-
-**技术实现**:
-
-- `app.mcp_widgets`: MCP 交互组件
-- `app.tui_mcp_handler`: TUI MCP 事件处理器
-- `backend.mcp_handler`: MCP 事件处理器接口
-- 完整的 SSE (Server-Sent Events) 支持
-
-### 部署助手
-
-内置的可视化部署助手支持：
-
-**功能**:
-
-- **环境检测**: 自动检测 openEuler 系统和依赖
-- **配置验证**: LLM 和 Embedding API 连接性验证
-- **组件选择**: Web 界面和 RAG 功能的可选部署
-- **实时监控**: 部署过程的实时日志和进度显示
-
-**模块结构**:
-
-- `app.deployment.models`: 部署配置数据模型
-- `app.deployment.service`: 部署服务逻辑
-- `app.deployment.ui`: 部署界面组件
-- `app.deployment.validators`: 配置验证器
-
-### 多后端架构
-
-应用程序采用插件化的后端架构：
-
-**后端支持**:
-
-- **OpenAI 兼容**: 支持所有 OpenAI API 兼容的服务
-- **Hermes**: 专为 openEuler Intelligence 优化的后端
-- **可扩展**: 基于 `backend.base.LLMClientBase` 可轻松添加新后端
-
-**核心组件**:
-
-- `backend.factory`: 后端工厂类
-- `backend.openai`: OpenAI 兼容客户端
-- `backend.hermes`: Hermes 客户端实现
-
 ## 贡献
 
 欢迎贡献代码！请随时提交 PR 或开启问题讨论任何功能增强或错误修复建议。
-
-## 版本信息
-
-- **当前版本**: 0.10.0
-- **Python 要求**: >=3.9
-- **许可证**: MulanPSL-2.0
 
 ## 相关文档
 
