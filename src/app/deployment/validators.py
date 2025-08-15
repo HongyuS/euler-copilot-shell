@@ -4,7 +4,6 @@
 提供实际 API 调用验证配置的有效性。
 """
 
-import asyncio
 from typing import Any
 
 from openai import APIError, AsyncOpenAI, AuthenticationError, OpenAIError
@@ -68,11 +67,11 @@ class APIValidator:
             await client.close()
 
             if chat_valid:
-                success_msg = f"LLM 配置验证成功 - 模型: {model}"
+                success_msg = "LLM 配置验证成功 - 模型"
                 if func_valid:
-                    success_msg += " (支持 function_call)"
+                    success_msg += "支持 function_call"
                 else:
-                    success_msg += f" (不支持 function_call: {func_msg})"
+                    success_msg += f"不支持 function_call: {func_msg}"
 
                 return True, success_msg, {
                     "available_models": available_models,
@@ -80,7 +79,7 @@ class APIValidator:
                     "function_call_info": func_info,
                 }
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return False, f"连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}", {}
         except (AuthenticationError, APIError, OpenAIError) as e:
             error_msg = f"LLM 配置验证失败: {e!s}"
@@ -119,7 +118,7 @@ class APIValidator:
             response = await client.embeddings.create(input=test_text, model=model)
 
             await client.close()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return False, f"连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}", {}
         except (AuthenticationError, APIError, OpenAIError) as e:
             error_msg = f"Embedding 配置验证失败: {e!s}"
@@ -129,7 +128,7 @@ class APIValidator:
             if response.data and len(response.data) > 0:
                 embedding = response.data[0].embedding
                 dimension = len(embedding)
-                return True, f"Embedding 配置验证成功 - 模型: {model}, 维度: {dimension}", {
+                return True, f"Embedding 配置验证成功 - 维度: {dimension}", {
                     "model": model,
                     "dimension": dimension,
                     "sample_embedding_length": len(embedding),
