@@ -16,6 +16,7 @@ from config import Backend, ConfigManager
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
+    from textual.events import Key
 
     from backend.base import LLMClientBase
 
@@ -44,7 +45,11 @@ class SettingsScreen(Screen):
                 # 后端选择
                 Horizontal(
                     Label("后端:", classes="settings-label"),
-                    Button(f"{self.backend}", id="backend-btn", classes="settings-value settings-button"),
+                    Button(
+                        f"{self.backend.get_display_name()}",
+                        id="backend-btn",
+                        classes="settings-value settings-button",
+                    ),
                     classes="settings-option",
                 ),
                 # Base URL 输入
@@ -142,7 +147,7 @@ class SettingsScreen(Screen):
 
         # 更新按钮文本
         backend_btn = self.query_one("#backend-btn", Button)
-        backend_btn.label = new
+        backend_btn.label = new.get_display_name()
 
         # 更新 URL 和 API Key
         base_url = self.query_one("#base-url", Input)
@@ -244,6 +249,12 @@ class SettingsScreen(Screen):
     def cancel_settings(self) -> None:
         """取消设置"""
         self.app.pop_screen()
+
+    def on_key(self, event: Key) -> None:
+        """处理键盘事件"""
+        if event.key == "escape":
+            # ESC 键退出设置页面，等效于取消
+            self.app.pop_screen()
 
     def _ensure_buttons_visible(self) -> None:
         """确保操作按钮始终可见"""
