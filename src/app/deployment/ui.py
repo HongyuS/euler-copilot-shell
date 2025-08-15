@@ -19,9 +19,7 @@ from textual.widgets import (
     Label,
     ProgressBar,
     RichLog,
-    Select,
     Static,
-    Switch,
     TabbedContent,
     TabPane,
 )
@@ -46,38 +44,34 @@ class DeploymentConfigScreen(ModalScreen[bool]):
     }
 
     .config-container {
-        width: 80%;
-        max-width: 100;
-        height: 90%;
+        width: 95%;
+        max-width: 130;
+        height: 95%;
         background: $surface;
         border: solid $primary;
-        padding: 1;
-    }
-
-    .form-section {
-        margin: 1 0;
-        padding: 1;
-        border: solid $secondary;
+        padding: 0 1;
     }
 
     .form-row {
         height: 3;
-        margin: 1 0;
+        margin: 0;
     }
 
     .form-label {
-        width: 1fr;
+        width: 18;
         text-align: left;
         text-style: bold;
+        content-align: left middle;
     }
 
     .form-input {
-        width: 2fr;
+        width: 1fr;
+        margin-left: 1;
     }
 
     .button-row {
         height: 3;
-        margin: 1 0;
+        margin: 1 0 0 0;
         align: center middle;
     }
 
@@ -94,6 +88,16 @@ class DeploymentConfigScreen(ModalScreen[bool]):
     #llm_validation_status, #embedding_validation_status {
         text-style: italic;
     }
+
+    TabbedContent {
+        height: 1fr;
+    }
+
+    TabPane {
+        height: auto;
+        scrollbar-size: 1 1;
+        overflow: auto;
+    }
     """
 
     def __init__(self) -> None:
@@ -107,10 +111,6 @@ class DeploymentConfigScreen(ModalScreen[bool]):
         """组合界面组件"""
         with Container(classes="config-container"):
             yield Header()
-            yield Static(
-                "openEuler Intelligence 后端部署配置",
-                classes="form-section",
-            )
 
             with TabbedContent():
                 with TabPane("基础配置", id="basic"):
@@ -122,16 +122,13 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                 with TabPane("Embedding 配置", id="embedding"):
                     yield from self._compose_embedding_config()
 
-                with TabPane("部署选项", id="deployment"):
-                    yield from self._compose_deployment_options()
-
             with Horizontal(classes="button-row"):
                 yield Button("开始部署", id="deploy", classes="deploy-button")
                 yield Button("取消", id="cancel", classes="cancel-button")
 
     def _compose_basic_config(self) -> ComposeResult:
         """组合基础配置组件"""
-        with Vertical(classes="form-section"):
+        with Vertical():
             yield Static("基础配置", classes="form-label")
 
             with Horizontal(classes="form-row"):
@@ -142,9 +139,22 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                     classes="form-input",
                 )
 
+            with Horizontal(classes="form-row"):
+                yield Label("部署模式:", classes="form-label")
+                # 使用按钮在轻量/全量间切换，按钮文本显示当前选择（不包含括号描述）
+                yield Button("轻量部署", id="deployment_mode_btn", classes="form-input")
+
+            # 描述区域，显示当前部署模式的详细说明
+            with Horizontal(classes="form-row"):
+                yield Static(
+                    "轻量部署：仅部署框架服务。",
+                    id="deployment_mode_desc",
+                    classes="form-input",
+                )
+
     def _compose_llm_config(self) -> ComposeResult:
         """组合 LLM 配置组件"""
-        with Vertical(classes="form-section"):
+        with Vertical():
             yield Static("大语言模型配置", classes="form-label")
 
             with Horizontal(classes="form-row"):
@@ -172,7 +182,6 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                     classes="form-input",
                 )
 
-            # LLM 验证状态显示
             with Horizontal(classes="form-row"):
                 yield Label("验证状态:", classes="form-label")
                 yield Static("未验证", id="llm_validation_status", classes="form-input")
@@ -203,17 +212,8 @@ class DeploymentConfigScreen(ModalScreen[bool]):
 
     def _compose_embedding_config(self) -> ComposeResult:
         """组合 Embedding 配置组件"""
-        with Vertical(classes="form-section"):
+        with Vertical():
             yield Static("嵌入模型配置", classes="form-label")
-
-            with Horizontal(classes="form-row"):
-                yield Label("类型:", classes="form-label")
-                yield Select(
-                    [("OpenAI", "openai")],
-                    value="openai",
-                    id="embedding_type",
-                    classes="form-input",
-                )
 
             with Horizontal(classes="form-row"):
                 yield Label("API 端点:", classes="form-label")
@@ -240,35 +240,9 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                     classes="form-input",
                 )
 
-            # Embedding 验证状态显示
             with Horizontal(classes="form-row"):
                 yield Label("验证状态:", classes="form-label")
                 yield Static("未验证", id="embedding_validation_status", classes="form-input")
-
-    def _compose_deployment_options(self) -> ComposeResult:
-        """组合部署选项组件"""
-        with Vertical(classes="form-section"):
-            yield Static("部署选项", classes="form-label")
-
-            with Horizontal(classes="form-row"):
-                yield Label("部署模式:", classes="form-label")
-                yield Select(
-                    [
-                        ("轻量部署（仅框架服务）", "light"),
-                        ("全量部署（包含 Web 和 RAG）", "full"),
-                    ],
-                    value="light",
-                    id="deployment_mode",
-                    classes="form-input",
-                )
-
-            with Horizontal(classes="form-row"):
-                yield Label("启用 Web 界面:", classes="form-label")
-                yield Switch(id="enable_web", classes="form-input")
-
-            with Horizontal(classes="form-row"):
-                yield Label("启用 RAG 组件:", classes="form-label")
-                yield Switch(id="enable_rag", classes="form-input")
 
     @on(Button.Pressed, "#deploy")
     async def on_deploy_button_pressed(self) -> None:
@@ -282,25 +256,33 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                 )
                 return
 
-            # 关闭配置界面，返回 True 表示开始部署
-            self.dismiss(result=True)
+            # 直接推送部署进度屏幕，不关闭当前界面
+            await self.app.push_screen(DeploymentProgressScreen(self.config))
+            # 部署完成后，退出整个应用
+            self.app.exit()
 
     @on(Button.Pressed, "#cancel")
     def on_cancel_button_pressed(self) -> None:
         """处理取消按钮点击"""
-        self.dismiss(result=False)
+        # 退出整个程序
+        self.app.exit()
 
-    @on(Select.Changed, "#deployment_mode")
-    def on_deployment_mode_changed(self, event: Select.Changed) -> None:
-        """处理部署模式改变"""
-        if event.value == "full":
-            # 全量部署时自动启用 Web 和 RAG
-            self.query_one("#enable_web", Switch).value = True
-            self.query_one("#enable_rag", Switch).value = True
-        else:
-            # 轻量部署时禁用 Web 和 RAG
-            self.query_one("#enable_web", Switch).value = False
-            self.query_one("#enable_rag", Switch).value = False
+    @on(Button.Pressed, "#deployment_mode_btn")
+    def on_deployment_mode_btn_pressed(self) -> None:
+        """切换部署模式按钮：在轻量和全量之间切换，更新按钮文本和描述。"""
+        try:
+            btn = self.query_one("#deployment_mode_btn", Button)
+            desc = self.query_one("#deployment_mode_desc", Static)
+            # 如果当前为轻量，则切换到全量
+            if btn.label and "轻量" in str(btn.label):
+                btn.label = "全量部署"
+                desc.update("全量部署：部署框架服务、Web 界面和 RAG 组件。")
+            else:
+                btn.label = "轻量部署"
+                desc.update("轻量部署：仅部署框架服务。")
+        except (AttributeError, ValueError):
+            # 查询失败或属性错误时忽略
+            return
 
     @on(Input.Changed, "#llm_endpoint, #llm_api_key, #llm_model")
     async def on_llm_field_changed(self, event: Input.Changed) -> None:
@@ -434,8 +416,8 @@ class DeploymentConfigScreen(ModalScreen[bool]):
     def _collect_embedding_config(self) -> None:
         """收集 Embedding 配置"""
         try:
-            embedding_type_value = self.query_one("#embedding_type", Select).value
-            self.config.embedding.type = str(embedding_type_value) if embedding_type_value else "openai"
+            # 固定使用 openai 类型
+            self.config.embedding.type = "openai"
             self.config.embedding.endpoint = self.query_one("#embedding_endpoint", Input).value.strip()
             self.config.embedding.api_key = self.query_one("#embedding_api_key", Input).value.strip()
             self.config.embedding.model = self.query_one("#embedding_model", Input).value.strip()
@@ -460,21 +442,31 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             )
 
             # Embedding 配置
-            embedding_type_value = self.query_one("#embedding_type", Select).value
-            embedding_type = str(embedding_type_value) if embedding_type_value else "openai"
-
             self.config.embedding = EmbeddingConfig(
-                type=embedding_type,
+                type="openai",  # 固定使用 openai 类型
                 endpoint=self.query_one("#embedding_endpoint", Input).value.strip(),
                 api_key=self.query_one("#embedding_api_key", Input).value.strip(),
                 model=self.query_one("#embedding_model", Input).value.strip(),
             )
 
-            # 部署选项
-            deployment_mode_value = self.query_one("#deployment_mode", Select).value
-            self.config.deployment_mode = str(deployment_mode_value) if deployment_mode_value else "light"
-            self.config.enable_web = self.query_one("#enable_web", Switch).value
-            self.config.enable_rag = self.query_one("#enable_rag", Switch).value
+            # 部署选项 - 从切换按钮读取当前模式
+            try:
+                btn = self.query_one("#deployment_mode_btn", Button)
+                label = str(btn.label) if btn.label is not None else ""
+                if "全量" in label:
+                    self.config.deployment_mode = "full"
+                else:
+                    self.config.deployment_mode = "light"
+            except (AttributeError, ValueError):
+                self.config.deployment_mode = "light"
+
+            # 根据部署模式自动设置组件启用状态
+            if self.config.deployment_mode == "full":
+                self.config.enable_web = True
+                self.config.enable_rag = True
+            else:
+                self.config.enable_web = False
+                self.config.enable_rag = False
 
         except (ValueError, AttributeError) as e:
             # 处理输入转换错误
@@ -548,10 +540,6 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         """组合界面组件"""
         with Container(classes="progress-container"):
             yield Header()
-            yield Static(
-                "openEuler Intelligence 后端部署进度",
-                classes="progress-section",
-            )
 
             with Vertical(classes="progress-section"):
                 yield Static("部署进度:", id="progress_label")
@@ -572,7 +560,8 @@ class DeploymentProgressScreen(ModalScreen[bool]):
     @on(Button.Pressed, "#close")
     def on_close_button_pressed(self) -> None:
         """处理完成按钮点击"""
-        self.dismiss(result=True)
+        # 退出整个程序
+        self.app.exit()
 
     @on(Button.Pressed, "#cancel")
     async def on_cancel_button_pressed(self) -> None:
