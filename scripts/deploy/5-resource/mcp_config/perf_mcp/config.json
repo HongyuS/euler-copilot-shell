@@ -1,0 +1,16 @@
+{
+    "name": "perf 分析工具",
+    "overview": "perf 分析工具",
+    "description": "perf 分析工具",
+    "mcpType": "sse",
+    "author": "root",
+    "config": {
+        "env": {},
+        "autoApprove": [],
+        "disabled": false,
+        "auto_install": false,
+        "description": "",
+        "timeout": 60,
+        "url": "http://127.0.0.1:12141/sse"
+    }
+}
