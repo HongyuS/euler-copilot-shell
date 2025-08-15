@@ -2,7 +2,17 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from textual.app import App
+
 from log.manager import get_logger
+
+if TYPE_CHECKING:
+    from app.deployment.models import DeploymentConfig
+
+from app.deployment.ui import DeploymentConfigScreen, DeploymentProgressScreen
 
 
 def oi_backend_init() -> None:
@@ -10,19 +20,14 @@ def oi_backend_init() -> None:
     logger = get_logger(__name__)
 
     try:
-        from typing import TYPE_CHECKING
-
-        from textual.app import App
-
-        if TYPE_CHECKING:
-            from app.deployment.models import DeploymentConfig
-
-        from app.deployment.ui import DeploymentConfigScreen, DeploymentProgressScreen
+        # 获取项目根目录的绝对路径
+        project_root = Path(__file__).parent.parent
+        css_path = str(project_root / "app" / "css" / "styles.tcss")
 
         class DeploymentApp(App):
             """部署 TUI 应用"""
 
-            CSS_PATH = "app/css/styles.tcss"
+            CSS_PATH = css_path
             TITLE = "openEuler Intelligence 部署助手"
 
             def __init__(self) -> None:

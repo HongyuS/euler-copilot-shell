@@ -51,7 +51,6 @@ class DeploymentConfigScreen(ModalScreen[bool]):
         height: 90%;
         background: $surface;
         border: solid $primary;
-        border-radius: 3;
         padding: 1;
     }
 
@@ -59,7 +58,6 @@ class DeploymentConfigScreen(ModalScreen[bool]):
         margin: 1 0;
         padding: 1;
         border: solid $secondary;
-        border-radius: 2;
     }
 
     .form-row {
@@ -69,7 +67,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
 
     .form-label {
         width: 1fr;
-        content-align: center left;
+        text-align: left;
         text-style: bold;
     }
 
@@ -139,7 +137,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             with Horizontal(classes="form-row"):
                 yield Label("服务器 IP 地址:", classes="form-label")
                 yield Input(
-                    placeholder="例如：192.168.1.100",
+                    placeholder="例如：127.0.0.1",
                     id="server_ip",
                     classes="form-input",
                 )
@@ -504,7 +502,6 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         height: 90%;
         background: $surface;
         border: solid $primary;
-        border-radius: 3;
         padding: 1;
     }
 
@@ -517,7 +514,6 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         margin: 1 0;
         height: 1fr;
         border: solid $secondary;
-        border-radius: 2;
     }
 
     .button-section {
@@ -665,7 +661,6 @@ class ErrorMessageScreen(ModalScreen[None]):
         height: auto;
         background: $surface;
         border: solid $error;
-        border-radius: 3;
         padding: 1;
     }
 
