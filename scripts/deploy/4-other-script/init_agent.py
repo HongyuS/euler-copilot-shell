@@ -2,7 +2,7 @@ import requests
 from pydantic import BaseModel, Field
 from enum import Enum
 
-base_url = "http://76.53.17.51:10002"
+base_url = "http://127.0.0.1:8002"
 
 
 class AppType(str, Enum):

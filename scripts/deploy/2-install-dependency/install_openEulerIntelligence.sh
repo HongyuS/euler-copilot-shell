@@ -475,6 +475,7 @@ check_pip() {
     ["requests"]=""
     ["pydantic"]=""
     ["tiktoken"]=""
+    ["aiohttp"]=""
   )
 
   local need_install=0
@@ -534,7 +535,6 @@ install_framework(){
     return 1
   fi
   cd "$SCRIPT_DIR" || return 1
-  install_minio || return 1
   cd "$SCRIPT_DIR" || return 1
   install_mongodb || return 1
   check_pip || return 1
@@ -560,7 +560,7 @@ install_rag(){
   install_pgvector || return 1
   cd "$SCRIPT_DIR" || return 1
   install_zhparser || return 1
-
+  install_minio || return 1
 }
 install_web(){
   local pkgs=(

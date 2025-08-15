@@ -924,7 +924,10 @@ main() {
   install_components || return 1
   install_framework || return 1
   cd "$SCRIPT_DIR" || return 1
-  ./init_mcpserver.sh || return 1
+  ./install_mcpserver.sh
+  ./init_mcpserver.sh || {
+    echo -e "\n${COLOR_WARNING} 初始化agent失败，请检查mcp服务是否可用，使用agent初始化工具创建agent，详见部署文档...${COLOR_RESET}"
+  }
 }
 
 main "$@"

@@ -6,7 +6,7 @@ COLOR_ERROR='\033[31m'   # 红色错误
 COLOR_WARNING='\033[33m' # 黄色警告
 COLOR_RESET='\033[0m'    # 重置颜色
 
-init_mcp_config(){
+init_mcp_config() {
   local mcp_config_path="../5-resource/mcp_config"
   local target_path="/opt/copilot/semantics/mcp/template"
 
@@ -37,7 +37,7 @@ init_mcp_config(){
   echo -e "${COLOR_SUCCESS}[Success] MCP配置文件初始化完成${COLOR_RESET}"
   return 0
 }
-main(){
+start_bak() {
   # 获取脚本所在的绝对路径
   SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
   if [ -z "$SCRIPT_DIR" ]; then
@@ -79,7 +79,95 @@ main(){
     return 1
   fi
   sleep 10
-  python3 "../4-other-script/init_agent.py"  > client_info.tmp 2>&1
+  python3 "../4-other-script/init_agent.py" >client_info.tmp 2>&1
+}
+# 日志输出函数
+info() {
+    echo -e "${COLOR_INFO}[Info] $1${COLOR_RESET}"
 }
 
-main
+warn() {
+    echo -e "${COLOR_WARN}[Warn] $1${COLOR_RESET}"
+}
+
+error() {
+    echo -e "${COLOR_ERROR}[Error] $1${COLOR_RESET}" >&2  # 错误信息输出到 stderr
+}
+main() {
+    # 获取脚本所在的绝对路径
+    SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    if [ -z "$SCRIPT_DIR" ]; then
+        error "无法获取脚本所在目录路径"
+        return 1
+    fi
+    info "脚本所在目录: ${COLOR_BOLD}$SCRIPT_DIR${COLOR_RESET}"
+
+    # 切换到脚本所在目录
+    info "切换到脚本目录"
+    cd "$SCRIPT_DIR" || {
+        error "无法切换到脚本目录: $SCRIPT_DIR"
+        return 1
+    }
+
+    # 定义配置文件目录和脚本路径
+    local mcp_config_root="../5-resource/mcp_config"
+    local agent_manager_script="../4-other-script/agent_manager.py"
+
+    # 检查配置文件根目录是否存在
+    if [ ! -d "$mcp_config_root" ]; then
+        error "配置文件根目录不存在: $mcp_config_root"
+        return 1
+    fi
+
+    # 检查管理脚本是否存在
+    if [ ! -f "$agent_manager_script" ]; then
+        error "agent_manager.py 脚本不存在: $agent_manager_script"
+        return 1
+    fi
+    # 遍历所有子目录下的 config.json 文件
+    info "开始查找配置文件: $mcp_config_root/**/config.json"
+    local config_files
+    config_files=$(find "$mcp_config_root" -type f -name "config.json")
+
+    # 检查是否找到配置文件
+    if [ -z "$config_files" ]; then
+        warn "未在 $mcp_config_root 下找到任何 config.json 文件"
+        return 0
+    fi
+
+    # 统计配置文件数量
+    local file_count=$(echo "$config_files" | wc -l | tr -d ' ')
+    info "共找到 ${COLOR_BOLD}$file_count${COLOR_RESET} 个配置文件，开始处理..."
+
+    # 遍历配置文件并执行初始化和创建操作
+    local index=1
+    while IFS= read -r config_file; do
+        # 转换为绝对路径
+        local abs_config=$(realpath "$config_file")
+        info "\n===== 处理第 $index/$file_count 个配置文件 ====="
+        info "配置文件路径: $abs_config"
+        # 执行 init 操作
+        info "执行初始化: python3 $agent_manager_script init $abs_config"
+        if python3 "$agent_manager_script" init "$abs_config"; then
+            info "初始化成功: $abs_config"
+        else
+            warn "继续处理下一个配置文件"
+        fi
+
+        # 执行 create 操作
+        info "执行创建: python3 $agent_manager_script create $abs_config"
+        if python3 "$agent_manager_script" create "$abs_config"; then
+            info "创建成功: $abs_config"
+        else
+            warn "继续处理下一个配置文件"
+        fi
+
+        index=$((index + 1))
+    done <<< "$config_files"
+
+    info "\n===== 所有配置文件处理完成 ====="
+    return 0
+}
+
+# 执行主函数
+main "$@"
