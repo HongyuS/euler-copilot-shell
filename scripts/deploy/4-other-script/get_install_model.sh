@@ -9,8 +9,6 @@ COLOR_RESET='\033[0m'    # 重置颜色
 # 存储安装模式的文件路径
 INSTALL_MODEL_FILE="/etc/euler_Intelligence_install_model"
 
-
-
 # 询问用户并保存安装模式
 ask_install_options() {
   # 存储安装模式的文件路径

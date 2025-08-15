@@ -275,6 +275,7 @@ show_help() {
 #  echo "  --q          切换安装部署模式"
   echo "  --h          显示本帮助信息"
   echo "  --help       同 --h"
+  echo "  --a          进入agent初始化模式，详见部署文档"
   echo ""
   echo -e "${BLUE}服务部署手册查看位置:${COLOR_RESET}"
   echo "  1. 在线文档: https://gitee.com/openeuler/euler-copilot-shell/blob/dev/scripts/deploy/安装部署手册.md"
@@ -287,6 +288,19 @@ show_help() {
   echo "=============================================================================="
   exit 0
 }
+agent_manager() {
+  # 获取主脚本绝对路径并切换到所在目录
+  MAIN_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  if [ "${MAIN_DIR}" = "/usr/bin" ]; then
+    cd /usr/lib/deploy/scripts || exit 1
+  else
+    cd "$MAIN_DIR" || exit 1
+  fi
+
+  # 将所有接收的参数传递给Python脚本
+  python3 4-other-script/agent_manager.py "$@"
+  return 0
+}
 
 # 检查帮助参数
 if [[ "$1" == "--h" || "$1" == "--help" ]]; then
@@ -298,7 +312,10 @@ fi
 #  ask_install_options "force"
 #  return 0
 #fi
-
+if [[ "$1" == "--a" ]]; then
+  agent_manager  "${@:2}"
+  exit 0
+fi
 # 获取主脚本绝对路径并切换到所在目录
 MAIN_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 if [ "${MAIN_DIR}" = "/usr/bin" ]; then
