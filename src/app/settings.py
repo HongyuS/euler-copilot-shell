@@ -10,10 +10,13 @@ from textual.containers import Container, Horizontal
 from textual.screen import Screen
 from textual.widgets import Button, Input, Label, Static
 
+from backend.hermes import HermesChatClient
+from backend.openai import OpenAIClient
 from config import Backend, ConfigManager
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
+    from textual.events import Key
 
     from backend.base import LLMClientBase
 
@@ -42,7 +45,11 @@ class SettingsScreen(Screen):
                 # 后端选择
                 Horizontal(
                     Label("后端:", classes="settings-label"),
-                    Button(f"{self.backend}", id="backend-btn", classes="settings-value settings-button"),
+                    Button(
+                        f"{self.backend.get_display_name()}",
+                        id="backend-btn",
+                        classes="settings-value settings-button",
+                    ),
                     classes="settings-option",
                 ),
                 # Base URL 输入
@@ -140,7 +147,7 @@ class SettingsScreen(Screen):
 
         # 更新按钮文本
         backend_btn = self.query_one("#backend-btn", Button)
-        backend_btn.label = new
+        backend_btn.label = new.get_display_name()
 
         # 更新 URL 和 API Key
         base_url = self.query_one("#base-url", Input)
@@ -232,9 +239,9 @@ class SettingsScreen(Screen):
             self.config_manager.set_eulerintelli_key(api_key)
 
         # 通知主应用刷新客户端
-        from app.tui import IntelligentTerminal
-        if isinstance(self.app, IntelligentTerminal):
-            self.app.refresh_llm_client()
+        refresh_method = getattr(self.app, "refresh_llm_client", None)
+        if refresh_method:
+            refresh_method()
 
         self.app.pop_screen()
 
@@ -242,6 +249,12 @@ class SettingsScreen(Screen):
     def cancel_settings(self) -> None:
         """取消设置"""
         self.app.pop_screen()
+
+    def on_key(self, event: Key) -> None:
+        """处理键盘事件"""
+        if event.key == "escape":
+            # ESC 键退出设置页面，等效于取消
+            self.app.pop_screen()
 
     def _ensure_buttons_visible(self) -> None:
         """确保操作按钮始终可见"""
@@ -264,16 +277,12 @@ class SettingsScreen(Screen):
         api_key_input = self.query_one("#api-key", Input)
 
         if self.backend == Backend.OPENAI:
-            from backend.openai import OpenAIClient
-
             self.llm_client = OpenAIClient(
                 base_url=base_url_input.value,
                 model=self.selected_model,
                 api_key=api_key_input.value,
             )
         else:  # EULERINTELLI
-            from backend.hermes.client import HermesChatClient
-
             self.llm_client = HermesChatClient(
                 base_url=base_url_input.value,
                 auth_token=api_key_input.value,

@@ -218,10 +218,10 @@ class IntelligentTerminal(App):
     CSS_PATH = "css/styles.tcss"
 
     BINDINGS: ClassVar[list[BindingType]] = [
+        Binding(key="ctrl+q", action="request_quit", description="退出"),
         Binding(key="ctrl+s", action="settings", description="设置"),
         Binding(key="ctrl+r", action="reset_conversation", description="重置对话"),
         Binding(key="ctrl+t", action="choose_agent", description="选择智能体"),
-        Binding(key="esc", action="request_quit", description="退出"),
         Binding(key="tab", action="toggle_focus", description="切换焦点"),
     ]
 
@@ -272,14 +272,23 @@ class IntelligentTerminal(App):
 
     def action_settings(self) -> None:
         """打开设置页面"""
+        # 只有在主界面（无其他屏幕）时才响应
+        if not self._is_in_main_interface():
+            return
         self.push_screen(SettingsScreen(self.config_manager, self.get_llm_client()))
 
     def action_request_quit(self) -> None:
         """请求退出应用"""
+        # 检查是否已经在退出对话框
+        if self._is_exit_dialog_open():
+            return
         self.push_screen(ExitDialog())
 
     def action_reset_conversation(self) -> None:
         """重置对话历史记录的动作"""
+        # 只有在主界面（无其他屏幕）时才响应
+        if not self._is_in_main_interface():
+            return
         if self._llm_client is not None and hasattr(self._llm_client, "reset_conversation"):
             self._llm_client.reset_conversation()
         # 清除屏幕上的所有内容
@@ -290,6 +299,9 @@ class IntelligentTerminal(App):
 
     def action_choose_agent(self) -> None:
         """选择智能体的动作"""
+        # 只有在主界面（无其他屏幕）时才响应
+        if not self._is_in_main_interface():
+            return
         # 获取 Hermes 客户端
         llm_client = self.get_llm_client()
 
@@ -441,6 +453,17 @@ class IntelligentTerminal(App):
             task = asyncio.create_task(self._send_mcp_response(message.task_id, params=params))
             self.background_tasks.add(task)
             task.add_done_callback(self._task_done_callback)
+
+    def _is_in_main_interface(self) -> bool:
+        """检查是否在主界面（没有其他屏幕弹出）"""
+        # 检查是否有活动的屏幕栈，除了主屏幕外没有其他屏幕
+        return len(self.screen_stack) <= 1
+
+    def _is_exit_dialog_open(self) -> bool:
+        """检查是否已经打开了退出对话框"""
+        # 检查当前活动屏幕是否是退出对话框
+        current_screen = self.screen
+        return hasattr(current_screen, "__class__") and current_screen.__class__.__name__ == "ExitDialog"
 
     def _task_done_callback(self, task: asyncio.Task) -> None:
         """任务完成回调，从任务集合中移除"""
