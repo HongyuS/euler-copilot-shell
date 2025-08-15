@@ -218,10 +218,10 @@ class IntelligentTerminal(App):
     CSS_PATH = "css/styles.tcss"
 
     BINDINGS: ClassVar[list[BindingType]] = [
+        Binding(key="ctrl+q", action="request_quit", description="退出"),
         Binding(key="ctrl+s", action="settings", description="设置"),
         Binding(key="ctrl+r", action="reset_conversation", description="重置对话"),
         Binding(key="ctrl+t", action="choose_agent", description="选择智能体"),
-        Binding(key="esc", action="request_quit", description="退出"),
         Binding(key="tab", action="toggle_focus", description="切换焦点"),
     ]
 

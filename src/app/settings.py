@@ -10,6 +10,8 @@ from textual.containers import Container, Horizontal
 from textual.screen import Screen
 from textual.widgets import Button, Input, Label, Static
 
+from backend.hermes import HermesChatClient
+from backend.openai import OpenAIClient
 from config import Backend, ConfigManager
 
 if TYPE_CHECKING:
@@ -232,9 +234,9 @@ class SettingsScreen(Screen):
             self.config_manager.set_eulerintelli_key(api_key)
 
         # 通知主应用刷新客户端
-        from app.tui import IntelligentTerminal
-        if isinstance(self.app, IntelligentTerminal):
-            self.app.refresh_llm_client()
+        refresh_method = getattr(self.app, "refresh_llm_client", None)
+        if refresh_method:
+            refresh_method()
 
         self.app.pop_screen()
 
@@ -264,16 +266,12 @@ class SettingsScreen(Screen):
         api_key_input = self.query_one("#api-key", Input)
 
         if self.backend == Backend.OPENAI:
-            from backend.openai import OpenAIClient
-
             self.llm_client = OpenAIClient(
                 base_url=base_url_input.value,
                 model=self.selected_model,
                 api_key=api_key_input.value,
             )
         else:  # EULERINTELLI
-            from backend.hermes.client import HermesChatClient
-
             self.llm_client = HermesChatClient(
                 base_url=base_url_input.value,
                 auth_token=api_key_input.value,
