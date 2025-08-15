@@ -98,6 +98,13 @@ class DeploymentConfigScreen(ModalScreen[bool]):
         scrollbar-size: 1 1;
         overflow: auto;
     }
+
+    .llm-config-container, .embedding-config-container {
+        height: 1fr;
+        scrollbar-size: 1 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
     """
 
     def __init__(self) -> None:
@@ -154,7 +161,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
 
     def _compose_llm_config(self) -> ComposeResult:
         """组合 LLM 配置组件"""
-        with Vertical():
+        with Vertical(classes="llm-config-container"):
             yield Static("大语言模型配置", classes="form-label")
 
             with Horizontal(classes="form-row"):
@@ -212,7 +219,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
 
     def _compose_embedding_config(self) -> ComposeResult:
         """组合 Embedding 配置组件"""
-        with Vertical():
+        with Vertical(classes="embedding-config-container"):
             yield Static("嵌入模型配置", classes="form-label")
 
             with Horizontal(classes="form-row"):
