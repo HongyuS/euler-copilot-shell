@@ -75,18 +75,15 @@ class DeploymentConfigScreen(ModalScreen[bool]):
         align: center middle;
     }
 
-    .deploy-button {
-        margin: 0 1;
-        background: $success;
-    }
-
-    .cancel-button {
-        margin: 0 1;
-        background: $error;
-    }
-
     #llm_validation_status, #embedding_validation_status {
         text-style: italic;
+    }
+
+    #deploy, #cancel {
+        margin: 0 1;
+        width: auto;
+        min-height: 3;
+        height: 3;
     }
 
     TabbedContent {
@@ -130,8 +127,8 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                     yield from self._compose_embedding_config()
 
             with Horizontal(classes="button-row"):
-                yield Button("开始部署", id="deploy", classes="deploy-button")
-                yield Button("取消", id="cancel", classes="cancel-button")
+                yield Button("开始部署", id="deploy", variant="success")
+                yield Button("取消", id="cancel", variant="error")
 
     def _compose_basic_config(self) -> ComposeResult:
         """组合基础配置组件"""
