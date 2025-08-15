@@ -9,61 +9,6 @@
 - **流式响应**: 实时显示 AI 回复内容
 - **部署助手**: 内置 openEuler Intelligence 自动部署功能
 
-## 项目结构
-
-```text
-smart-shell/
-├── README.md                     # 项目说明文档
-├── requirements.txt              # Python 依赖包列表
-├── setup.py                      # 包安装配置文件
-├── LICENSE                       # 开源许可证
-├── distribution/                 # 发布相关文件
-├── docs/                         # 项目文档目录
-│   └── development/              # 开发设计文档
-│       └── server-side/          # 服务端相关文档
-├── scripts/                      # 部署脚本目录
-│   └── build/                    # RPM 包构建脚本
-│   └── deploy/                   # 自动化部署脚本
-├── tests/                        # 测试文件目录
-└── src/                          # 源代码目录
-    ├── main.py                   # 应用程序入口点
-    ├── app/                      # TUI 应用模块
-    │   ├── tui.py                # 主界面应用类
-    │   ├── mcp_widgets.py        # MCP 交互组件
-    │   ├── tui_mcp_handler.py    # MCP 事件处理器
-    │   ├── settings.py           # 设置界面
-    │   ├── css/
-    │   │   └── styles.tcss       # TUI 样式文件
-    │   ├── deployment/           # 部署助手模块
-    │   │   ├── models.py         # 部署配置模型
-    │   │   ├── service.py        # 部署服务逻辑
-    │   │   ├── ui.py             # 部署界面组件
-    │   │   └── validators.py     # 配置验证器
-    │   └── dialogs/              # 对话框组件
-    │       ├── agent.py          # 智能体选择对话框
-    │       └── common.py         # 通用对话框组件
-    ├── backend/                  # 后端适配模块
-    │   ├── base.py               # 后端客户端基类
-    │   ├── factory.py            # 后端工厂类
-    │   ├── mcp_handler.py        # MCP 事件处理接口
-    │   ├── openai.py             # OpenAI 兼容客户端
-    │   └── hermes/               # openEuler Intelligence 客户端
-    │       ├── client.py         # Hermes API 客户端
-    │       ├── constants.py      # 常量定义
-    │       ├── exceptions.py     # 异常类定义
-    │       ├── models.py         # 数据模型
-    │       ├── stream.py         # 流式响应处理
-    │       └── services/         # 服务层组件
-    ├── config/                   # 配置管理模块
-    │   ├── manager.py            # 配置管理器
-    │   └── model.py              # 配置数据模型
-    ├── log/                      # 日志管理模块
-    │   └── manager.py            # 日志管理器
-    └── tool/                     # 工具模块
-        ├── command_processor.py  # 命令处理器
-        └── oi_backend_init.py    # 后端初始化工具
-```
-
 ## 安装说明
 
 ### 方式一：从源码安装（推荐开发者）
@@ -266,9 +211,8 @@ oi --init
 1. 克隆仓库并切换到对应分支：
 
    ```sh
-   git clone https://gitee.com/openeuler/euler-copilot-shell.git
+   git clone https://gitee.com/openeuler/euler-copilot-shell.git -b dev
    cd euler-copilot-shell
-   git checkout main
    ```
 
 2. 为构建脚本添加可执行权限：
@@ -280,11 +224,65 @@ oi --init
 3. 运行 RPM 构建脚本：
 
    ```sh
-   cd scripts/build
-   ./build_rpm.sh
+   ./scripts/build/build_rpm.sh
    ```
 
    脚本执行完成后，会在临时构建目录下的 `RPMS` 和 `SRPMS` 子目录中生成相应的二进制包和源码包，并在终端输出具体路径。
+
+## 项目结构
+
+```text
+smart-shell/
+├── README.md                     # 项目说明文档
+├── requirements.txt              # Python 依赖包列表
+├── setup.py                      # 包安装配置文件
+├── LICENSE                       # 开源许可证
+├── distribution/                 # 发布相关文件
+├── docs/                         # 项目文档目录
+│   └── development/              # 开发设计文档
+│       └── server-side/          # 服务端相关文档
+├── scripts/                      # 部署脚本目录
+│   └── build/                    # RPM 包构建脚本
+│   └── deploy/                   # 自动化部署脚本
+├── tests/                        # 测试文件目录
+└── src/                          # 源代码目录
+    ├── main.py                   # 应用程序入口点
+    ├── app/                      # TUI 应用模块
+    │   ├── tui.py                # 主界面应用类
+    │   ├── mcp_widgets.py        # MCP 交互组件
+    │   ├── tui_mcp_handler.py    # MCP 事件处理器
+    │   ├── settings.py           # 设置界面
+    │   ├── css/
+    │   │   └── styles.tcss       # TUI 样式文件
+    │   ├── deployment/           # 部署助手模块
+    │   │   ├── models.py         # 部署配置模型
+    │   │   ├── service.py        # 部署服务逻辑
+    │   │   ├── ui.py             # 部署界面组件
+    │   │   └── validators.py     # 配置验证器
+    │   └── dialogs/              # 对话框组件
+    │       ├── agent.py          # 智能体选择对话框
+    │       └── common.py         # 通用对话框组件
+    ├── backend/                  # 后端适配模块
+    │   ├── base.py               # 后端客户端基类
+    │   ├── factory.py            # 后端工厂类
+    │   ├── mcp_handler.py        # MCP 事件处理接口
+    │   ├── openai.py             # OpenAI 兼容客户端
+    │   └── hermes/               # openEuler Intelligence 客户端
+    │       ├── client.py         # Hermes API 客户端
+    │       ├── constants.py      # 常量定义
+    │       ├── exceptions.py     # 异常类定义
+    │       ├── models.py         # 数据模型
+    │       ├── stream.py         # 流式响应处理
+    │       └── services/         # 服务层组件
+    ├── config/                   # 配置管理模块
+    │   ├── manager.py            # 配置管理器
+    │   └── model.py              # 配置数据模型
+    ├── log/                      # 日志管理模块
+    │   └── manager.py            # 日志管理器
+    └── tool/                     # 工具模块
+        ├── command_processor.py  # 命令处理器
+        └── oi_backend_init.py    # 后端初始化工具
+```
 
 ## 贡献
 
