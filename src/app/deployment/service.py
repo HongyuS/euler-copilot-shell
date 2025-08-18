@@ -62,38 +62,62 @@ class DeploymentResourceManager:
     @classmethod
     def update_config_values(cls, content: str, config: DeploymentConfig) -> str:
         """根据用户配置更新配置文件内容"""
+
+        def safe_replace(pattern: str, replacement: str, text: str) -> str:
+            """安全的正则表达式替换，避免反向引用问题"""
+            # 使用 lambda 函数来避免反向引用问题
+            return re.sub(pattern, lambda m: m.group(1) + replacement, text)
+
         # 更新 LLM 配置
-        content = re.sub(r"(MODEL_NAME\s*=\s*).*", rf"\1{config.llm.model}", content)
-        content = re.sub(r"(OPENAI_API_BASE\s*=\s*).*", rf"\1{config.llm.endpoint}", content)
-        content = re.sub(r"(OPENAI_API_KEY\s*=\s*).*", rf"\1{config.llm.api_key}", content)
-        content = re.sub(r"(MAX_TOKENS\s*=\s*).*", rf"\1{config.llm.max_tokens}", content)
-        content = re.sub(r"(TEMPERATURE\s*=\s*).*", rf"\1{config.llm.temperature}", content)
-        content = re.sub(r"(REQUEST_TIMEOUT\s*=\s*).*", rf"\1{config.llm.request_timeout}", content)
+        content = safe_replace(r"(MODEL_NAME\s*=\s*).*", config.llm.model, content)
+        content = safe_replace(r"(OPENAI_API_BASE\s*=\s*).*", config.llm.endpoint, content)
+        content = safe_replace(r"(OPENAI_API_KEY\s*=\s*).*", config.llm.api_key, content)
+        content = safe_replace(r"(MAX_TOKENS\s*=\s*).*", str(config.llm.max_tokens), content)
+        content = safe_replace(r"(TEMPERATURE\s*=\s*).*", str(config.llm.temperature), content)
+        content = safe_replace(r"(REQUEST_TIMEOUT\s*=\s*).*", str(config.llm.request_timeout), content)
 
         # 更新 Embedding 配置
-        content = re.sub(r"(EMBEDDING_TYPE\s*=\s*).*", rf"\1{config.embedding.type}", content)
-        content = re.sub(r"(EMBEDDING_API_KEY\s*=\s*).*", rf"\1{config.embedding.api_key}", content)
-        content = re.sub(r"(EMBEDDING_ENDPOINT\s*=\s*).*", rf"\1{config.embedding.endpoint}", content)
-        return re.sub(r"(EMBEDDING_MODEL_NAME\s*=\s*).*", rf"\1{config.embedding.model}", content)
+        content = safe_replace(r"(EMBEDDING_TYPE\s*=\s*).*", config.embedding.type, content)
+        content = safe_replace(r"(EMBEDDING_API_KEY\s*=\s*).*", config.embedding.api_key, content)
+        content = safe_replace(r"(EMBEDDING_ENDPOINT\s*=\s*).*", config.embedding.endpoint, content)
+        return safe_replace(r"(EMBEDDING_MODEL_NAME\s*=\s*).*", config.embedding.model, content)
 
     @classmethod
     def update_toml_values(cls, content: str, config: DeploymentConfig) -> str:
         """更新 TOML 配置文件的值"""
+
+        def safe_replace_quoted(pattern: str, replacement: str, text: str) -> str:
+            """安全替换引号内的值"""
+            return re.sub(pattern, lambda m: m.group(1) + replacement + m.group(2), text)
+
+        def safe_replace_number(pattern: str, replacement: str, text: str) -> str:
+            """安全替换数字值"""
+            return re.sub(pattern, lambda m: m.group(1) + replacement, text)
+
         # 更新服务器 IP
-        content = re.sub(r"(host\s*=\s*')[^']*(')", rf"\1http://{config.server_ip}:8000\2", content)
-        content = re.sub(r"(login_api\s*=\s*')[^']*(')", rf"\1http://{config.server_ip}:8080/api/auth/login\2", content)
-        content = re.sub(r"(domain\s*=\s*')[^']*(')", rf"\1{config.server_ip}\2", content)
+        server_ip = str(config.server_ip)
+        content = safe_replace_quoted(
+            r"(host\s*=\s*')[^']*(')",
+            f"http://{server_ip}:8000",
+            content,
+        )
+        content = safe_replace_quoted(
+            r"(login_api\s*=\s*')[^']*(')",
+            f"http://{server_ip}:8080/api/auth/login",
+            content,
+        )
+        content = safe_replace_quoted(r"(domain\s*=\s*')[^']*(')", server_ip, content)
 
         # 更新 LLM 配置
-        content = re.sub(r'(endpoint\s*=\s*")[^"]*(")', rf"\1{config.llm.endpoint}\2", content)
-        content = re.sub(r"(key\s*=\s*')[^']*(')", rf"\1{config.llm.api_key}\2", content)
-        content = re.sub(r"(model\s*=\s*')[^']*(')", rf"\1{config.llm.model}\2", content)
-        content = re.sub(r"(max_tokens\s*=\s*)\d+", rf"\1{config.llm.max_tokens}", content)
-        content = re.sub(r"(temperature\s*=\s*)[\d.]+", rf"\1{config.llm.temperature}", content)
+        content = safe_replace_quoted(r'(endpoint\s*=\s*")[^"]*(")', config.llm.endpoint, content)
+        content = safe_replace_quoted(r"(key\s*=\s')[^']*(')", config.llm.api_key, content)
+        content = safe_replace_quoted(r"(model\s*=\s')[^']*(')", config.llm.model, content)
+        content = safe_replace_number(r"(max_tokens\s*=\s*)\d+", str(config.llm.max_tokens), content)
+        content = safe_replace_number(r"(temperature\s*=\s*)[\d.]+", str(config.llm.temperature), content)
 
         # 更新 Embedding 配置
-        content = re.sub(r"(type\s*=\s*')[^']*(')", rf"\1{config.embedding.type}\2", content)
-        return re.sub(r"(api_key\s*=\s*')[^']*(')", rf"\1{config.embedding.api_key}\2", content)
+        content = safe_replace_quoted(r"(type\s*=\s*')[^']*(')", config.embedding.type, content)
+        return safe_replace_quoted(r"(api_key\s*=\s*')[^']*(')", config.embedding.api_key, content)
 
     @classmethod
     def create_deploy_mode_content(cls, config: DeploymentConfig) -> str:
@@ -651,7 +675,17 @@ class DeploymentService:
             str(self.resource_manager.ENV_TEMPLATE),
             f"{self.resource_manager.ENV_TEMPLATE}.backup",
         ]
-        await asyncio.create_subprocess_exec(*backup_cmd)
+        backup_process = await asyncio.create_subprocess_exec(
+            *backup_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, backup_stderr = await backup_process.communicate()
+
+        if backup_process.returncode != 0:
+            error_msg = backup_stderr.decode("utf-8", errors="ignore").strip()
+            msg = f"备份 env 文件失败: {error_msg}"
+            raise RuntimeError(msg)
 
         # 写入更新后的内容
         write_cmd = ["sudo", "tee", str(self.resource_manager.ENV_TEMPLATE)]
@@ -662,7 +696,12 @@ class DeploymentService:
             stderr=asyncio.subprocess.PIPE,
         )
 
-        await process.communicate(updated_content.encode())
+        _, write_stderr = await process.communicate(updated_content.encode())
+
+        if process.returncode != 0:
+            error_msg = write_stderr.decode("utf-8", errors="ignore").strip()
+            msg = f"写入 env 文件失败: {error_msg}"
+            raise RuntimeError(msg)
 
     async def _update_config_toml(self, config: DeploymentConfig) -> None:
         """更新 config.toml 配置文件"""
@@ -682,7 +721,17 @@ class DeploymentService:
             str(self.resource_manager.CONFIG_TEMPLATE),
             f"{self.resource_manager.CONFIG_TEMPLATE}.backup",
         ]
-        await asyncio.create_subprocess_exec(*backup_cmd)
+        backup_process = await asyncio.create_subprocess_exec(
+            *backup_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, backup_stderr = await backup_process.communicate()
+
+        if backup_process.returncode != 0:
+            error_msg = backup_stderr.decode("utf-8", errors="ignore").strip()
+            msg = f"备份 config.toml 文件失败: {error_msg}"
+            raise RuntimeError(msg)
 
         # 写入更新后的内容
         write_cmd = ["sudo", "tee", str(self.resource_manager.CONFIG_TEMPLATE)]
@@ -693,7 +742,12 @@ class DeploymentService:
             stderr=asyncio.subprocess.PIPE,
         )
 
-        await process.communicate(updated_content.encode())
+        _, write_stderr = await process.communicate(updated_content.encode())
+
+        if process.returncode != 0:
+            error_msg = write_stderr.decode("utf-8", errors="ignore").strip()
+            msg = f"写入 config.toml 文件失败: {error_msg}"
+            raise RuntimeError(msg)
 
     async def _read_process_output(self) -> AsyncGenerator[str, None]:
         """读取进程输出"""
@@ -758,7 +812,10 @@ class DeploymentService:
 
         try:
             return await self._execute_agent_init_command(
-                agent_script_path, config_file_path, temp_state, progress_callback,
+                agent_script_path,
+                config_file_path,
+                temp_state,
+                progress_callback,
             )
         except Exception as e:
             temp_state.add_log(f"❌ Agent 初始化异常: {e!s}")
@@ -779,8 +836,10 @@ class DeploymentService:
         cmd = [
             "python3",
             str(agent_script_path),
-            "--operator", "comb",
-            "--config_path", str(config_file_path),
+            "--operator",
+            "comb",
+            "--config_path",
+            str(config_file_path),
         ]
 
         temp_state.add_log(f"执行命令: {' '.join(cmd)}")
