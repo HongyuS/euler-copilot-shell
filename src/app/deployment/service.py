@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import platform
 import re
 from pathlib import Path
@@ -358,7 +359,17 @@ class DeploymentService:
         output_lines = []
         if process.stdout:
             while True:
-                line = await process.stdout.readline()
+                try:
+                    # 使用超时读取，避免长时间阻塞
+                    line = await asyncio.wait_for(
+                        process.stdout.readline(),
+                        timeout=0.1,  # 100ms 超时
+                    )
+                except TimeoutError:
+                    # 超时时让出控制权给 UI 事件循环
+                    await asyncio.sleep(0)
+                    continue
+
                 if not line:
                     break
 
@@ -368,6 +379,9 @@ class DeploymentService:
                     if progress_callback:
                         temp_state.add_log(f"安装: {decoded_line}")
                         progress_callback(temp_state)
+
+                # 每次读取后让出控制权
+                await asyncio.sleep(0)
 
         # 等待进程结束
         return_code = await process.wait()
@@ -497,14 +511,24 @@ class DeploymentService:
                 cwd=script_dir,
             )
 
-            # 读取输出
-            async for line in self._read_process_output():
-                self.state.add_log(line)
-                if progress_callback:
-                    progress_callback(self.state)
+            # 创建心跳任务，定期更新界面
+            heartbeat_task = asyncio.create_task(self._heartbeat_progress(progress_callback))
 
-            # 等待进程结束
-            return_code = await self._process.wait()
+            try:
+                # 读取输出
+                async for line in self._read_process_output():
+                    self.state.add_log(line)
+                    if progress_callback:
+                        progress_callback(self.state)
+
+                # 等待进程结束
+                return_code = await self._process.wait()
+            finally:
+                # 取消心跳任务
+                heartbeat_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await heartbeat_task
+
             self._process = None
 
             if return_code == 0:
@@ -519,6 +543,17 @@ class DeploymentService:
         else:
             self.state.add_log(f"✗ {script_name}执行失败，返回码: {return_code}")
             return False
+
+    async def _heartbeat_progress(self, progress_callback: Callable[[DeploymentState], None] | None) -> None:
+        """心跳进度更新，确保界面不会卡死"""
+        if not progress_callback:
+            return
+
+        with contextlib.suppress(asyncio.CancelledError):
+            while True:
+                await asyncio.sleep(1.0)  # 每秒更新一次
+                if progress_callback:
+                    progress_callback(self.state)
 
     async def _generate_config_files(
         self,
@@ -667,13 +702,26 @@ class DeploymentService:
 
         while True:
             try:
-                line = await self._process.stdout.readline()
+                # 使用超时读取，避免长时间阻塞
+                try:
+                    line = await asyncio.wait_for(
+                        self._process.stdout.readline(),
+                        timeout=0.1,  # 100ms 超时
+                    )
+                except TimeoutError:
+                    # 超时时让出控制权给 UI 事件循环
+                    await asyncio.sleep(0)
+                    continue
+
                 if not line:
                     break
 
                 decoded_line = line.decode("utf-8", errors="ignore").strip()
                 if decoded_line:
                     yield decoded_line
+
+                # 每次读取后让出控制权
+                await asyncio.sleep(0)
 
             except OSError as e:
                 logger.warning("读取进程输出时发生错误: %s", e)
