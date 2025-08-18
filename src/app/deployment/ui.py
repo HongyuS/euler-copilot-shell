@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING
 
 from textual import on
@@ -842,6 +843,10 @@ class DeploymentProgressScreen(ModalScreen[bool]):
             self.query_one("#step_label", Static).update("部署已取消")
             self.query_one("#deployment_log", RichLog).write("部署已被用户取消")
 
+            # 等待任务真正结束
+            with contextlib.suppress(asyncio.CancelledError):
+                await self.deployment_task
+
             # 更新按钮状态
             self._update_buttons_after_failure()
         else:
@@ -850,6 +855,11 @@ class DeploymentProgressScreen(ModalScreen[bool]):
 
     def _reset_ui_for_retry(self) -> None:
         """重置界面用于重试"""
+        # 取消之前的任务
+        if self.deployment_task and not self.deployment_task.done():
+            self.deployment_task.cancel()
+        self.deployment_task = None
+
         # 清空日志
         log_widget = self.query_one("#deployment_log", RichLog)
         log_widget.clear()
@@ -885,12 +895,35 @@ class DeploymentProgressScreen(ModalScreen[bool]):
     async def _start_deployment(self) -> None:
         """开始部署流程"""
         try:
+            # 创建异步任务但不等待，让它在后台运行
             self.deployment_task = asyncio.create_task(self._execute_deployment())
-            await self.deployment_task
-        except asyncio.CancelledError:
-            self.query_one("#step_label", Static).update("部署已取消")
-            self.query_one("#deployment_log", RichLog).write("部署被取消")
+
+            # 启动一个定时器来检查任务状态
+            self.set_interval(0.1, self._check_deployment_status)
+
+        except (OSError, RuntimeError) as e:
+            self.query_one("#step_label", Static).update("部署启动失败")
+            self.query_one("#deployment_log", RichLog).write(f"部署启动失败: {e}")
             self._update_buttons_after_failure()
+
+    def _check_deployment_status(self) -> None:
+        """检查部署任务状态"""
+        if self.deployment_task is None:
+            return
+
+        if self.deployment_task.done():
+            # 任务完成，停止定时器
+            try:
+                # 获取任务结果，如果有异常会在这里抛出
+                self.deployment_task.result()
+            except asyncio.CancelledError:
+                self.query_one("#step_label", Static).update("部署已取消")
+                self.query_one("#deployment_log", RichLog).write("部署被取消")
+                self._update_buttons_after_failure()
+            except (OSError, RuntimeError, ValueError) as e:
+                self.query_one("#step_label", Static).update("部署异常")
+                self.query_one("#deployment_log", RichLog).write(f"部署异常: {e}")
+                self._update_buttons_after_failure()
 
     async def _execute_deployment(self) -> None:
         """执行部署过程"""
