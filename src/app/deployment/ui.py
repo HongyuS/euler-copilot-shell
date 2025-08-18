@@ -248,6 +248,7 @@ class EnvironmentErrorScreen(ModalScreen[None]):
         height: auto;
         max-height: 15;
         overflow-y: auto;
+        scrollbar-size: 1 1;
         border: solid $secondary;
         padding: 1;
     }
@@ -899,7 +900,7 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         self.query_one("#finish", Button).disabled = True
         self.query_one("#retry", Button).disabled = False
         self.query_one("#reconfigure", Button).disabled = False
-        self.query_one("#cancel", Button).disabled = True
+        self.query_one("#cancel", Button).disabled = False
 
     def _update_buttons_after_success(self) -> None:
         """部署成功后更新按钮状态"""
