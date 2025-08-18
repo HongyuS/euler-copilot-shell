@@ -260,9 +260,9 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                 )
                 return
 
-            # 直接推送部署进度屏幕，不关闭当前界面
+            # 推送部署进度屏幕，等待其完成
             await self.app.push_screen(DeploymentProgressScreen(self.config))
-            # 部署完成后，退出整个应用
+            # 部署屏幕关闭后，退出整个应用
             self.app.exit()
 
     @on(Button.Pressed, "#cancel")
@@ -586,6 +586,18 @@ class DeploymentProgressScreen(ModalScreen[bool]):
     async def _start_deployment(self) -> None:
         """开始部署流程"""
         try:
+            # 步骤1：检查并安装依赖
+            self.query_one("#step_label", Static).update("正在检查部署环境...")
+            success, errors = await self.service.check_and_install_dependencies(self._on_progress_update)
+
+            if not success:
+                self.query_one("#step_label", Static).update("环境检查失败")
+                for error in errors:
+                    self.query_one("#deployment_log", RichLog).write(f"[red]✗ {error}[/red]")
+                return
+
+            # 步骤2：执行部署
+            self.query_one("#step_label", Static).update("正在执行部署...")
             success = await self.service.deploy(self.config, self._on_progress_update)
 
             # 更新界面状态
