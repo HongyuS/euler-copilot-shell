@@ -53,13 +53,11 @@ install_wget() {
 
 # 基础URL列表（无论RAG是否启用都需要检测）
 base_urls_x86=(
-  "https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20250524170830.0.0-1.x86_64.rpm"
   "https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.x86_64.rpm"
   "https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/x86_64/RPMS/mongodb-org-server-7.0.21-1.el9.x86_64.rpm"
 )
 
 base_urls_arm=(
-  "https://dl.min.io/server/minio/release/linux-arm64/minio"
   "https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/aarch64/RPMS/mongodb-org-server-7.0.21-1.el9.aarch64.rpm"
   "https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.aarch64.rpm"
 )
