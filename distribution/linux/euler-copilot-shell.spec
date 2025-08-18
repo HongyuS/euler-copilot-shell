@@ -57,12 +57,11 @@ pip install -r requirements.txt
 # 安装PyInstaller
 pip install pyinstaller
 
-# 使用虚拟环境中的PyInstaller创建单一可执行文件
-pyinstaller --noconfirm --onefile \
-            --name %{pypi_name} \
-            --add-data "src/app/css:app/css" \
-            --target-architecture %{_target_cpu} \
-            src/main.py
+# 使用虚拟环境中的 PyInstaller 创建单一可执行文件
+# 使用专用的 .spec 文件解决 Textual 动态导入问题
+pyinstaller --noconfirm \
+            --distpath dist \
+            oi-cli.spec
 
 # 退出虚拟环境
 deactivate
