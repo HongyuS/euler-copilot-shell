@@ -850,7 +850,9 @@ class DeploymentService:
         """执行 Agent 初始化命令"""
         # 构建 Agent 初始化命令（默认执行 comb 操作）
         # 根据 agent_manager.py 的参数定义：operator 和 config_path 是位置参数
+        # 由于脚本需要访问系统级目录，使用 sudo 权限执行
         cmd = [
+            "sudo",
             "python3",
             str(agent_script_path),
             "comb",
