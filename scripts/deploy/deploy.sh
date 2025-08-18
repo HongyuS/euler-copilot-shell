@@ -59,12 +59,11 @@ show_restart_menu() {
   echo "2) framework"
   echo "3) rag"
   echo "4) mysql"
-  echo "5) minio"
-  echo "6) redis"
-  echo "7) postgresql"
-  echo "8) 返回主菜单"
+  echo "5) redis"
+  echo "6) postgresql"
+  echo "7) 返回主菜单"
   echo "=============================="
-  echo -n "请输入要重启的服务编号（1-8）: "
+  echo -n "请输入要重启的服务编号（1-7）: "
 }
 # 询问用户并保存安装模式
 ask_install_options() {
@@ -215,7 +214,7 @@ check_existing_install_model() {
 # 手动部署子菜单循环
 manual_deployment_loop() {
   while true; do
-#    show_sub_menu
+    #    show_sub_menu
     show_sub_model_menu
     read -r sub_choice
     run_sub_model_script "$sub_choice"
@@ -272,7 +271,7 @@ show_help() {
   echo ""
   echo -e "${BLUE}选项:${COLOR_RESET}"
   echo "  无参数        进入交互式菜单"
-#  echo "  --q          切换安装部署模式"
+  #  echo "  --q          切换安装部署模式"
   echo "  --h          显示本帮助信息"
   echo "  --help       同 --h"
   echo "  --a          进入agent初始化模式，详见部署文档"
@@ -313,7 +312,7 @@ fi
 #  return 0
 #fi
 if [[ "$1" == "--a" ]]; then
-  agent_manager  "${@:2}"
+  agent_manager "${@:2}"
   exit 0
 fi
 # 获取主脚本绝对路径并切换到所在目录
@@ -347,10 +346,9 @@ while true; do
       2) service="framework" ;;
       3) service="rag" ;;
       4) service="mysqld" ;;
-      5) service="minio" ;;
-      6) service="redis" ;;
-      7) service="postgresql" ;;
-      8) break ;;
+      5) service="redis" ;;
+      6) service="postgresql" ;;
+      7) break ;;
       *)
         echo -e "${COLOR_ERROR}无效的选项，请输入1-8之间的数字${COLOR_RESET}"
         continue
