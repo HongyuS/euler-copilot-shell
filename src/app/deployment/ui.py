@@ -80,14 +80,8 @@ class EnvironmentCheckScreen(ModalScreen[bool]):
         align: center middle;
     }
 
-    .continue-button {
+    .continue-button, .exit-button {
         margin: 0 1;
-        background: $success;
-    }
-
-    .exit-button {
-        margin: 0 1;
-        background: $error;
     }
     """
 
@@ -112,8 +106,8 @@ class EnvironmentCheckScreen(ModalScreen[bool]):
                 yield Static("检查管理员权限...", id="sudo_desc", classes="check-description")
 
             with Horizontal(classes="button-row"):
-                yield Button("继续配置", id="continue", classes="continue-button", disabled=True)
-                yield Button("退出", id="exit", classes="exit-button")
+                yield Button("继续配置", id="continue", variant="success", classes="continue-button", disabled=True)
+                yield Button("退出", id="exit", variant="error", classes="exit-button")
 
     async def on_mount(self) -> None:
         """界面挂载时开始环境检查"""
@@ -252,12 +246,6 @@ class EnvironmentErrorScreen(ModalScreen[None]):
         border: solid $secondary;
         padding: 1;
     }
-
-    .ok-button {
-        margin: 1 0;
-        align: center middle;
-        background: $primary;
-    }
     """
 
     def __init__(self, title: str, messages: list[str]) -> None:
@@ -286,7 +274,7 @@ class EnvironmentErrorScreen(ModalScreen[None]):
                 yield Static("")
                 yield Static("请解决上述问题后重新运行部署助手。")
 
-            yield Button("确定退出", id="ok", classes="ok-button")
+            yield Button("确定退出", id="ok", variant="primary")
 
     @on(Button.Pressed, "#ok")
     def on_ok_button_pressed(self) -> None:
@@ -402,6 +390,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             with Horizontal(classes="form-row"):
                 yield Label("服务器 IP 地址:", classes="form-label")
                 yield Input(
+                    value="127.0.0.1",  # 默认为本地地址
                     placeholder="例如：127.0.0.1",
                     id="server_ip",
                     classes="form-input",
@@ -1002,12 +991,6 @@ class ErrorMessageScreen(ModalScreen[None]):
         margin: 1 0;
         max-height: 20;
     }
-
-    .ok-button {
-        margin: 1 0;
-        align: center middle;
-        background: $primary;
-    }
     """
 
     def __init__(self, title: str, messages: list[str]) -> None:
@@ -1032,7 +1015,7 @@ class ErrorMessageScreen(ModalScreen[None]):
                 for message in self.messages:
                     yield Static(f"• {message}")
 
-            yield Button("确定", id="ok", classes="ok-button")
+            yield Button("确定", id="ok", variant="primary")
 
     @on(Button.Pressed, "#ok")
     def on_ok_button_pressed(self) -> None:
