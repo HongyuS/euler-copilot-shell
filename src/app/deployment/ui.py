@@ -410,7 +410,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             with Horizontal(classes="form-row"):
                 yield Label("部署模式:", classes="form-label")
                 # 使用按钮在轻量/全量间切换，按钮文本显示当前选择（不包含括号描述）
-                yield Button("轻量部署", id="deployment_mode_btn", classes="form-input")
+                yield Button("轻量部署", id="deployment_mode_btn", classes="form-input", variant="primary")
 
             # 描述区域，显示当前部署模式的详细说明
             with Horizontal(classes="form-row"):
@@ -780,22 +780,6 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         margin: 1 0;
         align: center middle;
     }
-
-    .success-button {
-        background: $success;
-    }
-
-    .error-button {
-        background: $error;
-    }
-
-    .warning-button {
-        background: $warning;
-    }
-
-    .primary-button {
-        background: $primary;
-    }
     """
 
     def __init__(self, config: DeploymentConfig) -> None:
@@ -827,10 +811,10 @@ class DeploymentProgressScreen(ModalScreen[bool]):
                 yield RichLog(id="deployment_log", highlight=True, markup=True)
 
             with Horizontal(classes="button-section"):
-                yield Button("完成", id="finish", classes="success-button", disabled=True)
-                yield Button("重试", id="retry", classes="warning-button", disabled=True)
-                yield Button("重新配置", id="reconfigure", classes="primary-button", disabled=True)
-                yield Button("取消部署", id="cancel", classes="error-button")
+                yield Button("完成", id="finish", variant="success", disabled=True)
+                yield Button("重试", id="retry", variant="warning", disabled=True)
+                yield Button("重新配置", id="reconfigure", variant="primary", disabled=True)
+                yield Button("取消部署", id="cancel", variant="error")
 
     async def on_mount(self) -> None:
         """界面挂载时开始部署"""
