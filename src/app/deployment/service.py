@@ -13,6 +13,8 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import toml
+
 from log.manager import get_logger
 
 from .models import DeploymentConfig, DeploymentState
@@ -85,39 +87,53 @@ class DeploymentResourceManager:
     @classmethod
     def update_toml_values(cls, content: str, config: DeploymentConfig) -> str:
         """更新 TOML 配置文件的值"""
+        try:
+            # 解析 TOML 内容
+            toml_data = toml.loads(content)
 
-        def safe_replace_quoted(pattern: str, replacement: str, text: str) -> str:
-            """安全替换引号内的值"""
-            return re.sub(pattern, lambda m: m.group(1) + replacement + m.group(2), text)
+            # 更新服务器 IP
+            server_ip = str(config.server_ip)
+            if "login" in toml_data and "settings" in toml_data["login"]:
+                toml_data["login"]["settings"]["host"] = f"http://{server_ip}:8000"
+                toml_data["login"]["settings"]["login_api"] = f"http://{server_ip}:8080/api/auth/login"
 
-        def safe_replace_number(pattern: str, replacement: str, text: str) -> str:
-            """安全替换数字值"""
-            return re.sub(pattern, lambda m: m.group(1) + replacement, text)
+            # 更新 fastapi 域名
+            if "fastapi" in toml_data:
+                toml_data["fastapi"]["domain"] = server_ip
 
-        # 更新服务器 IP
-        server_ip = str(config.server_ip)
-        content = safe_replace_quoted(
-            r"(host\s*=\s*')[^']*(')",
-            f"http://{server_ip}:8000",
-            content,
-        )
-        content = safe_replace_quoted(
-            r"(login_api\s*=\s*')[^']*(')",
-            f"http://{server_ip}:8080/api/auth/login",
-            content,
-        )
-        content = safe_replace_quoted(r"(domain\s*=\s*')[^']*(')", server_ip, content)
+            # 更新 LLM 配置
+            if "llm" in toml_data:
+                toml_data["llm"]["endpoint"] = config.llm.endpoint
+                toml_data["llm"]["key"] = config.llm.api_key
+                toml_data["llm"]["model"] = config.llm.model
+                toml_data["llm"]["max_tokens"] = config.llm.max_tokens
+                toml_data["llm"]["temperature"] = config.llm.temperature
 
-        # 更新 LLM 配置
-        content = safe_replace_quoted(r'(endpoint\s*=\s*")[^"]*(")', config.llm.endpoint, content)
-        content = safe_replace_quoted(r"(key\s*=\s')[^']*(')", config.llm.api_key, content)
-        content = safe_replace_quoted(r"(model\s*=\s')[^']*(')", config.llm.model, content)
-        content = safe_replace_number(r"(max_tokens\s*=\s*)\d+", str(config.llm.max_tokens), content)
-        content = safe_replace_number(r"(temperature\s*=\s*)[\d.]+", str(config.llm.temperature), content)
+            # 更新 function_call 配置
+            if "function_call" in toml_data:
+                toml_data["function_call"]["backend"] = "function_call"
+                toml_data["function_call"]["endpoint"] = config.llm.endpoint
+                toml_data["function_call"]["api_key"] = config.llm.api_key
+                toml_data["function_call"]["model"] = config.llm.model
+                toml_data["function_call"]["max_tokens"] = config.llm.max_tokens
+                toml_data["function_call"]["temperature"] = config.llm.temperature
 
-        # 更新 Embedding 配置
-        content = safe_replace_quoted(r"(type\s*=\s*')[^']*(')", config.embedding.type, content)
-        return safe_replace_quoted(r"(api_key\s*=\s*')[^']*(')", config.embedding.api_key, content)
+            # 更新 Embedding 配置
+            if "embedding" in toml_data:
+                toml_data["embedding"]["type"] = config.embedding.type
+                toml_data["embedding"]["api_key"] = config.embedding.api_key
+
+            # 将更新后的数据转换回 TOML 格式
+            return toml.dumps(toml_data)
+
+        except toml.TomlDecodeError as e:
+            logger.exception("解析 TOML 内容时出错")
+            msg = f"TOML 格式错误: {e}"
+            raise ValueError(msg) from e
+        except Exception as e:
+            logger.exception("更新 TOML 配置时发生错误")
+            msg = f"更新 TOML 配置失败: {e}"
+            raise RuntimeError(msg) from e
 
     @classmethod
     def create_deploy_mode_content(cls, config: DeploymentConfig) -> str:
