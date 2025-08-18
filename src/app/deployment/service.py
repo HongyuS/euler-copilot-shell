@@ -849,12 +849,11 @@ class DeploymentService:
     ) -> bool:
         """执行 Agent 初始化命令"""
         # 构建 Agent 初始化命令（默认执行 comb 操作）
+        # 根据 agent_manager.py 的参数定义：operator 和 config_path 是位置参数
         cmd = [
             "python3",
             str(agent_script_path),
-            "--operator",
             "comb",
-            "--config_path",
             str(config_file_path),
         ]
 
