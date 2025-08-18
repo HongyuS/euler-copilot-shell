@@ -155,7 +155,7 @@ class HermesChatClient(LLMClientBase):
                 conversation_id=conversation_id,
                 question=prompt,
                 features=HermesFeatures(),
-                language="zh_cn",
+                language="zh",
             )
 
             # 直接传递异常，不在这里处理
