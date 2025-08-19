@@ -3,16 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from textual.app import App
 
+from app.deployment.ui import EnvironmentCheckScreen
 from log.manager import get_logger
-
-if TYPE_CHECKING:
-    from app.deployment.models import DeploymentConfig
-
-from app.deployment.ui import DeploymentConfigScreen, DeploymentProgressScreen
 
 
 def oi_backend_init() -> None:
@@ -30,21 +25,9 @@ def oi_backend_init() -> None:
             CSS_PATH = css_path
             TITLE = "openEuler Intelligence 部署助手"
 
-            def __init__(self) -> None:
-                super().__init__()
-                self.deployment_config: DeploymentConfig | None = None
-
             def on_mount(self) -> None:
-                """启动时显示配置界面"""
-                self.push_screen(DeploymentConfigScreen())
-
-            def on_deployment_config_submitted(self, config: DeploymentConfig) -> None:
-                """配置提交后开始部署"""
-                self.deployment_config = config
-                if self.deployment_config is not None:
-                    self.push_screen(
-                        DeploymentProgressScreen(self.deployment_config),
-                    )
+                """启动时先显示环境检查界面"""
+                self.push_screen(EnvironmentCheckScreen())
 
         app = DeploymentApp()
         result = app.run()

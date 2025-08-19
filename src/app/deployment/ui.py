@@ -19,9 +19,7 @@ from textual.widgets import (
     Label,
     ProgressBar,
     RichLog,
-    Select,
     Static,
-    Switch,
     TabbedContent,
     TabPane,
 )
@@ -31,6 +29,270 @@ if TYPE_CHECKING:
 
 from .models import DeploymentConfig, DeploymentState, EmbeddingConfig, LLMConfig
 from .service import DeploymentService
+
+
+class EnvironmentCheckScreen(ModalScreen[bool]):
+    """
+    环境检查屏幕
+
+    在进入部署配置之前先检查系统环境是否满足要求。
+    """
+
+    CSS = """
+    EnvironmentCheckScreen {
+        align: center middle;
+    }
+
+    .check-container {
+        width: 70%;
+        max-width: 80;
+        height: 60%;
+        background: $surface;
+        border: solid $primary;
+        padding: 1;
+    }
+
+    .check-title {
+        text-style: bold;
+        color: $primary;
+        margin: 0 0 2 0;
+        text-align: center;
+    }
+
+    .check-item {
+        margin: 1 0;
+        height: 3;
+    }
+
+    .check-status {
+        width: 4;
+        text-align: center;
+    }
+
+    .check-description {
+        width: 1fr;
+        margin-left: 2;
+    }
+
+    .button-row {
+        height: 3;
+        margin: 2 0 0 0;
+        align: center middle;
+    }
+
+    .continue-button {
+        margin: 0 1;
+        background: $success;
+    }
+
+    .exit-button {
+        margin: 0 1;
+        background: $error;
+    }
+    """
+
+    def __init__(self) -> None:
+        """初始化环境检查屏幕"""
+        super().__init__()
+        self.service = DeploymentService()
+        self.check_results: dict[str, bool] = {}
+        self.error_messages: list[str] = []
+
+    def compose(self) -> ComposeResult:
+        """组合界面组件"""
+        with Container(classes="check-container"):
+            yield Static("环境检查", classes="check-title")
+
+            with Horizontal(classes="check-item"):
+                yield Static("", id="os_status", classes="check-status")
+                yield Static("检查操作系统类型...", id="os_desc", classes="check-description")
+
+            with Horizontal(classes="check-item"):
+                yield Static("", id="sudo_status", classes="check-status")
+                yield Static("检查管理员权限...", id="sudo_desc", classes="check-description")
+
+            with Horizontal(classes="button-row"):
+                yield Button("继续配置", id="continue", classes="continue-button", disabled=True)
+                yield Button("退出", id="exit", classes="exit-button")
+
+    async def on_mount(self) -> None:
+        """界面挂载时开始环境检查"""
+        await self._perform_environment_check()
+
+    async def _perform_environment_check(self) -> None:
+        """执行环境检查"""
+        try:
+            # 检查操作系统
+            await self._check_operating_system()
+
+            # 检查 sudo 权限
+            await self._check_sudo_privileges()
+
+            # 更新界面状态
+            self._update_ui_state()
+
+        except (OSError, RuntimeError) as e:
+            self.notify(f"环境检查过程中发生异常: {e}", severity="error")
+
+    async def _check_operating_system(self) -> None:
+        """检查操作系统类型"""
+        try:
+            is_openeuler = self.service.detect_openeuler()
+            self.check_results["os"] = is_openeuler
+
+            os_status = self.query_one("#os_status", Static)
+            os_desc = self.query_one("#os_desc", Static)
+
+            if is_openeuler:
+                os_status.update("[green]✓[/green]")
+                os_desc.update("操作系统: openEuler (支持)")
+            else:
+                os_status.update("[red]✗[/red]")
+                os_desc.update("操作系统: 非 openEuler (不支持)")
+                self.error_messages.append("仅支持 openEuler 操作系统")
+
+        except (OSError, RuntimeError) as e:
+            self.check_results["os"] = False
+            self.query_one("#os_status", Static).update("[red]✗[/red]")
+            self.query_one("#os_desc", Static).update(f"操作系统检查失败: {e}")
+            self.error_messages.append(f"操作系统检查异常: {e}")
+
+    async def _check_sudo_privileges(self) -> None:
+        """检查管理员权限"""
+        try:
+            has_sudo = await self.service.check_sudo_privileges()
+            self.check_results["sudo"] = has_sudo
+
+            sudo_status = self.query_one("#sudo_status", Static)
+            sudo_desc = self.query_one("#sudo_desc", Static)
+
+            if has_sudo:
+                sudo_status.update("[green]✓[/green]")
+                sudo_desc.update("管理员权限: 可用")
+            else:
+                sudo_status.update("[red]✗[/red]")
+                sudo_desc.update("管理员权限: 不可用 (需要 sudo)")
+                self.error_messages.append("需要管理员权限，请确保可以使用 sudo")
+
+        except (OSError, RuntimeError) as e:
+            self.check_results["sudo"] = False
+            self.query_one("#sudo_status", Static).update("[red]✗[/red]")
+            self.query_one("#sudo_desc", Static).update(f"权限检查失败: {e}")
+            self.error_messages.append(f"权限检查异常: {e}")
+
+    def _update_ui_state(self) -> None:
+        """更新界面状态"""
+        all_checks_passed = all(self.check_results.values())
+        continue_button = self.query_one("#continue", Button)
+
+        if all_checks_passed:
+            continue_button.disabled = False
+            self.notify("环境检查通过，可以开始配置部署参数", severity="information")
+        else:
+            continue_button.disabled = True
+            error_summary = " | ".join(self.error_messages)
+            self.notify(f"环境检查失败: {error_summary}", severity="error")
+
+    @on(Button.Pressed, "#continue")
+    async def on_continue_button_pressed(self) -> None:
+        """处理继续按钮点击"""
+        # 推送部署配置屏幕
+        await self.app.push_screen(DeploymentConfigScreen())
+        # 关闭当前屏幕
+        self.dismiss(result=True)
+
+    @on(Button.Pressed, "#exit")
+    def on_exit_button_pressed(self) -> None:
+        """处理退出按钮点击"""
+        if self.error_messages:
+            # 显示错误信息确认对话框
+            self.app.push_screen(
+                EnvironmentErrorScreen("环境检查失败", self.error_messages),
+            )
+        else:
+            # 直接退出
+            self.app.exit()
+
+
+class EnvironmentErrorScreen(ModalScreen[None]):
+    """
+    环境错误屏幕
+
+    显示环境检查失败的详细信息。
+    """
+
+    CSS = """
+    EnvironmentErrorScreen {
+        align: center middle;
+    }
+
+    .error-container {
+        width: 80%;
+        max-width: 100;
+        height: auto;
+        max-height: 80%;
+        background: $surface;
+        border: solid $error;
+        padding: 1;
+    }
+
+    .error-title {
+        color: $error;
+        text-style: bold;
+        margin: 1 0;
+        text-align: center;
+    }
+
+    .error-content {
+        margin: 1 0;
+        height: auto;
+        max-height: 15;
+        overflow-y: auto;
+        scrollbar-size: 1 1;
+        border: solid $secondary;
+        padding: 1;
+    }
+
+    .ok-button {
+        margin: 1 0;
+        align: center middle;
+        background: $primary;
+    }
+    """
+
+    def __init__(self, title: str, messages: list[str]) -> None:
+        """
+        初始化环境错误屏幕
+
+        Args:
+            title: 错误标题
+            messages: 错误消息列表
+
+        """
+        super().__init__()
+        self.title = title
+        self.messages = messages
+
+    def compose(self) -> ComposeResult:
+        """组合界面组件"""
+        with Container(classes="error-container"):
+            yield Static(self.title or "环境检查失败", classes="error-title")
+
+            with Container(classes="error-content"):
+                yield Static("环境检查发现以下问题：")
+                for i, message in enumerate(self.messages, 1):
+                    yield Static(f"{i}. {message}")
+
+                yield Static("")
+                yield Static("请解决上述问题后重新运行部署助手。")
+
+            yield Button("确定退出", id="ok", classes="ok-button")
+
+    @on(Button.Pressed, "#ok")
+    def on_ok_button_pressed(self) -> None:
+        """处理确定按钮点击"""
+        # 退出整个应用程序
+        self.app.exit()
 
 
 class DeploymentConfigScreen(ModalScreen[bool]):
@@ -46,53 +308,63 @@ class DeploymentConfigScreen(ModalScreen[bool]):
     }
 
     .config-container {
-        width: 80%;
-        max-width: 100;
-        height: 90%;
+        width: 95%;
+        max-width: 130;
+        height: 95%;
         background: $surface;
         border: solid $primary;
-        padding: 1;
-    }
-
-    .form-section {
-        margin: 1 0;
-        padding: 1;
-        border: solid $secondary;
+        padding: 0 1;
     }
 
     .form-row {
         height: 3;
-        margin: 1 0;
+        margin: 0;
     }
 
     .form-label {
-        width: 1fr;
+        width: 18;
         text-align: left;
         text-style: bold;
+        content-align: left middle;
     }
 
     .form-input {
-        width: 2fr;
+        width: 1fr;
+        margin-left: 1;
     }
 
     .button-row {
         height: 3;
-        margin: 1 0;
+        margin: 1 0 0 0;
         align: center middle;
-    }
-
-    .deploy-button {
-        margin: 0 1;
-        background: $success;
-    }
-
-    .cancel-button {
-        margin: 0 1;
-        background: $error;
     }
 
     #llm_validation_status, #embedding_validation_status {
         text-style: italic;
+    }
+
+    #deploy, #cancel {
+        margin: 0 1;
+        width: auto;
+        min-height: 3;
+        height: 3;
+    }
+
+    TabbedContent {
+        height: 1fr;
+    }
+
+    TabPane {
+        height: auto;
+        scrollbar-size: 1 1;
+        overflow: auto;
+    }
+
+    .llm-config-container, .embedding-config-container {
+        height: 1fr;
+        scrollbar-size: 1 1;
+        overflow-y: auto;
+        overflow-x: hidden;
     }
     """
 
@@ -107,10 +379,6 @@ class DeploymentConfigScreen(ModalScreen[bool]):
         """组合界面组件"""
         with Container(classes="config-container"):
             yield Header()
-            yield Static(
-                "openEuler Intelligence 后端部署配置",
-                classes="form-section",
-            )
 
             with TabbedContent():
                 with TabPane("基础配置", id="basic"):
@@ -122,16 +390,13 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                 with TabPane("Embedding 配置", id="embedding"):
                     yield from self._compose_embedding_config()
 
-                with TabPane("部署选项", id="deployment"):
-                    yield from self._compose_deployment_options()
-
             with Horizontal(classes="button-row"):
-                yield Button("开始部署", id="deploy", classes="deploy-button")
-                yield Button("取消", id="cancel", classes="cancel-button")
+                yield Button("开始部署", id="deploy", variant="success")
+                yield Button("取消", id="cancel", variant="error")
 
     def _compose_basic_config(self) -> ComposeResult:
         """组合基础配置组件"""
-        with Vertical(classes="form-section"):
+        with Vertical():
             yield Static("基础配置", classes="form-label")
 
             with Horizontal(classes="form-row"):
@@ -142,9 +407,22 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                     classes="form-input",
                 )
 
+            with Horizontal(classes="form-row"):
+                yield Label("部署模式:", classes="form-label")
+                # 使用按钮在轻量/全量间切换，按钮文本显示当前选择（不包含括号描述）
+                yield Button("轻量部署", id="deployment_mode_btn", classes="form-input", variant="primary")
+
+            # 描述区域，显示当前部署模式的详细说明
+            with Horizontal(classes="form-row"):
+                yield Static(
+                    "轻量部署：仅部署框架服务。",
+                    id="deployment_mode_desc",
+                    classes="form-input",
+                )
+
     def _compose_llm_config(self) -> ComposeResult:
         """组合 LLM 配置组件"""
-        with Vertical(classes="form-section"):
+        with Vertical(classes="llm-config-container"):
             yield Static("大语言模型配置", classes="form-label")
 
             with Horizontal(classes="form-row"):
@@ -172,7 +450,6 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                     classes="form-input",
                 )
 
-            # LLM 验证状态显示
             with Horizontal(classes="form-row"):
                 yield Label("验证状态:", classes="form-label")
                 yield Static("未验证", id="llm_validation_status", classes="form-input")
@@ -203,17 +480,8 @@ class DeploymentConfigScreen(ModalScreen[bool]):
 
     def _compose_embedding_config(self) -> ComposeResult:
         """组合 Embedding 配置组件"""
-        with Vertical(classes="form-section"):
+        with Vertical(classes="embedding-config-container"):
             yield Static("嵌入模型配置", classes="form-label")
-
-            with Horizontal(classes="form-row"):
-                yield Label("类型:", classes="form-label")
-                yield Select(
-                    [("OpenAI", "openai")],
-                    value="openai",
-                    id="embedding_type",
-                    classes="form-input",
-                )
 
             with Horizontal(classes="form-row"):
                 yield Label("API 端点:", classes="form-label")
@@ -240,35 +508,9 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                     classes="form-input",
                 )
 
-            # Embedding 验证状态显示
             with Horizontal(classes="form-row"):
                 yield Label("验证状态:", classes="form-label")
                 yield Static("未验证", id="embedding_validation_status", classes="form-input")
-
-    def _compose_deployment_options(self) -> ComposeResult:
-        """组合部署选项组件"""
-        with Vertical(classes="form-section"):
-            yield Static("部署选项", classes="form-label")
-
-            with Horizontal(classes="form-row"):
-                yield Label("部署模式:", classes="form-label")
-                yield Select(
-                    [
-                        ("轻量部署（仅框架服务）", "light"),
-                        ("全量部署（包含 Web 和 RAG）", "full"),
-                    ],
-                    value="light",
-                    id="deployment_mode",
-                    classes="form-input",
-                )
-
-            with Horizontal(classes="form-row"):
-                yield Label("启用 Web 界面:", classes="form-label")
-                yield Switch(id="enable_web", classes="form-input")
-
-            with Horizontal(classes="form-row"):
-                yield Label("启用 RAG 组件:", classes="form-label")
-                yield Switch(id="enable_rag", classes="form-input")
 
     @on(Button.Pressed, "#deploy")
     async def on_deploy_button_pressed(self) -> None:
@@ -282,25 +524,32 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                 )
                 return
 
-            # 关闭配置界面，返回 True 表示开始部署
-            self.dismiss(result=True)
+            # 推送部署进度屏幕，不再自动退出应用
+            # 部署进度屏幕会根据用户选择决定是否退出或返回配置
+            await self.app.push_screen(DeploymentProgressScreen(self.config))
 
     @on(Button.Pressed, "#cancel")
     def on_cancel_button_pressed(self) -> None:
         """处理取消按钮点击"""
-        self.dismiss(result=False)
+        # 退出整个程序
+        self.app.exit()
 
-    @on(Select.Changed, "#deployment_mode")
-    def on_deployment_mode_changed(self, event: Select.Changed) -> None:
-        """处理部署模式改变"""
-        if event.value == "full":
-            # 全量部署时自动启用 Web 和 RAG
-            self.query_one("#enable_web", Switch).value = True
-            self.query_one("#enable_rag", Switch).value = True
-        else:
-            # 轻量部署时禁用 Web 和 RAG
-            self.query_one("#enable_web", Switch).value = False
-            self.query_one("#enable_rag", Switch).value = False
+    @on(Button.Pressed, "#deployment_mode_btn")
+    def on_deployment_mode_btn_pressed(self) -> None:
+        """切换部署模式按钮：在轻量和全量之间切换，更新按钮文本和描述。"""
+        try:
+            btn = self.query_one("#deployment_mode_btn", Button)
+            desc = self.query_one("#deployment_mode_desc", Static)
+            # 如果当前为轻量，则切换到全量
+            if btn.label and "轻量" in str(btn.label):
+                btn.label = "全量部署"
+                desc.update("全量部署：部署框架服务、Web 界面和 RAG 组件。")
+            else:
+                btn.label = "轻量部署"
+                desc.update("轻量部署：仅部署框架服务。")
+        except (AttributeError, ValueError):
+            # 查询失败或属性错误时忽略
+            return
 
     @on(Input.Changed, "#llm_endpoint, #llm_api_key, #llm_model")
     async def on_llm_field_changed(self, event: Input.Changed) -> None:
@@ -434,8 +683,8 @@ class DeploymentConfigScreen(ModalScreen[bool]):
     def _collect_embedding_config(self) -> None:
         """收集 Embedding 配置"""
         try:
-            embedding_type_value = self.query_one("#embedding_type", Select).value
-            self.config.embedding.type = str(embedding_type_value) if embedding_type_value else "openai"
+            # 固定使用 openai 类型
+            self.config.embedding.type = "openai"
             self.config.embedding.endpoint = self.query_one("#embedding_endpoint", Input).value.strip()
             self.config.embedding.api_key = self.query_one("#embedding_api_key", Input).value.strip()
             self.config.embedding.model = self.query_one("#embedding_model", Input).value.strip()
@@ -460,21 +709,31 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             )
 
             # Embedding 配置
-            embedding_type_value = self.query_one("#embedding_type", Select).value
-            embedding_type = str(embedding_type_value) if embedding_type_value else "openai"
-
             self.config.embedding = EmbeddingConfig(
-                type=embedding_type,
+                type="openai",  # 固定使用 openai 类型
                 endpoint=self.query_one("#embedding_endpoint", Input).value.strip(),
                 api_key=self.query_one("#embedding_api_key", Input).value.strip(),
                 model=self.query_one("#embedding_model", Input).value.strip(),
             )
 
-            # 部署选项
-            deployment_mode_value = self.query_one("#deployment_mode", Select).value
-            self.config.deployment_mode = str(deployment_mode_value) if deployment_mode_value else "light"
-            self.config.enable_web = self.query_one("#enable_web", Switch).value
-            self.config.enable_rag = self.query_one("#enable_rag", Switch).value
+            # 部署选项 - 从切换按钮读取当前模式
+            try:
+                btn = self.query_one("#deployment_mode_btn", Button)
+                label = str(btn.label) if btn.label is not None else ""
+                if "全量" in label:
+                    self.config.deployment_mode = "full"
+                else:
+                    self.config.deployment_mode = "light"
+            except (AttributeError, ValueError):
+                self.config.deployment_mode = "light"
+
+            # 根据部署模式自动设置组件启用状态
+            if self.config.deployment_mode == "full":
+                self.config.enable_web = True
+                self.config.enable_rag = True
+            else:
+                self.config.enable_web = False
+                self.config.enable_rag = False
 
         except (ValueError, AttributeError) as e:
             # 处理输入转换错误
@@ -521,14 +780,6 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         margin: 1 0;
         align: center middle;
     }
-
-    .close-button {
-        background: $success;
-    }
-
-    .cancel-button {
-        background: $error;
-    }
     """
 
     def __init__(self, config: DeploymentConfig) -> None:
@@ -543,15 +794,13 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         self.config = config
         self.service = DeploymentService()
         self.deployment_task: asyncio.Task[None] | None = None
+        self.deployment_success = False
+        self.deployment_errors: list[str] = []
 
     def compose(self) -> ComposeResult:
         """组合界面组件"""
         with Container(classes="progress-container"):
             yield Header()
-            yield Static(
-                "openEuler Intelligence 后端部署进度",
-                classes="progress-section",
-            )
 
             with Vertical(classes="progress-section"):
                 yield Static("部署进度:", id="progress_label")
@@ -562,17 +811,35 @@ class DeploymentProgressScreen(ModalScreen[bool]):
                 yield RichLog(id="deployment_log", highlight=True, markup=True)
 
             with Horizontal(classes="button-section"):
-                yield Button("完成", id="close", classes="close-button", disabled=True)
-                yield Button("取消部署", id="cancel", classes="cancel-button")
+                yield Button("完成", id="finish", variant="success", disabled=True)
+                yield Button("重试", id="retry", variant="warning", disabled=True)
+                yield Button("重新配置", id="reconfigure", variant="primary", disabled=True)
+                yield Button("取消部署", id="cancel", variant="error")
 
     async def on_mount(self) -> None:
         """界面挂载时开始部署"""
-        self.deployment_task = asyncio.create_task(self._start_deployment())
+        await self._start_deployment()
 
-    @on(Button.Pressed, "#close")
-    def on_close_button_pressed(self) -> None:
+    @on(Button.Pressed, "#finish")
+    def on_finish_button_pressed(self) -> None:
         """处理完成按钮点击"""
-        self.dismiss(result=True)
+        self.app.exit()
+
+    @on(Button.Pressed, "#retry")
+    async def on_retry_button_pressed(self) -> None:
+        """处理重试按钮点击"""
+        # 重置界面状态
+        self._reset_ui_for_retry()
+        # 重新开始部署
+        await self._start_deployment()
+
+    @on(Button.Pressed, "#reconfigure")
+    async def on_reconfigure_button_pressed(self) -> None:
+        """处理重新配置按钮点击"""
+        # 返回配置屏幕
+        await self.app.push_screen(DeploymentConfigScreen())
+        # 关闭当前屏幕
+        self.dismiss(result=False)
 
     @on(Button.Pressed, "#cancel")
     async def on_cancel_button_pressed(self) -> None:
@@ -586,39 +853,100 @@ class DeploymentProgressScreen(ModalScreen[bool]):
             self.query_one("#step_label", Static).update("部署已取消")
             self.query_one("#deployment_log", RichLog).write("部署已被用户取消")
 
-            # 启用完成按钮
-            self.query_one("#close", Button).disabled = False
-            self.query_one("#cancel", Button).disabled = True
+            # 更新按钮状态
+            self._update_buttons_after_failure()
+        else:
+            # 如果部署已完成或未开始，直接退出
+            self.app.exit()
+
+    def _reset_ui_for_retry(self) -> None:
+        """重置界面用于重试"""
+        # 清空日志
+        log_widget = self.query_one("#deployment_log", RichLog)
+        log_widget.clear()
+
+        # 重置进度
+        self.query_one("#progress_bar", ProgressBar).update(progress=0)
+        self.query_one("#step_label", Static).update("")
+
+        # 重置状态
+        self.deployment_success = False
+        self.deployment_errors.clear()
+
+        # 重置按钮状态
+        self.query_one("#finish", Button).disabled = True
+        self.query_one("#retry", Button).disabled = True
+        self.query_one("#reconfigure", Button).disabled = True
+        self.query_one("#cancel", Button).disabled = False
+
+    def _update_buttons_after_failure(self) -> None:
+        """部署失败后更新按钮状态"""
+        self.query_one("#finish", Button).disabled = True
+        self.query_one("#retry", Button).disabled = False
+        self.query_one("#reconfigure", Button).disabled = False
+        self.query_one("#cancel", Button).disabled = False
+
+    def _update_buttons_after_success(self) -> None:
+        """部署成功后更新按钮状态"""
+        self.query_one("#finish", Button).disabled = False
+        self.query_one("#retry", Button).disabled = True
+        self.query_one("#reconfigure", Button).disabled = True
+        self.query_one("#cancel", Button).disabled = True
 
     async def _start_deployment(self) -> None:
         """开始部署流程"""
         try:
+            self.deployment_task = asyncio.create_task(self._execute_deployment())
+            await self.deployment_task
+        except asyncio.CancelledError:
+            self.query_one("#step_label", Static).update("部署已取消")
+            self.query_one("#deployment_log", RichLog).write("部署被取消")
+            self._update_buttons_after_failure()
+
+    async def _execute_deployment(self) -> None:
+        """执行部署过程"""
+        try:
+            # 步骤1：检查并安装依赖
+            self.query_one("#step_label", Static).update("正在检查部署环境...")
+            success, errors = await self.service.check_and_install_dependencies(self._on_progress_update)
+
+            if not success:
+                self.query_one("#step_label", Static).update("环境检查失败")
+                for error in errors:
+                    self.query_one("#deployment_log", RichLog).write(f"[red]✗ {error}[/red]")
+                    self.deployment_errors.append(error)
+                self._update_buttons_after_failure()
+                return
+
+            # 步骤2：执行部署
+            self.query_one("#step_label", Static).update("正在执行部署...")
             success = await self.service.deploy(self.config, self._on_progress_update)
 
             # 更新界面状态
             if success:
+                self.deployment_success = True
                 self.query_one("#step_label", Static).update("部署完成！")
                 self.query_one("#deployment_log", RichLog).write(
                     "[bold green]部署成功完成！[/bold green]",
                 )
+                self._update_buttons_after_success()
+                self.notify("部署成功完成！", severity="information")
             else:
                 self.query_one("#step_label", Static).update("部署失败")
                 self.query_one("#deployment_log", RichLog).write(
                     "[bold red]部署失败，请查看上面的错误信息[/bold red]",
                 )
+                self.deployment_errors.append("部署执行失败")
+                self._update_buttons_after_failure()
+                self.notify("部署失败，可以重试或重新配置参数", severity="error")
 
-        except asyncio.CancelledError:
-            self.query_one("#step_label", Static).update("部署已取消")
-            self.query_one("#deployment_log", RichLog).write("部署被取消")
         except OSError as e:
+            error_msg = f"部署过程中发生异常: {e}"
             self.query_one("#step_label", Static).update("部署异常")
-            self.query_one("#deployment_log", RichLog).write(
-                f"[bold red]部署过程中发生异常: {e}[/bold red]",
-            )
-        finally:
-            # 启用完成按钮，禁用取消按钮
-            self.query_one("#close", Button).disabled = False
-            self.query_one("#cancel", Button).disabled = True
+            self.query_one("#deployment_log", RichLog).write(f"[bold red]{error_msg}[/bold red]")
+            self.deployment_errors.append(error_msg)
+            self._update_buttons_after_failure()
+            self.notify("部署异常，可以重试或重新配置参数", severity="error")
 
     def _on_progress_update(self, state: DeploymentState) -> None:
         """处理进度更新"""

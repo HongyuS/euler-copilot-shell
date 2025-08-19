@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import platform
 import re
 from pathlib import Path
@@ -79,8 +78,6 @@ class DeploymentResourceManager:
     @classmethod
     def update_toml_values(cls, content: str, config: DeploymentConfig) -> str:
         """更新 TOML 配置文件的值"""
-        import re
-
         # 更新服务器 IP
         content = re.sub(r"(host\s*=\s*')[^']*(')", rf"\1http://{config.server_ip}:8000\2", content)
         content = re.sub(r"(login_api\s*=\s*')[^']*(')", rf"\1http://{config.server_ip}:8080/api/auth/login\2", content)
@@ -122,6 +119,94 @@ class DeploymentService:
         self._process: asyncio.subprocess.Process | None = None
         self.resource_manager = DeploymentResourceManager()
 
+    # 公共方法
+
+    async def check_and_install_dependencies(
+        self,
+        progress_callback: Callable[[DeploymentState], None] | None = None,
+    ) -> tuple[bool, list[str]]:
+        """
+        检查并自动安装部署依赖
+
+        Returns:
+            tuple[bool, list[str]]: (是否成功, 错误信息列表)
+
+        """
+        errors = []
+        temp_state = DeploymentState()
+
+        # 更新状态
+        if progress_callback:
+            temp_state.current_step_name = "检查部署依赖"
+            temp_state.add_log("正在检查部署环境依赖...")
+            progress_callback(temp_state)
+
+        # 检查操作系统
+        if not self.detect_openeuler():
+            errors.append("仅支持 openEuler 操作系统")
+            return False, errors
+
+        # 检查并安装 openeuler-intelligence-installer
+        if not self.resource_manager.check_installer_available():
+            if progress_callback:
+                temp_state.add_log("缺少 openeuler-intelligence-installer 包，正在尝试安装...")
+                progress_callback(temp_state)
+
+            success, install_errors = await self._install_intelligence_installer(progress_callback)
+            if not success:
+                errors.extend(install_errors)
+                return False, errors
+
+        # 检查 sudo 权限
+        if not await self.check_sudo_privileges():
+            errors.append("需要管理员权限，请确保可以使用 sudo")
+            return False, errors
+
+        if progress_callback:
+            temp_state.add_log("✓ 部署环境依赖检查完成")
+            progress_callback(temp_state)
+
+        return True, []
+
+    def detect_openeuler(self) -> bool:
+        """检测是否为 openEuler 系统"""
+        try:
+            # 检查 /etc/os-release
+            os_release_path = Path("/etc/os-release")
+            if os_release_path.exists():
+                content = os_release_path.read_text(encoding="utf-8").lower()
+                if "openeuler" in content:
+                    return True
+
+            # 检查 /etc/openEuler-release
+            openeuler_release_path = Path("/etc/openEuler-release")
+            if openeuler_release_path.exists():
+                return True
+
+        except OSError as e:
+            logger.warning("检测操作系统时发生错误: %s", e)
+            return False
+        else:
+            # 检查 platform 信息
+            system_info = platform.platform().lower()
+            return "openeuler" in system_info
+
+    async def check_sudo_privileges(self) -> bool:
+        """检查 sudo 权限"""
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "sudo",
+                "-n",
+                "true",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            return_code = await process.wait()
+        except OSError:
+            return False
+        else:
+            return return_code == 0
+
     async def deploy(
         self,
         config: DeploymentConfig,
@@ -144,22 +229,12 @@ class DeploymentService:
             # 重置状态
             self.state.reset()
             self.state.is_running = True
-            self.state.total_steps = 4
+            self.state.total_steps = 7
 
-            # 步骤1：检查系统环境和资源
-            if not await self._check_environment(config, progress_callback):
-                return False
+            # 执行部署步骤
+            success = await self._execute_deployment_steps(config, progress_callback)
 
-            # 步骤2：生成配置文件
-            if not await self._generate_config_files(config, progress_callback):
-                return False
-
-            # 步骤3：设置部署模式
-            if not await self._setup_deploy_mode(config, progress_callback):
-                return False
-
-            # 步骤4：执行部署脚本
-            if not await self._run_deployment_script(config, progress_callback):
+            if not success:
                 return False
 
         except Exception:
@@ -173,17 +248,130 @@ class DeploymentService:
                 progress_callback(self.state)
 
             return False
-        else:
-            # 部署完成
-            self.state.is_running = False
-            self.state.is_completed = True
-            self.state.add_log("✓ openEuler Intelligence 后端部署完成！")
 
+        # 部署完成
+        self.state.is_running = False
+        self.state.is_completed = True
+        self.state.add_log("✓ openEuler Intelligence 后端部署完成！")
+
+        if progress_callback:
+            progress_callback(self.state)
+
+        logger.info("部署完成")
+        return True
+
+    def cancel_deployment(self) -> None:
+        """取消部署"""
+        if self._process:
+            try:
+                self._process.terminate()
+                logger.info("部署进程已终止")
+            except OSError as e:
+                logger.warning("终止部署进程时发生错误: %s", e)
+
+    # 私有方法
+
+    async def _install_intelligence_installer(
+        self,
+        progress_callback: Callable[[DeploymentState], None] | None = None,
+    ) -> tuple[bool, list[str]]:
+        """
+        安装 openeuler-intelligence-installer 包
+
+        Returns:
+            tuple[bool, list[str]]: (是否成功安装, 错误信息列表)
+
+        """
+        errors = []
+
+        try:
+            temp_state = DeploymentState()
             if progress_callback:
-                progress_callback(self.state)
+                temp_state.add_log("正在安装 openeuler-intelligence-installer...")
+                progress_callback(temp_state)
 
-            logger.info("部署完成")
-            return True
+            # 执行安装命令
+            cmd = ["sudo", "dnf", "install", "-y", "openeuler-intelligence-installer"]
+            success, output_lines = await self._execute_install_command(cmd, progress_callback, temp_state)
+
+            if success:
+                # 验证安装是否成功
+                if self.resource_manager.check_installer_available():
+                    if progress_callback:
+                        temp_state.add_log("✓ openeuler-intelligence-installer 安装成功")
+                        progress_callback(temp_state)
+                    return True, []
+
+                errors.append("openeuler-intelligence-installer 安装后资源文件仍然缺失")
+                return False, errors
+
+            errors.append("安装 openeuler-intelligence-installer 失败")
+            # 添加安装输出到错误信息
+            if output_lines:
+                errors.append("安装输出:")
+                errors.extend(output_lines[-5:])  # 只显示最后5行
+
+        except Exception as e:
+            errors.append(f"安装过程中发生异常: {e}")
+            logger.exception("安装 openeuler-intelligence-installer 时发生异常")
+
+        return False, errors
+
+    async def _execute_deployment_steps(
+        self,
+        config: DeploymentConfig,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """执行所有部署步骤"""
+        # 定义部署步骤
+        steps = [
+            self._check_environment,
+            self._run_env_check_script,
+            self._run_install_dependency_script,
+            self._generate_config_files,
+            self._setup_deploy_mode,
+            self._run_init_config_script,
+            self._run_agent_init_script,
+        ]
+
+        # 依次执行每个步骤
+        for step in steps:
+            if not await step(config, progress_callback):
+                return False
+
+        return True
+
+    async def _execute_install_command(
+        self,
+        cmd: list[str],
+        progress_callback: Callable[[DeploymentState], None] | None,
+        temp_state: DeploymentState,
+    ) -> tuple[bool, list[str]]:
+        """执行安装命令"""
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+
+        # 读取安装输出
+        output_lines = []
+        if process.stdout:
+            while True:
+                line = await process.stdout.readline()
+                if not line:
+                    break
+
+                decoded_line = line.decode("utf-8", errors="ignore").strip()
+                if decoded_line:
+                    output_lines.append(decoded_line)
+                    if progress_callback:
+                        temp_state.add_log(f"安装: {decoded_line}")
+                        progress_callback(temp_state)
+
+        # 等待进程结束
+        return_code = await process.wait()
+        return return_code == 0, output_lines
 
     async def _check_environment(
         self,
@@ -199,7 +387,7 @@ class DeploymentService:
             progress_callback(self.state)
 
         # 检查操作系统
-        if not self._detect_openeuler():
+        if not self.detect_openeuler():
             self.state.add_log("✗ 错误: 仅支持 openEuler 操作系统")
             return False
         self.state.add_log("✓ 检测到 openEuler 操作系统")
@@ -212,12 +400,125 @@ class DeploymentService:
         self.state.add_log("✓ openeuler-intelligence-installer 资源可用")
 
         # 检查权限
-        if not await self._check_sudo_privileges():
+        if not await self.check_sudo_privileges():
             self.state.add_log("✗ 错误: 需要管理员权限")
             return False
         self.state.add_log("✓ 具有管理员权限")
 
         return True
+
+    async def _run_env_check_script(
+        self,
+        config: DeploymentConfig,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """运行环境检查脚本"""
+        self.state.current_step = 2
+        self.state.current_step_name = "环境检查"
+        self.state.add_log("正在执行系统环境检查...")
+
+        if progress_callback:
+            progress_callback(self.state)
+
+        try:
+            script_path = self.resource_manager.INSTALLER_BASE_PATH / "1-check-env" / "check_env.sh"
+            return await self._run_script(script_path, "环境检查脚本", progress_callback)
+        except Exception as e:
+            self.state.add_log(f"✗ 环境检查失败: {e}")
+            logger.exception("环境检查脚本执行失败")
+            return False
+
+    async def _run_install_dependency_script(
+        self,
+        config: DeploymentConfig,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """运行依赖安装脚本"""
+        self.state.current_step = 3
+        self.state.current_step_name = "安装依赖组件"
+        self.state.add_log("正在安装 openEuler Intelligence 依赖组件...")
+
+        if progress_callback:
+            progress_callback(self.state)
+
+        try:
+            script_path = (
+                self.resource_manager.INSTALLER_BASE_PATH / "2-install-dependency" / "install_openEulerIntelligence.sh"
+            )
+            return await self._run_script(script_path, "依赖安装脚本", progress_callback)
+        except Exception as e:
+            self.state.add_log(f"✗ 依赖安装失败: {e}")
+            logger.exception("依赖安装脚本执行失败")
+            return False
+
+    async def _run_init_config_script(
+        self,
+        config: DeploymentConfig,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """运行配置初始化脚本"""
+        self.state.current_step = 6
+        self.state.current_step_name = "初始化配置和服务"
+        self.state.add_log("正在初始化配置和启动服务...")
+
+        if progress_callback:
+            progress_callback(self.state)
+
+        try:
+            script_path = self.resource_manager.INSTALLER_BASE_PATH / "3-install-server" / "init_config.sh"
+            return await self._run_script(script_path, "配置初始化脚本", progress_callback)
+        except Exception as e:
+            self.state.add_log(f"✗ 配置初始化失败: {e}")
+            logger.exception("配置初始化脚本执行失败")
+            return False
+
+    async def _run_script(
+        self,
+        script_path: Path,
+        script_name: str,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """运行部署脚本"""
+        if not script_path.exists():
+            self.state.add_log(f"✗ 脚本文件不存在: {script_path}")
+            return False
+
+        try:
+            # 切换到脚本所在目录
+            script_dir = script_path.parent
+            script_file = script_path.name
+
+            cmd = ["sudo", "bash", script_file]
+
+            self._process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=script_dir,
+            )
+
+            # 读取输出
+            async for line in self._read_process_output():
+                self.state.add_log(line)
+                if progress_callback:
+                    progress_callback(self.state)
+
+            # 等待进程结束
+            return_code = await self._process.wait()
+            self._process = None
+
+            if return_code == 0:
+                self.state.add_log(f"✓ {script_name}执行成功")
+                return True
+
+        except Exception as e:
+            self.state.add_log(f"✗ 运行{script_name}时发生错误: {e}")
+            logger.exception("运行脚本失败: %s", script_path)
+            return False
+
+        else:
+            self.state.add_log(f"✗ {script_name}执行失败，返回码: {return_code}")
+            return False
 
     async def _generate_config_files(
         self,
@@ -225,7 +526,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """生成配置文件"""
-        self.state.current_step = 2
+        self.state.current_step = 4
         self.state.current_step_name = "更新配置文件"
         self.state.add_log("正在更新配置文件...")
 
@@ -245,8 +546,8 @@ class DeploymentService:
             self.state.add_log(f"✗ 更新配置文件失败: {e}")
             logger.exception("更新配置文件失败")
             return False
-        else:
-            return True
+
+        return True
 
     async def _setup_deploy_mode(
         self,
@@ -254,7 +555,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """设置部署模式"""
-        self.state.current_step = 3
+        self.state.current_step = 5
         self.state.current_step_name = "设置部署模式"
         self.state.add_log("正在设置部署模式...")
 
@@ -294,62 +595,8 @@ class DeploymentService:
             self.state.add_log(f"✗ 设置部署模式失败: {e}")
             logger.exception("设置部署模式失败")
             return False
-        else:
-            return True
 
-    async def _run_deployment_script(
-        self,
-        config: DeploymentConfig,
-        progress_callback: Callable[[DeploymentState], None] | None,
-    ) -> bool:
-        """运行部署脚本"""
-        self.state.current_step = 4
-        self.state.current_step_name = "执行部署脚本"
-        self.state.add_log("正在运行部署脚本...")
-
-        if progress_callback:
-            progress_callback(self.state)
-
-        try:
-            # 运行部署脚本
-            cmd = [
-                "sudo",
-                str(self.resource_manager.DEPLOY_SCRIPT),
-                config.deployment_mode,
-            ]
-
-            # 设置环境变量，启用自动部署模式
-            env = os.environ.copy()
-            env["AUTO_DEPLOY"] = "1"
-
-            self._process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                env=env,
-            )
-
-            # 读取输出
-            async for line in self._read_process_output():
-                self.state.add_log(line)
-                if progress_callback:
-                    progress_callback(self.state)
-
-            # 等待进程结束
-            return_code = await self._process.wait()
-            self._process = None
-
-            if return_code == 0:
-                self.state.add_log("✓ 部署脚本执行成功")
-                return True
-
-        except Exception as e:
-            self.state.add_log(f"✗ 运行部署脚本时发生错误: {e}")
-            logger.exception("运行部署脚本失败")
-            return False
-        else:
-            self.state.add_log(f"✗ 部署脚本执行失败，返回码: {return_code}")
-            return False
+        return True
 
     async def _update_env_file(self, config: DeploymentConfig) -> None:
         """更新 env 配置文件"""
@@ -432,51 +679,122 @@ class DeploymentService:
                 logger.warning("读取进程输出时发生错误: %s", e)
                 break
 
-    def _detect_openeuler(self) -> bool:
-        """检测是否为 openEuler 系统"""
-        try:
-            # 检查 /etc/os-release
-            os_release_path = Path("/etc/os-release")
-            if os_release_path.exists():
-                content = os_release_path.read_text(encoding="utf-8").lower()
-                if "openeuler" in content:
-                    return True
+    async def _run_agent_init_script(
+        self,
+        config: DeploymentConfig,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """运行 Agent 初始化脚本"""
+        temp_state = DeploymentState()
+        temp_state.current_step = 7
+        temp_state.total_steps = 7
+        temp_state.current_step_name = "Agent 初始化"
+        temp_state.add_log("开始 Agent 初始化...")
 
-            # 检查 /etc/openEuler-release
-            openeuler_release_path = Path("/etc/openEuler-release")
-            if openeuler_release_path.exists():
-                return True
+        if progress_callback:
+            progress_callback(temp_state)
 
-        except OSError as e:
-            logger.warning("检测操作系统时发生错误: %s", e)
+        # 检查脚本文件存在性
+        agent_script_path = Path("/usr/lib/openeuler-intelligence/scripts/4-other-script/agent_manager.py")
+        if not agent_script_path.exists():
+            temp_state.add_log("错误: Agent 管理脚本不存在")
+            logger.error("Agent 脚本不存在: %s", agent_script_path)
             return False
 
-        else:
-            # 检查 platform 信息
-            system_info = platform.platform().lower()
-            return "openeuler" in system_info
+        # 检查配置文件存在性
+        config_file_path = self.resource_manager.CONFIG_TEMPLATE
+        if not config_file_path.exists():
+            temp_state.add_log("错误: 配置文件不存在")
+            logger.error("配置文件不存在: %s", config_file_path)
+            return False
 
-    async def _check_sudo_privileges(self) -> bool:
-        """检查 sudo 权限"""
         try:
-            process = await asyncio.create_subprocess_exec(
-                "sudo",
-                "-n",
-                "true",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            return await self._execute_agent_init_command(
+                agent_script_path, config_file_path, temp_state, progress_callback,
             )
-            return_code = await process.wait()
-        except OSError:
+        except Exception as e:
+            temp_state.add_log(f"❌ Agent 初始化异常: {e!s}")
+            logger.exception("Agent 初始化过程中发生异常")
+            if progress_callback:
+                progress_callback(temp_state)
             return False
-        else:
-            return return_code == 0
 
-    def cancel_deployment(self) -> None:
-        """取消部署"""
-        if self._process:
-            try:
-                self._process.terminate()
-                logger.info("部署进程已终止")
-            except OSError as e:
-                logger.warning("终止部署进程时发生错误: %s", e)
+    async def _execute_agent_init_command(
+        self,
+        agent_script_path: Path,
+        config_file_path: Path,
+        temp_state: DeploymentState,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """执行 Agent 初始化命令"""
+        # 构建 Agent 初始化命令（默认执行 comb 操作）
+        cmd = [
+            "python3",
+            str(agent_script_path),
+            "--operator", "comb",
+            "--config_path", str(config_file_path),
+        ]
+
+        temp_state.add_log(f"执行命令: {' '.join(cmd)}")
+        logger.info("执行 Agent 初始化命令: %s", " ".join(cmd))
+
+        # 执行脚本
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=agent_script_path.parent,
+        )
+
+        # 读取并处理输出
+        output_lines = await self._process_agent_init_output(process, temp_state, progress_callback)
+
+        # 等待进程结束并处理结果
+        return_code = await process.wait()
+        return self._handle_agent_init_result(return_code, output_lines, temp_state, progress_callback)
+
+    async def _process_agent_init_output(
+        self,
+        process: asyncio.subprocess.Process,
+        temp_state: DeploymentState,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> list[str]:
+        """处理 Agent 初始化输出"""
+        output_lines = []
+        if process.stdout:
+            while True:
+                line = await process.stdout.readline()
+                if not line:
+                    break
+
+                decoded_line = line.decode("utf-8", errors="ignore").strip()
+                if decoded_line:
+                    output_lines.append(decoded_line)
+                    temp_state.add_log(f"Agent初始化: {decoded_line}")
+                    if progress_callback:
+                        progress_callback(temp_state)
+
+        return output_lines
+
+    def _handle_agent_init_result(
+        self,
+        return_code: int,
+        output_lines: list[str],
+        temp_state: DeploymentState,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """处理 Agent 初始化结果"""
+        if return_code == 0:
+            temp_state.add_log("✅ Agent 初始化完成")
+            logger.info("Agent 初始化成功完成")
+            if progress_callback:
+                progress_callback(temp_state)
+            return True
+
+        temp_state.add_log(f"❌ Agent 初始化失败 (退出码: {return_code})")
+        logger.error("Agent 初始化失败，退出码: %s", return_code)
+        for line in output_lines[-5:]:  # 显示最后5行错误信息
+            temp_state.add_log(f"错误详情: {line}")
+        if progress_callback:
+            progress_callback(temp_state)
+        return False
