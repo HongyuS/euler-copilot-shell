@@ -1,22 +1,22 @@
+import argparse
+import asyncio
 import json
-import sys
+import logging
 import os
 import shutil
-import argparse
-import logging
-from typing import Optional, Dict, List, Any
+import sys
 from enum import Enum
-from pydantic import BaseModel, Field, ValidationError
+from typing import Any, Optional
 
 import aiohttp
-import asyncio
 from aiohttp import ClientError, ClientResponseError
+from pydantic import BaseModel, Field, ValidationError
 
 # 配置日志系统
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger("mcp_manager")
 
@@ -31,18 +31,21 @@ SERVICE_WAIT_TIMEOUT = 60  # 服务等待超时时间(秒)
 
 class AppType(str, Enum):
     """应用中心应用类型"""
+
     FLOW = "flow"
     AGENT = "agent"
 
 
 class AppLink(BaseModel):
     """App的相关链接"""
+
     title: str = Field(description="链接标题")
     url: str = Field(..., description="链接地址", pattern=r"^(https|http)://.*$")
 
 
 class PermissionType(str, Enum):
     """权限类型"""
+
     PROTECTED = "protected"
     PUBLIC = "public"
     PRIVATE = "private"
@@ -50,12 +53,13 @@ class PermissionType(str, Enum):
 
 class AppPermissionData(BaseModel):
     """应用权限数据结构"""
+
     type: PermissionType = Field(
         default=PermissionType.PRIVATE,
         alias="visibility",
         description="可见性（public/private/protected）",
     )
-    users: Optional[List[str]] = Field(
+    users: list[str] | None = Field(
         None,
         alias="authorizedUsers",
         description="附加人员名单（如果可见性为部分人可见）",
@@ -64,6 +68,7 @@ class AppPermissionData(BaseModel):
 
 class AppFlowInfo(BaseModel):
     """应用工作流数据结构"""
+
     id: str = Field(..., description="工作流ID")
     name: str = Field(..., description="工作流名称")
     description: str = Field(..., description="工作流简介")
@@ -72,32 +77,35 @@ class AppFlowInfo(BaseModel):
 
 class AppData(BaseModel):
     """应用信息数据结构"""
+
     app_type: AppType = Field(..., alias="appType", description="应用类型")
     icon: str = Field(default="", description="图标")
     name: str = Field(..., max_length=20, description="应用名称")
     description: str = Field(..., max_length=150, description="应用简介")
-    links: List[AppLink] = Field(default=[], description="相关链接", max_length=5)
-    first_questions: List[str] = Field(
-        default=[], alias="recommendedQuestions", description="推荐问题", max_length=3)
+    links: list[AppLink] = Field(default=[], description="相关链接", max_length=5)
+    first_questions: list[str] = Field(default=[], alias="recommendedQuestions", description="推荐问题", max_length=3)
     history_len: int = Field(3, alias="dialogRounds", ge=1, le=10, description="对话轮次（1～10）")
     permission: AppPermissionData = Field(
-        default_factory=lambda: AppPermissionData(authorizedUsers=None), description="权限配置")
-    workflows: List[AppFlowInfo] = Field(default=[], description="工作流信息列表")
-    mcp_service: List[str] = Field(default=[], alias="mcpService", description="MCP服务id列表")
+        default_factory=lambda: AppPermissionData(authorizedUsers=None),
+        description="权限配置",
+    )
+    workflows: list[AppFlowInfo] = Field(default=[], description="工作流信息列表")
+    mcp_service: list[str] = Field(default=[], alias="mcpService", description="MCP服务id列表")
 
 
 class ApiClient:
     """API请求客户端封装"""
 
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, *, verify_ssl: bool = False) -> None:
         self.base_url = base_url
-        self.session = aiohttp.ClientSession()
+        connector = aiohttp.TCPConnector(ssl=verify_ssl)
+        self.session = aiohttp.ClientSession(connector=connector)
 
-    async def close(self):
+    async def close(self) -> None:
         """关闭客户端会话"""
         await self.session.close()
 
-    async def request(self, method: str, path: str, **kwargs) -> Dict[str, Any]:
+    async def request(self, method: str, path: str, **kwargs) -> dict[str, Any]:
         """
         带重试机制的异步API请求
 
@@ -111,20 +119,17 @@ class ApiClient:
 
         Raises:
             ClientError: 当请求失败时
+
         """
         url = f"{self.base_url}{path}"
         for retry in range(MAX_RETRY_COUNT):
             try:
-                async with self.session.request(
-                        method, url, timeout=REQUEST_TIMEOUT, **kwargs
-                ) as response:
+                async with self.session.request(method, url, timeout=REQUEST_TIMEOUT, **kwargs) as response:
                     response.raise_for_status()
                     return await response.json()
 
             except (ClientResponseError, ClientError) as e:
-                logger.warning(
-                    f"API请求失败(第{retry + 1}/{MAX_RETRY_COUNT}次) - {method} {url}: {str(e)}"
-                )
+                logger.warning(f"API请求失败(第{retry + 1}/{MAX_RETRY_COUNT}次) - {method} {url}: {str(e)}")
                 if retry < MAX_RETRY_COUNT - 1:
                     await asyncio.sleep(RETRY_DELAY)
 
@@ -142,6 +147,7 @@ def copy_folder(src_dir: str, dest_dir: str) -> None:
     Raises:
         NotADirectoryError: 源路径不是有效的文件夹
         RuntimeError: 复制过程中发生错误
+
     """
     if not os.path.isdir(src_dir):
         raise NotADirectoryError(f"源路径 {src_dir} 不是一个有效的文件夹")
@@ -181,12 +187,13 @@ def get_config(config_path: str) -> dict:
         FileNotFoundError: 配置文件不存在
         ValueError: 配置文件格式错误
         RuntimeError: 读取文件失败
+
     """
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"配置文件不存在: {config_path}")
 
     try:
-        with open(config_path, 'r', encoding='utf-8') as reader:
+        with open(config_path, "r", encoding="utf-8") as reader:
             config = json.load(reader)
 
         if not isinstance(config, dict):
@@ -201,7 +208,7 @@ def get_config(config_path: str) -> dict:
         raise RuntimeError(f"读取配置文件失败: {str(e)}")
 
 
-async def wait_for_mcp_service(api_client: ApiClient, service_id: str) -> Dict[str, Any]:
+async def wait_for_mcp_service(api_client: ApiClient, service_id: str) -> dict[str, Any]:
     """
     等待MCP服务就绪
 
@@ -214,6 +221,7 @@ async def wait_for_mcp_service(api_client: ApiClient, service_id: str) -> Dict[s
 
     Raises:
         RuntimeError: 服务超时未就绪
+
     """
     logger.info(f"等待MCP服务就绪: {service_id}")
     for elapsed in range(SERVICE_WAIT_TIMEOUT):
@@ -231,7 +239,7 @@ async def wait_for_mcp_service(api_client: ApiClient, service_id: str) -> Dict[s
     raise RuntimeError(f"MCP服务 {service_id} 等待超时 ({SERVICE_WAIT_TIMEOUT}秒) 未就绪")
 
 
-async def delete_mcp_server(api_client: ApiClient, server_id: str) -> Dict[str, Any]:
+async def delete_mcp_server(api_client: ApiClient, server_id: str) -> dict[str, Any]:
     """删除mcp服务"""
     logger.info(f"删除MCP服务: {server_id}")
     return await api_client.request("DELETE", f"/api/mcp/{server_id}")
@@ -260,25 +268,26 @@ async def process_mcp_config(api_client: ApiClient, config_path: str) -> str:
 
     Returns:
         生成的server_id
+
     """
     config = get_config(config_path)
 
     # 先删除已存在的服务
-    if 'serviceId' in config:
+    if "serviceId" in config:
         try:
-            await delete_mcp_server(api_client, config['serviceId'])
-            del config['serviceId']
+            await delete_mcp_server(api_client, config["serviceId"])
+            del config["serviceId"]
             logger.info("已删除旧的MCP服务ID")
-        except Exception as e:
-            logger.warning(f"删除旧MCP服务失败(可能不存在)，继续创建新服务: {str(e)}")
+        except Exception:
+            logger.exception("删除旧MCP服务失败(可能不存在)，继续创建新服务")
 
     # 创建新服务
     server_id = await create_mcp_server(api_client, config)
 
     # 保存更新后的配置文件
     try:
-        config['serviceId'] = server_id
-        with open(config_path, 'w', encoding='utf-8') as writer:
+        config["serviceId"] = server_id
+        with open(config_path, "w", encoding="utf-8") as writer:
             json.dump(config, writer, ensure_ascii=False, indent=4)
 
         logger.info(f"配置文件已更新: {config_path}")
@@ -288,7 +297,7 @@ async def process_mcp_config(api_client: ApiClient, config_path: str) -> str:
         raise RuntimeError(f"保存配置文件失败: {str(e)}")
 
 
-async def query_mcp_server(api_client: ApiClient, mcp_id: str) -> Optional[Dict[str, Any]]:
+async def query_mcp_server(api_client: ApiClient, mcp_id: str) -> Optional[dict[str, Any]]:
     """查询MCP服务状态"""
     logger.debug(f"查询MCP服务状态: {mcp_id}")
     response = await api_client.request("GET", "/api/mcp")
@@ -305,7 +314,7 @@ async def query_mcp_server(api_client: ApiClient, mcp_id: str) -> Optional[Dict[
     return None
 
 
-async def install_mcp_server(api_client: ApiClient, mcp_id: str) -> Dict[str, Any]:
+async def install_mcp_server(api_client: ApiClient, mcp_id: str) -> dict[str, Any] | None:
     """安装mcp服务"""
     logger.info(f"安装MCP服务: {mcp_id}")
     response = await api_client.request("GET", "/api/mcp")
@@ -317,19 +326,20 @@ async def install_mcp_server(api_client: ApiClient, mcp_id: str) -> Dict[str, An
     for service in services:
         if service.get("mcpserviceId") == mcp_id:
             logger.debug(f"MCP服务 {mcp_id} 状态: {service.get('status')}")
-            if service.get('status') != "ready":
+            if service.get("status") != "ready":
                 logger.debug(f"开始安装MCP服务{mcp_id}")
                 return await api_client.request("POST", f"/api/mcp/{mcp_id}/install")
             break
+    return None
 
 
-async def activate_mcp_server(api_client: ApiClient, mcp_id: str) -> Dict[str, Any]:
+async def activate_mcp_server(api_client: ApiClient, mcp_id: str) -> dict[str, Any]:
     """激活mcp服务"""
     logger.info(f"激活MCP服务: {mcp_id}")
     return await api_client.request("POST", f"/api/mcp/{mcp_id}", json={"active": "true"})
 
 
-async def deploy_app(api_client: ApiClient, app_id: str) -> Dict[str, Any]:
+async def deploy_app(api_client: ApiClient, app_id: str) -> dict[str, Any]:
     """发布应用"""
     logger.info(f"发布应用: {app_id}")
     return await api_client.request("POST", f"/api/app/{app_id}", json={})
@@ -357,7 +367,6 @@ async def call_app_api(api_client: ApiClient, appdata: AppData) -> str:
 async def get_app_list(api_client: ApiClient) -> str:
     """查询智能体应用agent list"""
     try:
-
         response = await api_client.request("GET", "/api/app")
         return str(response)
 
@@ -410,8 +419,8 @@ async def create_agent(api_client: ApiClient, config_path: str) -> None:
         await activate_mcp_server(api_client, service_id)
 
     # 创建应用数据
-    app_name = mcp_server.get('name', f"agent_{service_id[:6]}")[:20]
-    app_desc = mcp_server.get('description', f"Auto-created agent for {service_id}")[:150]
+    app_name = mcp_server.get("name", f"agent_{service_id[:6]}")[:20]
+    app_desc = mcp_server.get("description", f"Auto-created agent for {service_id}")[:150]
 
     app_data = AppData(
         appType=AppType.AGENT,
@@ -420,10 +429,7 @@ async def create_agent(api_client: ApiClient, config_path: str) -> None:
         icon="",
         mcpService=[service_id],
         name=app_name,
-        permission=AppPermissionData(
-            visibility=PermissionType.PUBLIC,
-            authorizedUsers=[]
-        )
+        permission=AppPermissionData(visibility=PermissionType.PUBLIC, authorizedUsers=[]),
     )
 
     # 创建并发布应用
@@ -432,27 +438,16 @@ async def create_agent(api_client: ApiClient, config_path: str) -> None:
     logger.info("Agent创建流程完成")
 
 
-async def main_async():
-    parser = argparse.ArgumentParser(description='MCP服务器管理工具')
+async def main_async() -> None:
+    parser = argparse.ArgumentParser(description="MCP服务器管理工具")
     parser.add_argument(
-        'operator',
-        choices=['init', 'create', 'comb'],
-        help='操作指令：init（初始化mcp server）、create（创建agent）、comb（创建组合mcp的agent）'
+        "operator",
+        choices=["init", "create", "comb"],
+        help="操作指令：init（初始化mcp server）、create（创建agent）、comb（创建组合mcp的agent）",
     )
-    parser.add_argument(
-        'config_path',
-        help='MCP配置文件的路径（例如：/opt/mcp-servers/config.json）要求是全路径'
-    )
-    parser.add_argument(
-        '-v', '--verbose',
-        action='store_true',
-        help='显示详细日志信息'
-    )
-    parser.add_argument(
-        '--url',
-        help=f'MCP服务基础URL，默认: {BASE_URL}',
-        default=BASE_URL
-    )
+    parser.add_argument("config_path", help="MCP配置文件的路径（例如：/opt/mcp-servers/config.json）要求是全路径")
+    parser.add_argument("-v", "--verbose", action="store_true", help="显示详细日志信息")
+    parser.add_argument("--url", help=f"MCP服务基础URL，默认: {BASE_URL}", default=BASE_URL)
 
     args = parser.parse_args()
 
@@ -469,11 +464,11 @@ async def main_async():
     api_client = ApiClient(args.url)
 
     try:
-        if args.operator == 'init':
+        if args.operator == "init":
             await process_mcp_config(api_client, args.config_path)
-        elif args.operator == 'create':
+        elif args.operator == "create":
             await create_agent(api_client, args.config_path)
-        elif args.operator == 'comb':
+        elif args.operator == "comb":
             await comb_create(api_client, args.config_path)
         logger.info("操作执行成功")
     except Exception as e:
@@ -484,7 +479,7 @@ async def main_async():
         sys.exit(0)
 
 
-def main():
+def main() -> None:
     try:
         asyncio.run(main_async())
     except KeyboardInterrupt:
@@ -492,5 +487,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

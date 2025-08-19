@@ -7,10 +7,13 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import platform
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import toml
 
 from log.manager import get_logger
 
@@ -61,38 +64,76 @@ class DeploymentResourceManager:
     @classmethod
     def update_config_values(cls, content: str, config: DeploymentConfig) -> str:
         """根据用户配置更新配置文件内容"""
+
+        def safe_replace(pattern: str, replacement: str, text: str) -> str:
+            """安全的正则表达式替换，避免反向引用问题"""
+            # 使用 lambda 函数来避免反向引用问题
+            return re.sub(pattern, lambda m: m.group(1) + replacement, text)
+
         # 更新 LLM 配置
-        content = re.sub(r"(MODEL_NAME\s*=\s*).*", rf"\1{config.llm.model}", content)
-        content = re.sub(r"(OPENAI_API_BASE\s*=\s*).*", rf"\1{config.llm.endpoint}", content)
-        content = re.sub(r"(OPENAI_API_KEY\s*=\s*).*", rf"\1{config.llm.api_key}", content)
-        content = re.sub(r"(MAX_TOKENS\s*=\s*).*", rf"\1{config.llm.max_tokens}", content)
-        content = re.sub(r"(TEMPERATURE\s*=\s*).*", rf"\1{config.llm.temperature}", content)
-        content = re.sub(r"(REQUEST_TIMEOUT\s*=\s*).*", rf"\1{config.llm.request_timeout}", content)
+        content = safe_replace(r"(MODEL_NAME\s*=\s*).*", config.llm.model, content)
+        content = safe_replace(r"(OPENAI_API_BASE\s*=\s*).*", config.llm.endpoint, content)
+        content = safe_replace(r"(OPENAI_API_KEY\s*=\s*).*", config.llm.api_key, content)
+        content = safe_replace(r"(MAX_TOKENS\s*=\s*).*", str(config.llm.max_tokens), content)
+        content = safe_replace(r"(TEMPERATURE\s*=\s*).*", str(config.llm.temperature), content)
+        content = safe_replace(r"(REQUEST_TIMEOUT\s*=\s*).*", str(config.llm.request_timeout), content)
 
         # 更新 Embedding 配置
-        content = re.sub(r"(EMBEDDING_TYPE\s*=\s*).*", rf"\1{config.embedding.type}", content)
-        content = re.sub(r"(EMBEDDING_API_KEY\s*=\s*).*", rf"\1{config.embedding.api_key}", content)
-        content = re.sub(r"(EMBEDDING_ENDPOINT\s*=\s*).*", rf"\1{config.embedding.endpoint}", content)
-        return re.sub(r"(EMBEDDING_MODEL_NAME\s*=\s*).*", rf"\1{config.embedding.model}", content)
+        content = safe_replace(r"(EMBEDDING_TYPE\s*=\s*).*", config.embedding.type, content)
+        content = safe_replace(r"(EMBEDDING_API_KEY\s*=\s*).*", config.embedding.api_key, content)
+        content = safe_replace(r"(EMBEDDING_ENDPOINT\s*=\s*).*", config.embedding.endpoint, content)
+        return safe_replace(r"(EMBEDDING_MODEL_NAME\s*=\s*).*", config.embedding.model, content)
 
     @classmethod
     def update_toml_values(cls, content: str, config: DeploymentConfig) -> str:
         """更新 TOML 配置文件的值"""
-        # 更新服务器 IP
-        content = re.sub(r"(host\s*=\s*')[^']*(')", rf"\1http://{config.server_ip}:8000\2", content)
-        content = re.sub(r"(login_api\s*=\s*')[^']*(')", rf"\1http://{config.server_ip}:8080/api/auth/login\2", content)
-        content = re.sub(r"(domain\s*=\s*')[^']*(')", rf"\1{config.server_ip}\2", content)
+        try:
+            # 解析 TOML 内容
+            toml_data = toml.loads(content)
 
-        # 更新 LLM 配置
-        content = re.sub(r'(endpoint\s*=\s*")[^"]*(")', rf"\1{config.llm.endpoint}\2", content)
-        content = re.sub(r"(key\s*=\s*')[^']*(')", rf"\1{config.llm.api_key}\2", content)
-        content = re.sub(r"(model\s*=\s*')[^']*(')", rf"\1{config.llm.model}\2", content)
-        content = re.sub(r"(max_tokens\s*=\s*)\d+", rf"\1{config.llm.max_tokens}", content)
-        content = re.sub(r"(temperature\s*=\s*)[\d.]+", rf"\1{config.llm.temperature}", content)
+            # 更新服务器 IP
+            server_ip = str(config.server_ip)
+            if "login" in toml_data and "settings" in toml_data["login"]:
+                toml_data["login"]["settings"]["host"] = f"http://{server_ip}:8000"
+                toml_data["login"]["settings"]["login_api"] = f"http://{server_ip}:8080/api/auth/login"
 
-        # 更新 Embedding 配置
-        content = re.sub(r"(type\s*=\s*')[^']*(')", rf"\1{config.embedding.type}\2", content)
-        return re.sub(r"(api_key\s*=\s*')[^']*(')", rf"\1{config.embedding.api_key}\2", content)
+            # 更新 fastapi 域名
+            if "fastapi" in toml_data:
+                toml_data["fastapi"]["domain"] = server_ip
+
+            # 更新 LLM 配置
+            if "llm" in toml_data:
+                toml_data["llm"]["endpoint"] = config.llm.endpoint
+                toml_data["llm"]["key"] = config.llm.api_key
+                toml_data["llm"]["model"] = config.llm.model
+                toml_data["llm"]["max_tokens"] = config.llm.max_tokens
+                toml_data["llm"]["temperature"] = config.llm.temperature
+
+            # 更新 function_call 配置
+            if "function_call" in toml_data:
+                toml_data["function_call"]["backend"] = "function_call"
+                toml_data["function_call"]["endpoint"] = config.llm.endpoint
+                toml_data["function_call"]["api_key"] = config.llm.api_key
+                toml_data["function_call"]["model"] = config.llm.model
+                toml_data["function_call"]["max_tokens"] = config.llm.max_tokens
+                toml_data["function_call"]["temperature"] = config.llm.temperature
+
+            # 更新 Embedding 配置
+            if "embedding" in toml_data:
+                toml_data["embedding"]["type"] = config.embedding.type
+                toml_data["embedding"]["api_key"] = config.embedding.api_key
+
+            # 将更新后的数据转换回 TOML 格式
+            return toml.dumps(toml_data)
+
+        except toml.TomlDecodeError as e:
+            logger.exception("解析 TOML 内容时出错")
+            msg = f"TOML 格式错误: {e}"
+            raise ValueError(msg) from e
+        except Exception as e:
+            logger.exception("更新 TOML 配置时发生错误")
+            msg = f"更新 TOML 配置失败: {e}"
+            raise RuntimeError(msg) from e
 
     @classmethod
     def create_deploy_mode_content(cls, config: DeploymentConfig) -> str:
@@ -358,7 +399,17 @@ class DeploymentService:
         output_lines = []
         if process.stdout:
             while True:
-                line = await process.stdout.readline()
+                try:
+                    # 使用超时读取，避免长时间阻塞
+                    line = await asyncio.wait_for(
+                        process.stdout.readline(),
+                        timeout=0.1,  # 100ms 超时
+                    )
+                except TimeoutError:
+                    # 超时时让出控制权给 UI 事件循环
+                    await asyncio.sleep(0)
+                    continue
+
                 if not line:
                     break
 
@@ -368,6 +419,9 @@ class DeploymentService:
                     if progress_callback:
                         temp_state.add_log(f"安装: {decoded_line}")
                         progress_callback(temp_state)
+
+                # 每次读取后让出控制权
+                await asyncio.sleep(0)
 
         # 等待进程结束
         return_code = await process.wait()
@@ -497,14 +551,24 @@ class DeploymentService:
                 cwd=script_dir,
             )
 
-            # 读取输出
-            async for line in self._read_process_output():
-                self.state.add_log(line)
-                if progress_callback:
-                    progress_callback(self.state)
+            # 创建心跳任务，定期更新界面
+            heartbeat_task = asyncio.create_task(self._heartbeat_progress(progress_callback))
 
-            # 等待进程结束
-            return_code = await self._process.wait()
+            try:
+                # 读取输出
+                async for line in self._read_process_output():
+                    self.state.add_log(line)
+                    if progress_callback:
+                        progress_callback(self.state)
+
+                # 等待进程结束
+                return_code = await self._process.wait()
+            finally:
+                # 取消心跳任务
+                heartbeat_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await heartbeat_task
+
             self._process = None
 
             if return_code == 0:
@@ -519,6 +583,17 @@ class DeploymentService:
         else:
             self.state.add_log(f"✗ {script_name}执行失败，返回码: {return_code}")
             return False
+
+    async def _heartbeat_progress(self, progress_callback: Callable[[DeploymentState], None] | None) -> None:
+        """心跳进度更新，确保界面不会卡死"""
+        if not progress_callback:
+            return
+
+        with contextlib.suppress(asyncio.CancelledError):
+            while True:
+                await asyncio.sleep(1.0)  # 每秒更新一次
+                if progress_callback:
+                    progress_callback(self.state)
 
     async def _generate_config_files(
         self,
@@ -616,7 +691,17 @@ class DeploymentService:
             str(self.resource_manager.ENV_TEMPLATE),
             f"{self.resource_manager.ENV_TEMPLATE}.backup",
         ]
-        await asyncio.create_subprocess_exec(*backup_cmd)
+        backup_process = await asyncio.create_subprocess_exec(
+            *backup_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, backup_stderr = await backup_process.communicate()
+
+        if backup_process.returncode != 0:
+            error_msg = backup_stderr.decode("utf-8", errors="ignore").strip()
+            msg = f"备份 env 文件失败: {error_msg}"
+            raise RuntimeError(msg)
 
         # 写入更新后的内容
         write_cmd = ["sudo", "tee", str(self.resource_manager.ENV_TEMPLATE)]
@@ -627,7 +712,12 @@ class DeploymentService:
             stderr=asyncio.subprocess.PIPE,
         )
 
-        await process.communicate(updated_content.encode())
+        _, write_stderr = await process.communicate(updated_content.encode())
+
+        if process.returncode != 0:
+            error_msg = write_stderr.decode("utf-8", errors="ignore").strip()
+            msg = f"写入 env 文件失败: {error_msg}"
+            raise RuntimeError(msg)
 
     async def _update_config_toml(self, config: DeploymentConfig) -> None:
         """更新 config.toml 配置文件"""
@@ -647,7 +737,17 @@ class DeploymentService:
             str(self.resource_manager.CONFIG_TEMPLATE),
             f"{self.resource_manager.CONFIG_TEMPLATE}.backup",
         ]
-        await asyncio.create_subprocess_exec(*backup_cmd)
+        backup_process = await asyncio.create_subprocess_exec(
+            *backup_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, backup_stderr = await backup_process.communicate()
+
+        if backup_process.returncode != 0:
+            error_msg = backup_stderr.decode("utf-8", errors="ignore").strip()
+            msg = f"备份 config.toml 文件失败: {error_msg}"
+            raise RuntimeError(msg)
 
         # 写入更新后的内容
         write_cmd = ["sudo", "tee", str(self.resource_manager.CONFIG_TEMPLATE)]
@@ -658,7 +758,12 @@ class DeploymentService:
             stderr=asyncio.subprocess.PIPE,
         )
 
-        await process.communicate(updated_content.encode())
+        _, write_stderr = await process.communicate(updated_content.encode())
+
+        if process.returncode != 0:
+            error_msg = write_stderr.decode("utf-8", errors="ignore").strip()
+            msg = f"写入 config.toml 文件失败: {error_msg}"
+            raise RuntimeError(msg)
 
     async def _read_process_output(self) -> AsyncGenerator[str, None]:
         """读取进程输出"""
@@ -667,13 +772,26 @@ class DeploymentService:
 
         while True:
             try:
-                line = await self._process.stdout.readline()
+                # 使用超时读取，避免长时间阻塞
+                try:
+                    line = await asyncio.wait_for(
+                        self._process.stdout.readline(),
+                        timeout=0.1,  # 100ms 超时
+                    )
+                except TimeoutError:
+                    # 超时时让出控制权给 UI 事件循环
+                    await asyncio.sleep(0)
+                    continue
+
                 if not line:
                     break
 
                 decoded_line = line.decode("utf-8", errors="ignore").strip()
                 if decoded_line:
                     yield decoded_line
+
+                # 每次读取后让出控制权
+                await asyncio.sleep(0)
 
             except OSError as e:
                 logger.warning("读取进程输出时发生错误: %s", e)
@@ -710,7 +828,10 @@ class DeploymentService:
 
         try:
             return await self._execute_agent_init_command(
-                agent_script_path, config_file_path, temp_state, progress_callback,
+                agent_script_path,
+                config_file_path,
+                temp_state,
+                progress_callback,
             )
         except Exception as e:
             temp_state.add_log(f"❌ Agent 初始化异常: {e!s}")
@@ -728,11 +849,14 @@ class DeploymentService:
     ) -> bool:
         """执行 Agent 初始化命令"""
         # 构建 Agent 初始化命令（默认执行 comb 操作）
+        # 根据 agent_manager.py 的参数定义：operator 和 config_path 是位置参数
+        # 由于脚本需要访问系统级目录，使用 sudo 权限执行
         cmd = [
+            "sudo",
             "python3",
             str(agent_script_path),
-            "--operator", "comb",
-            "--config_path", str(config_file_path),
+            "comb",
+            str(config_file_path),
         ]
 
         temp_state.add_log(f"执行命令: {' '.join(cmd)}")

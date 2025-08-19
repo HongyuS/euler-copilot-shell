@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING
 
 from textual import on
@@ -80,14 +81,8 @@ class EnvironmentCheckScreen(ModalScreen[bool]):
         align: center middle;
     }
 
-    .continue-button {
+    .continue-button, .exit-button {
         margin: 0 1;
-        background: $success;
-    }
-
-    .exit-button {
-        margin: 0 1;
-        background: $error;
     }
     """
 
@@ -112,8 +107,8 @@ class EnvironmentCheckScreen(ModalScreen[bool]):
                 yield Static("检查管理员权限...", id="sudo_desc", classes="check-description")
 
             with Horizontal(classes="button-row"):
-                yield Button("继续配置", id="continue", classes="continue-button", disabled=True)
-                yield Button("退出", id="exit", classes="exit-button")
+                yield Button("继续配置", id="continue", variant="success", classes="continue-button", disabled=True)
+                yield Button("退出", id="exit", variant="error", classes="exit-button")
 
     async def on_mount(self) -> None:
         """界面挂载时开始环境检查"""
@@ -252,12 +247,6 @@ class EnvironmentErrorScreen(ModalScreen[None]):
         border: solid $secondary;
         padding: 1;
     }
-
-    .ok-button {
-        margin: 1 0;
-        align: center middle;
-        background: $primary;
-    }
     """
 
     def __init__(self, title: str, messages: list[str]) -> None:
@@ -286,7 +275,7 @@ class EnvironmentErrorScreen(ModalScreen[None]):
                 yield Static("")
                 yield Static("请解决上述问题后重新运行部署助手。")
 
-            yield Button("确定退出", id="ok", classes="ok-button")
+            yield Button("确定退出", id="ok", variant="primary")
 
     @on(Button.Pressed, "#ok")
     def on_ok_button_pressed(self) -> None:
@@ -402,6 +391,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             with Horizontal(classes="form-row"):
                 yield Label("服务器 IP 地址:", classes="form-label")
                 yield Input(
+                    value="127.0.0.1",  # 默认为本地地址
                     placeholder="例如：127.0.0.1",
                     id="server_ip",
                     classes="form-input",
@@ -853,6 +843,10 @@ class DeploymentProgressScreen(ModalScreen[bool]):
             self.query_one("#step_label", Static).update("部署已取消")
             self.query_one("#deployment_log", RichLog).write("部署已被用户取消")
 
+            # 等待任务真正结束
+            with contextlib.suppress(asyncio.CancelledError):
+                await self.deployment_task
+
             # 更新按钮状态
             self._update_buttons_after_failure()
         else:
@@ -861,6 +855,11 @@ class DeploymentProgressScreen(ModalScreen[bool]):
 
     def _reset_ui_for_retry(self) -> None:
         """重置界面用于重试"""
+        # 取消之前的任务
+        if self.deployment_task and not self.deployment_task.done():
+            self.deployment_task.cancel()
+        self.deployment_task = None
+
         # 清空日志
         log_widget = self.query_one("#deployment_log", RichLog)
         log_widget.clear()
@@ -896,12 +895,35 @@ class DeploymentProgressScreen(ModalScreen[bool]):
     async def _start_deployment(self) -> None:
         """开始部署流程"""
         try:
+            # 创建异步任务但不等待，让它在后台运行
             self.deployment_task = asyncio.create_task(self._execute_deployment())
-            await self.deployment_task
-        except asyncio.CancelledError:
-            self.query_one("#step_label", Static).update("部署已取消")
-            self.query_one("#deployment_log", RichLog).write("部署被取消")
+
+            # 启动一个定时器来检查任务状态
+            self.set_interval(0.1, self._check_deployment_status)
+
+        except (OSError, RuntimeError) as e:
+            self.query_one("#step_label", Static).update("部署启动失败")
+            self.query_one("#deployment_log", RichLog).write(f"部署启动失败: {e}")
             self._update_buttons_after_failure()
+
+    def _check_deployment_status(self) -> None:
+        """检查部署任务状态"""
+        if self.deployment_task is None:
+            return
+
+        if self.deployment_task.done():
+            # 任务完成，停止定时器
+            try:
+                # 获取任务结果，如果有异常会在这里抛出
+                self.deployment_task.result()
+            except asyncio.CancelledError:
+                self.query_one("#step_label", Static).update("部署已取消")
+                self.query_one("#deployment_log", RichLog).write("部署被取消")
+                self._update_buttons_after_failure()
+            except (OSError, RuntimeError, ValueError) as e:
+                self.query_one("#step_label", Static).update("部署异常")
+                self.query_one("#deployment_log", RichLog).write(f"部署异常: {e}")
+                self._update_buttons_after_failure()
 
     async def _execute_deployment(self) -> None:
         """执行部署过程"""
@@ -1002,12 +1024,6 @@ class ErrorMessageScreen(ModalScreen[None]):
         margin: 1 0;
         max-height: 20;
     }
-
-    .ok-button {
-        margin: 1 0;
-        align: center middle;
-        background: $primary;
-    }
     """
 
     def __init__(self, title: str, messages: list[str]) -> None:
@@ -1032,7 +1048,7 @@ class ErrorMessageScreen(ModalScreen[None]):
                 for message in self.messages:
                     yield Static(f"• {message}")
 
-            yield Button("确定", id="ok", classes="ok-button")
+            yield Button("确定", id="ok", variant="primary")
 
     @on(Button.Pressed, "#ok")
     def on_ok_button_pressed(self) -> None:

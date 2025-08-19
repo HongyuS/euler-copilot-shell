@@ -8,7 +8,9 @@ COLOR_RESET='\033[0m'    # 重置颜色
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
-INSTALL_MODEL_FILE="/etc/euler_Intelligence_install_model"
+
+INSTALL_MODE_FILE="/etc/euler_Intelligence_install_mode"
+
 # 顶层菜单
 show_top_menu() {
   clear
@@ -59,19 +61,19 @@ show_restart_menu() {
   echo "2) framework"
   echo "3) rag"
   echo "4) mysql"
-  echo "5) minio"
-  echo "6) redis"
-  echo "7) postgresql"
-  echo "8) 返回主菜单"
+  echo "5) redis"
+  echo "6) postgresql"
+  echo "7) 返回主菜单"
   echo "=============================="
-  echo -n "请输入要重启的服务编号（1-8）: "
+  echo -n "请输入要重启的服务编号（1-7）: "
 }
+
 # 询问用户并保存安装模式
 ask_install_options() {
   local force_mode="$1" # 接收可选参数（force或空值）
-  echo $force_mode
+  echo "$force_mode"
   # 只有当参数不是force，且存在有效配置时才跳过询问
-  if [ "$force_mode" != "force" ] && check_existing_install_model "$INSTALL_MODEL_FILE"; then
+  if [ "$force_mode" != "force" ] && check_existing_install_mode "$INSTALL_MODE_FILE"; then
     return 0 # 非强制模式且配置有效，直接返回
   fi
   echo -e "\n${COLOR_INFO}[Info] 请选择附加组件安装选项:${COLOR_RESET}"
@@ -103,26 +105,29 @@ ask_install_options() {
   rag_install=$(echo "$rag_choice" | tr '[:upper:]' '[:lower:]')
 
   # 保存到文件（格式：key=value，便于后续读取）
-  echo "web_install=$web_install" >"$INSTALL_MODEL_FILE"
-  echo "rag_install=$rag_install" >>"$INSTALL_MODEL_FILE"
+  echo "web_install=$web_install" >"$INSTALL_MODE_FILE"
+  echo "rag_install=$rag_install" >>"$INSTALL_MODE_FILE"
 
-  echo -e "\n${COLOR_INFO}[Info] 安装模式已保存到: $INSTALL_MODEL_FILE${COLOR_RESET}"
+  echo -e "\n${COLOR_INFO}[Info] 安装模式已保存到: $INSTALL_MODE_FILE${COLOR_RESET}"
   return 0
 }
+
 # 轻量部署
 light_deploy() {
   # 保存到文件（格式：key=value，便于后续读取）
-  echo "web_install=n" >"$INSTALL_MODEL_FILE"
-  echo "rag_install=n" >>"$INSTALL_MODEL_FILE"
+  echo "web_install=n" >"$INSTALL_MODE_FILE"
+  echo "rag_install=n" >>"$INSTALL_MODE_FILE"
   return 0
 }
+
 # 全量部署
 wight_deploy() {
   # 保存到文件（格式：key=value，便于后续读取）
-  echo "web_install=y" >"$INSTALL_MODEL_FILE"
-  echo "rag_install=y" >>"$INSTALL_MODEL_FILE"
+  echo "web_install=y" >"$INSTALL_MODE_FILE"
+  echo "rag_install=y" >>"$INSTALL_MODE_FILE"
   return 0
 }
+
 # 带错误检查的脚本执行函数
 run_script_with_check() {
   local script_path=$1
@@ -163,6 +168,7 @@ run_sub_script() {
   esac
   return 0
 }
+
 # 执行子菜单选择部署模式对应脚本
 run_sub_model_script() {
   case $1 in
@@ -187,8 +193,9 @@ run_sub_model_script() {
   esac
   return 0
 }
+
 # 检查是否存在有效的安装模式配置文件
-check_existing_install_model() {
+check_existing_install_mode() {
   local target_file="$1"
 
   # 检查文件是否存在
@@ -215,7 +222,7 @@ check_existing_install_model() {
 # 手动部署子菜单循环
 manual_deployment_loop() {
   while true; do
-#    show_sub_menu
+    #    show_sub_menu
     show_sub_model_menu
     read -r sub_choice
     run_sub_model_script "$sub_choice"
@@ -263,6 +270,7 @@ restart_service() {
     return 3
   fi
 }
+
 # 帮助信息函数
 show_help() {
   echo -e "${GREEN}openEuler Intelligence 一键部署系统使用说明${COLOR_RESET}"
@@ -272,10 +280,9 @@ show_help() {
   echo ""
   echo -e "${BLUE}选项:${COLOR_RESET}"
   echo "  无参数        进入交互式菜单"
-#  echo "  --q          切换安装部署模式"
   echo "  --h          显示本帮助信息"
   echo "  --help       同 --h"
-  echo "  --a          进入agent初始化模式，详见部署文档"
+  echo "  --a          进入 Agent 初始化模式，详见部署文档"
   echo ""
   echo -e "${BLUE}服务部署手册查看位置:${COLOR_RESET}"
   echo "  1. 在线文档: https://gitee.com/openeuler/euler-copilot-shell/blob/dev/scripts/deploy/安装部署手册.md"
@@ -288,6 +295,7 @@ show_help() {
   echo "=============================================================================="
   exit 0
 }
+
 agent_manager() {
   # 获取主脚本绝对路径并切换到所在目录
   MAIN_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -297,7 +305,15 @@ agent_manager() {
     cd "$MAIN_DIR" || exit 1
   fi
 
-  # 将所有接收的参数传递给Python脚本
+  # 安装 MCP 服务
+  3-install-server/install_mcpserver.sh
+  # 初始化 MCP 服务
+  3-install-server/init_mcpserver.sh || {
+    echo -e "\n${COLOR_ERROR} 初始化 Agent 失败，请检查 MCP 服务是否可用，使用 Agent 初始化工具创建 Agent，详见部署文档...${COLOR_RESET}"
+    exit 1
+  }
+
+  # 将所有接收的参数传递给 Python 脚本
   python3 4-other-script/agent_manager.py "$@"
   return 0
 }
@@ -305,17 +321,14 @@ agent_manager() {
 # 检查帮助参数
 if [[ "$1" == "--h" || "$1" == "--help" ]]; then
   show_help
-  return 0
 fi
-## 检查切换部署方式
-#if [[ "$1" == "--q" ]]; then
-#  ask_install_options "force"
-#  return 0
-#fi
+
+# 检查是否进入 Agent 初始化模式
 if [[ "$1" == "--a" ]]; then
-  agent_manager  "${@:2}"
+  agent_manager "${@:2}"
   exit 0
 fi
+
 # 获取主脚本绝对路径并切换到所在目录
 MAIN_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 if [ "${MAIN_DIR}" = "/usr/bin" ]; then
@@ -347,10 +360,9 @@ while true; do
       2) service="framework" ;;
       3) service="rag" ;;
       4) service="mysqld" ;;
-      5) service="minio" ;;
-      6) service="redis" ;;
-      7) service="postgresql" ;;
-      8) break ;;
+      5) service="redis" ;;
+      6) service="postgresql" ;;
+      7) break ;;
       *)
         echo -e "${COLOR_ERROR}无效的选项，请输入1-8之间的数字${COLOR_RESET}"
         continue

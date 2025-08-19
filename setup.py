@@ -21,6 +21,7 @@ setup(
         "openai==1.99.6",
         "rich==14.1.0",
         "textual==5.3.0",
+        "toml==0.10.2",
     ],
     entry_points={
         "console_scripts": [

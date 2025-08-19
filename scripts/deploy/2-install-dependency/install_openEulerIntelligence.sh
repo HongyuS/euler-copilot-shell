@@ -5,7 +5,7 @@ COLOR_SUCCESS='\033[32m' # 绿色成功
 COLOR_ERROR='\033[31m'   # 红色错误
 COLOR_WARNING='\033[33m' # 黄色警告
 COLOR_RESET='\033[0m'    # 重置颜色
-INSTALL_MODEL_FILE="/etc/euler_Intelligence_install_model"
+INSTALL_MODE_FILE="/etc/euler_Intelligence_install_mode"
 # 全局变量
 declare -a installed_pkgs=()
 install_success=true
@@ -284,67 +284,17 @@ install_zhparser() {
   return 0
 }
 is_x86_architecture() {
-    # 获取系统架构信息（使用 uname -m 或 arch 命令）
-    local arch
-    arch=$(uname -m)  # 多数系统支持，返回架构名称（如 x86_64、i686、aarch64 等）
-    # 备选：arch 命令，输出与 uname -m 类似
-    # arch=$(arch)
+  # 获取系统架构信息（使用 uname -m 或 arch 命令）
+  local arch
+  arch=$(uname -m) # 多数系统支持，返回架构名称（如 x86_64、i686、aarch64 等）
+  # 备选：arch 命令，输出与 uname -m 类似
+  # arch=$(arch)
 
-    # x86 架构的常见标识：i386、i686（32位），x86_64（64位）
-    if [[ $arch == i386 || $arch == i686 || $arch == x86_64 ]]; then
-        return 0  # 是 x86 架构，返回 0（成功）
-    else
-        return 1  # 非 x86 架构，返回 1（失败）
-    fi
-}
-# 安装MinIO
-install_minio() {
-  echo -e "${COLOR_INFO}[Info] 开始安装MinIO...${COLOR_RESET}"
-  local minio_dir="/opt/minio"
-  if ! mkdir -p "$minio_dir"; then
-    echo -e "${COLOR_ERROR}[Error] 创建目录失败: $minio_dir${COLOR_RESET}"
-    return 1
-  fi
-  ! is_x86_architecture || {
-  local minio_url="https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20250524170830.0.0-1.x86_64.rpm"
-  local minio_src="../5-resource/rpm/minio-20250524170830.0.0-1.x86_64.rpm"
-  local minio_file="/opt/minio/minio-20250524170830.0.0-1.x86_64.rpm"
-
-  if [ -f "$minio_src" ]; then
-    cp -r "$minio_src" "$minio_file"
-    sleep 1
-  fi
-  if [ ! -f "$minio_file" ]; then
-    echo -e "${COLOR_INFO}[Info] 正在下载MinIO软件包...${COLOR_RESET}"
-    if ! wget "$minio_url" --no-check-certificate -O "$minio_file"; then
-      echo -e "${COLOR_ERROR}[Error] MinIO下载失败${COLOR_RESET}"
-      return 1
-    fi
-  fi
-
-  dnf install -y $minio_file || {
-    echo -e "${COLOR_ERROR}[Error] MinIO安装失败${COLOR_RESET}"
-    return 1
-  }
-  echo -e "${COLOR_SUCCESS}[Success] MinIO安装成功...${COLOR_RESET}"
-  return 0
-  }
-  echo -e "${COLOR_INFO}[Info] 下载MinIO二进制文件（aarch64）...${COLOR_RESET}"
-  local minio_url="https://dl.min.io/server/minio/release/linux-arm64/minio"
-  local temp_dir=$minio_dir
-  local minio_path="../5-resource/rpm/minio"
-
-  # 检查文件是否已存在
-  if [ -f "$minio_path" ]; then
-    cp -r $minio_path $temp_dir
-    echo -e "${COLOR_INFO}[Info] MinIO二进制文件已存在，跳过下载${COLOR_RESET}"
+  # x86 架构的常见标识：i386、i686（32位），x86_64（64位）
+  if [[ $arch == i386 || $arch == i686 || $arch == x86_64 ]]; then
+    return 0 # 是 x86 架构，返回 0（成功）
   else
-    echo -e "${COLOR_INFO}[Info] 下载MinIO二进制文件（aarch64）...${COLOR_RESET}"
-    if ! wget -q --show-progress "$minio_url" -O "$temp_dir/minio" --no-check-certificate; then
-      echo -e "${COLOR_ERROR}[Error] 下载MinIO失败，请检查网络连接${COLOR_RESET}"
-      rm -rf "$temp_dir"
-      return 1
-    fi
+    return 1 # 非 x86 架构，返回 1（失败）
   fi
 }
 
@@ -519,16 +469,16 @@ check_pip() {
 
   return 0
 }
-install_framework(){
+install_framework() {
   echo -e "\n${COLOR_INFO}[Info] 开始安装框架服务...${COLOR_RESET}"
   local pkgs=(
-  "euler-copilot-framework"
-  "git"
-  "make"
-  "gcc"
-  "gcc-c++"
-  "tar"
-  "python3-pip"
+    "euler-copilot-framework"
+    "git"
+    "make"
+    "gcc"
+    "gcc-c++"
+    "tar"
+    "python3-pip"
   )
   if ! install_and_verify "${pkgs[@]}"; then
     echo -e "${COLOR_ERROR}[Error] dnf安装验证未通过！${COLOR_RESET}"
@@ -539,16 +489,16 @@ install_framework(){
   install_mongodb || return 1
   check_pip || return 1
 }
-install_rag(){
+install_rag() {
   local pkgs=(
-  "euler-copilot-rag"
-  "clang"
-  "llvm"
-  "java-17-openjdk"
-  "postgresql"
-  "postgresql-server"
-  "postgresql-server-devel"
-  "libpq-devel"
+    "euler-copilot-rag"
+    "clang"
+    "llvm"
+    "java-17-openjdk"
+    "postgresql"
+    "postgresql-server"
+    "postgresql-server-devel"
+    "libpq-devel"
   )
   if ! install_and_verify "${pkgs[@]}"; then
     echo -e "${COLOR_ERROR}[Error] dnf安装验证未通过！${COLOR_RESET}"
@@ -560,9 +510,8 @@ install_rag(){
   install_pgvector || return 1
   cd "$SCRIPT_DIR" || return 1
   install_zhparser || return 1
-  install_minio || return 1
 }
-install_web(){
+install_web() {
   local pkgs=(
     "nginx"
     "redis"
@@ -579,15 +528,15 @@ install_web(){
   fi
 }
 # 读取安装模式的方法
-read_install_model() {
-  if [ ! -f "$INSTALL_MODEL_FILE" ]; then
-    echo "web_install=n" >"$INSTALL_MODEL_FILE"
-    echo "rag_install=n" >>"$INSTALL_MODEL_FILE"
+read_install_mode() {
+  if [ ! -f "$INSTALL_MODE_FILE" ]; then
+    echo "web_install=n" >"$INSTALL_MODE_FILE"
+    echo "rag_install=n" >>"$INSTALL_MODE_FILE"
   fi
 
   # 从文件读取配置（格式：key=value）
-  local web_install=$(grep "web_install=" "$INSTALL_MODEL_FILE" | cut -d'=' -f2)
-  local rag_install=$(grep "rag_install=" "$INSTALL_MODEL_FILE" | cut -d'=' -f2)
+  local web_install=$(grep "web_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
+  local rag_install=$(grep "rag_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
 
   # 验证读取结果
   if [ -z "$web_install" ] || [ -z "$rag_install" ]; then
@@ -608,7 +557,7 @@ read_install_model() {
 # 示例：根据安装模式执行对应操作（可根据实际需求扩展）
 install_components() {
   # 读取安装模式
-  read_install_model || return 1
+  read_install_mode || return 1
 
   # 安装Web界面（如果用户选择）
   if [ "$WEB_INSTALL" = "y" ]; then

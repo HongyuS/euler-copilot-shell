@@ -5,7 +5,7 @@ COLOR_SUCCESS='\033[32m' # 绿色成功
 COLOR_ERROR='\033[31m'   # 红色错误
 COLOR_WARNING='\033[33m' # 黄色警告
 COLOR_RESET='\033[0m'    # 重置颜色
-INSTALL_MODEL_FILE="/etc/euler_Intelligence_install_model"
+INSTALL_MODE_FILE="/etc/euler_Intelligence_install_mode"
 # 全局模式标记
 OFFLINE_MODE=false
 
@@ -53,13 +53,11 @@ install_wget() {
 
 # 基础URL列表（无论RAG是否启用都需要检测）
 base_urls_x86=(
-  "https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20250524170830.0.0-1.x86_64.rpm"
   "https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.x86_64.rpm"
   "https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/x86_64/RPMS/mongodb-org-server-7.0.21-1.el9.x86_64.rpm"
 )
 
 base_urls_arm=(
-  "https://dl.min.io/server/minio/release/linux-arm64/minio"
   "https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/aarch64/RPMS/mongodb-org-server-7.0.21-1.el9.aarch64.rpm"
   "https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.aarch64.rpm"
 )
@@ -81,8 +79,8 @@ check_url_accessibility() {
     fi
   fi
 
-  # 读取RAG安装状态（依赖之前的read_install_model函数设置RAG_INSTALL变量）
-  if ! read_install_model; then
+  # 读取RAG安装状态（依赖之前的read_install_mode函数设置RAG_INSTALL变量）
+  if ! read_install_mode; then
     echo -e "${COLOR_WARNING}[WARN] 无法读取安装模式，默认按RAG未启用检测${COLOR_RESET}"
     local RAG_INSTALL="n"
   fi
@@ -157,7 +155,7 @@ PORTS=(8002)
 
 # 读取安装模式并设置端口列表的函数
 init_ports_based_on_web() {
-  if ! read_install_model; then
+  if ! read_install_mode; then
     echo -e "${COLOR_WARNING}[Warning] 无法读取安装模式，使用默认端口配置${COLOR_RESET}"
     return 1
   fi
@@ -478,16 +476,16 @@ setup_firewall() {
   return 0
 }
 # 读取安装模式的方法
-read_install_model() {
+read_install_mode() {
   # 检查文件是否存在
-  if [ ! -f "$INSTALL_MODEL_FILE" ]; then
-    echo "web_install=n" >"$INSTALL_MODEL_FILE"
-    echo "rag_install=n" >>"$INSTALL_MODEL_FILE"
+  if [ ! -f "$INSTALL_MODE_FILE" ]; then
+    echo "web_install=n" >"$INSTALL_MODE_FILE"
+    echo "rag_install=n" >>"$INSTALL_MODE_FILE"
   fi
 
   # 从文件读取配置（格式：key=value）
-  local web_install=$(grep "web_install=" "$INSTALL_MODEL_FILE" | cut -d'=' -f2)
-  local rag_install=$(grep "rag_install=" "$INSTALL_MODEL_FILE" | cut -d'=' -f2)
+  local web_install=$(grep "web_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
+  local rag_install=$(grep "rag_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
 
   # 验证读取结果
   if [ -z "$web_install" ] || [ -z "$rag_install" ]; then
@@ -502,7 +500,7 @@ read_install_model() {
 # 示例：根据安装模式执行对应操作（可根据实际需求扩展）
 install_components() {
   # 读取安装模式
-  read_install_model || return 1
+  read_install_mode || return 1
   echo -e "${COLOR_INFO}[Info] 检查软件包是否可用${COLOR_RESET}"
   if [ "$WEB_INSTALL" = "y" ]; then
     check_web_pkg
