@@ -17,6 +17,7 @@ import toml
 
 from log.manager import get_logger
 
+from .agent import AgentManager
 from .models import DeploymentConfig, DeploymentState
 
 if TYPE_CHECKING:
@@ -38,7 +39,7 @@ class DeploymentResourceManager:
     CONFIG_TEMPLATE = RESOURCE_PATH / "config.toml"
 
     # 系统配置文件路径
-    INSTALL_MODEL_FILE = Path("/etc/euler_Intelligence_install_model")
+    INSTALL_MODE_FILE = Path("/etc/euler_Intelligence_install_mode")
 
     @classmethod
     def check_installer_available(cls) -> bool:
@@ -372,7 +373,7 @@ class DeploymentService:
             self._generate_config_files,
             self._setup_deploy_mode,
             self._run_init_config_script,
-            self._run_agent_init_script,
+            self._run_agent_init,
         ]
 
         # 依次执行每个步骤
@@ -645,7 +646,7 @@ class DeploymentService:
             cmd = [
                 "sudo",
                 "tee",
-                str(self.resource_manager.INSTALL_MODEL_FILE),
+                str(self.resource_manager.INSTALL_MODE_FILE),
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -797,128 +798,15 @@ class DeploymentService:
                 logger.warning("读取进程输出时发生错误: %s", e)
                 break
 
-    async def _run_agent_init_script(
+    async def _run_agent_init(
         self,
         config: DeploymentConfig,
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """运行 Agent 初始化脚本"""
-        temp_state = DeploymentState()
-        temp_state.current_step = 7
-        temp_state.total_steps = 7
-        temp_state.current_step_name = "Agent 初始化"
-        temp_state.add_log("开始 Agent 初始化...")
+        # 使用配置中的服务器 IP 和默认端口
+        server_ip = config.server_ip or "127.0.0.1"
+        agent_manager = AgentManager(server_ip=server_ip, server_port=8002)
 
-        if progress_callback:
-            progress_callback(temp_state)
-
-        # 检查脚本文件存在性
-        agent_script_path = Path("/usr/lib/openeuler-intelligence/scripts/4-other-script/agent_manager.py")
-        if not agent_script_path.exists():
-            temp_state.add_log("错误: Agent 管理脚本不存在")
-            logger.error("Agent 脚本不存在: %s", agent_script_path)
-            return False
-
-        # 检查配置文件存在性
-        config_file_path = self.resource_manager.CONFIG_TEMPLATE
-        if not config_file_path.exists():
-            temp_state.add_log("错误: 配置文件不存在")
-            logger.error("配置文件不存在: %s", config_file_path)
-            return False
-
-        try:
-            return await self._execute_agent_init_command(
-                agent_script_path,
-                config_file_path,
-                temp_state,
-                progress_callback,
-            )
-        except Exception as e:
-            temp_state.add_log(f"❌ Agent 初始化异常: {e!s}")
-            logger.exception("Agent 初始化过程中发生异常")
-            if progress_callback:
-                progress_callback(temp_state)
-            return False
-
-    async def _execute_agent_init_command(
-        self,
-        agent_script_path: Path,
-        config_file_path: Path,
-        temp_state: DeploymentState,
-        progress_callback: Callable[[DeploymentState], None] | None,
-    ) -> bool:
-        """执行 Agent 初始化命令"""
-        # 构建 Agent 初始化命令（默认执行 comb 操作）
-        # 根据 agent_manager.py 的参数定义：operator 和 config_path 是位置参数
-        # 由于脚本需要访问系统级目录，使用 sudo 权限执行
-        cmd = [
-            "sudo",
-            "python3",
-            str(agent_script_path),
-            "comb",
-            str(config_file_path),
-        ]
-
-        temp_state.add_log(f"执行命令: {' '.join(cmd)}")
-        logger.info("执行 Agent 初始化命令: %s", " ".join(cmd))
-
-        # 执行脚本
-        process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            cwd=agent_script_path.parent,
-        )
-
-        # 读取并处理输出
-        output_lines = await self._process_agent_init_output(process, temp_state, progress_callback)
-
-        # 等待进程结束并处理结果
-        return_code = await process.wait()
-        return self._handle_agent_init_result(return_code, output_lines, temp_state, progress_callback)
-
-    async def _process_agent_init_output(
-        self,
-        process: asyncio.subprocess.Process,
-        temp_state: DeploymentState,
-        progress_callback: Callable[[DeploymentState], None] | None,
-    ) -> list[str]:
-        """处理 Agent 初始化输出"""
-        output_lines = []
-        if process.stdout:
-            while True:
-                line = await process.stdout.readline()
-                if not line:
-                    break
-
-                decoded_line = line.decode("utf-8", errors="ignore").strip()
-                if decoded_line:
-                    output_lines.append(decoded_line)
-                    temp_state.add_log(f"Agent初始化: {decoded_line}")
-                    if progress_callback:
-                        progress_callback(temp_state)
-
-        return output_lines
-
-    def _handle_agent_init_result(
-        self,
-        return_code: int,
-        output_lines: list[str],
-        temp_state: DeploymentState,
-        progress_callback: Callable[[DeploymentState], None] | None,
-    ) -> bool:
-        """处理 Agent 初始化结果"""
-        if return_code == 0:
-            temp_state.add_log("✅ Agent 初始化完成")
-            logger.info("Agent 初始化成功完成")
-            if progress_callback:
-                progress_callback(temp_state)
-            return True
-
-        temp_state.add_log(f"❌ Agent 初始化失败 (退出码: {return_code})")
-        logger.error("Agent 初始化失败，退出码: %s", return_code)
-        for line in output_lines[-5:]:  # 显示最后5行错误信息
-            temp_state.add_log(f"错误详情: {line}")
-        if progress_callback:
-            progress_callback(temp_state)
-        return False
+        # 初始化 Agent 和 MCP 服务
+        return await agent_manager.initialize_agents(progress_callback)
