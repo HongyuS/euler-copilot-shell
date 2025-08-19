@@ -83,6 +83,15 @@ class ConfigManager:
         self.data.log_level = level
         self._save_settings()
 
+    def get_default_app(self) -> str:
+        """获取当前默认智能体 ID"""
+        return self.data.eulerintelli.default_app
+
+    def set_default_app(self, app_id: str) -> None:
+        """更新默认智能体 ID 并保存"""
+        self.data.eulerintelli.default_app = app_id
+        self._save_settings()
+
     def _load_settings(self) -> None:
         """从文件载入设置"""
         if self.config_path.exists():
