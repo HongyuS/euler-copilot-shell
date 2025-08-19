@@ -371,6 +371,10 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """执行所有部署步骤"""
+        # 检查并停止旧的 framework 服务
+        if not await self._check_and_stop_old_framework_service(config, progress_callback):
+            return False
+
         # 定义基础部署步骤
         steps = [
             self._check_environment,
@@ -982,7 +986,7 @@ class DeploymentService:
             success = template_manager.create_global_template()
 
             if success:
-                self.state.add_log("✓ 全局配置模板创建成功，包含已验证的大模型配置，其他用户可正常使用")
+                self.state.add_log("✓ 全局配置模板创建成功，其他用户可正常使用")
                 logger.info("全局配置模板创建成功，包含部署时的大模型配置")
             else:
                 self.state.add_log("⚠ 全局配置模板创建失败，可能影响其他用户使用")
@@ -991,3 +995,82 @@ class DeploymentService:
         except Exception:
             logger.exception("创建全局配置模板时发生异常")
             self.state.add_log("⚠ 配置模板创建异常，可能影响其他用户使用")
+
+    async def _check_and_stop_old_framework_service(
+        self,
+        config: DeploymentConfig,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """
+        检查并停止旧的 framework 服务
+
+        Args:
+            config: 部署配置
+            progress_callback: 进度回调函数
+
+        Returns:
+            bool: 处理是否成功
+
+        """
+        self.state.add_log("正在检查是否存在旧的 framework 服务...")
+
+        if progress_callback:
+            progress_callback(self.state)
+
+        try:
+            # 检查 framework 服务状态
+            process = await asyncio.create_subprocess_exec(
+                "systemctl",
+                "is-active",
+                "framework",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            stdout, stderr = await process.communicate()
+            status = stdout.decode("utf-8").strip()
+
+            if process.returncode == 0 and status == "active":
+                logger.info("发现正在运行的 framework 服务，正在停止...")
+
+                if progress_callback:
+                    progress_callback(self.state)
+
+                # 停止 framework 服务
+                stop_process = await asyncio.create_subprocess_exec(
+                    "sudo",
+                    "systemctl",
+                    "stop",
+                    "framework",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+
+                _, stop_stderr = await stop_process.communicate()
+
+                if stop_process.returncode == 0:
+                    logger.info("旧的 framework 服务已停止")
+                else:
+                    error_msg = stop_stderr.decode("utf-8", errors="ignore").strip()
+                    logger.warning("⚠ 停止 framework 服务时出现警告: %s", error_msg)
+                    # 继续部署，不因停止服务失败而中断
+
+                # 等待服务完全停止
+                await asyncio.sleep(2.0)
+
+            elif status in ("inactive", "failed"):
+                logger.info("✓ 没有发现运行中的 framework 服务")
+            else:
+                logger.warning("Framework 服务状态: %s", status)
+
+        except (OSError, TimeoutError) as e:
+            # 如果系统中没有 framework 服务，systemctl 命令可能会失败
+            # 这种情况下我们记录信息但不阻止部署继续进行
+            logger.warning("检查 framework 服务状态时发生错误: %s", e)
+            return True
+
+        except Exception:
+            logger.exception("处理 framework 服务时发生异常")
+            return False
+        else:
+            return True
