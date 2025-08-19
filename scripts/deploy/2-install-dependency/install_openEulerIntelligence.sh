@@ -5,7 +5,7 @@ COLOR_SUCCESS='\033[32m' # 绿色成功
 COLOR_ERROR='\033[31m'   # 红色错误
 COLOR_WARNING='\033[33m' # 黄色警告
 COLOR_RESET='\033[0m'    # 重置颜色
-INSTALL_MODEL_FILE="/etc/euler_Intelligence_install_model"
+INSTALL_MODE_FILE="/etc/euler_Intelligence_install_mode"
 # 全局变量
 declare -a installed_pkgs=()
 install_success=true
@@ -528,15 +528,15 @@ install_web() {
   fi
 }
 # 读取安装模式的方法
-read_install_model() {
-  if [ ! -f "$INSTALL_MODEL_FILE" ]; then
-    echo "web_install=n" >"$INSTALL_MODEL_FILE"
-    echo "rag_install=n" >>"$INSTALL_MODEL_FILE"
+read_install_mode() {
+  if [ ! -f "$INSTALL_MODE_FILE" ]; then
+    echo "web_install=n" >"$INSTALL_MODE_FILE"
+    echo "rag_install=n" >>"$INSTALL_MODE_FILE"
   fi
 
   # 从文件读取配置（格式：key=value）
-  local web_install=$(grep "web_install=" "$INSTALL_MODEL_FILE" | cut -d'=' -f2)
-  local rag_install=$(grep "rag_install=" "$INSTALL_MODEL_FILE" | cut -d'=' -f2)
+  local web_install=$(grep "web_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
+  local rag_install=$(grep "rag_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
 
   # 验证读取结果
   if [ -z "$web_install" ] || [ -z "$rag_install" ]; then
@@ -557,7 +557,7 @@ read_install_model() {
 # 示例：根据安装模式执行对应操作（可根据实际需求扩展）
 install_components() {
   # 读取安装模式
-  read_install_model || return 1
+  read_install_mode || return 1
 
   # 安装Web界面（如果用户选择）
   if [ "$WEB_INSTALL" = "y" ]; then

@@ -7,12 +7,12 @@ COLOR_ERROR='\033[31m'   # 红色错误
 COLOR_RESET='\033[0m'    # 重置颜色
 
 # 存储安装模式的文件路径
-INSTALL_MODEL_FILE="/etc/euler_Intelligence_install_model"
+INSTALL_MODE_FILE="/etc/euler_Intelligence_install_mode"
 
 # 询问用户并保存安装模式
 ask_install_options() {
   # 存储安装模式的文件路径
-  INSTALL_MODEL_FILE="/etc/euler_Intelligence_install_model"
+  INSTALL_MODE_FILE="/etc/euler_Intelligence_install_mode"
   echo -e "\n${COLOR_INFO}[Info] 请选择附加组件安装选项:${COLOR_RESET}"
 
   # 询问是否安装web
@@ -42,23 +42,23 @@ ask_install_options() {
   rag_install=$(echo "$rag_choice" | tr '[:upper:]' '[:lower:]')
 
   # 保存到文件（格式：key=value，便于后续读取）
-  echo "web_install=$web_install" >"$INSTALL_MODEL_FILE"
-  echo "rag_install=$rag_install" >>"$INSTALL_MODEL_FILE"
+  echo "web_install=$web_install" >"$INSTALL_MODE_FILE"
+  echo "rag_install=$rag_install" >>"$INSTALL_MODE_FILE"
 
-  echo -e "\n${COLOR_INFO}[Info] 安装模式已保存到: $INSTALL_MODEL_FILE${COLOR_RESET}"
+  echo -e "\n${COLOR_INFO}[Info] 安装模式已保存到: $INSTALL_MODE_FILE${COLOR_RESET}"
   return 0
 }
 # 读取安装模式的方法
-read_install_model() {
+read_install_mode() {
   # 检查文件是否存在
-  if [ ! -f "$INSTALL_MODEL_FILE" ]; then
-    echo -e "${COLOR_ERROR}[Error] 安装模式文件不存在: $INSTALL_MODEL_FILE${COLOR_RESET}"
+  if [ ! -f "$INSTALL_MODE_FILE" ]; then
+    echo -e "${COLOR_ERROR}[Error] 安装模式文件不存在: $INSTALL_MODE_FILE${COLOR_RESET}"
     return 1
   fi
 
   # 从文件读取配置（格式：key=value）
-  local web_install=$(grep "web_install=" "$INSTALL_MODEL_FILE" | cut -d'=' -f2)
-  local rag_install=$(grep "rag_install=" "$INSTALL_MODEL_FILE" | cut -d'=' -f2)
+  local web_install=$(grep "web_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
+  local rag_install=$(grep "rag_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
 
   # 验证读取结果
   if [ -z "$web_install" ] || [ -z "$rag_install" ]; then
@@ -79,7 +79,7 @@ read_install_model() {
 # 示例：根据安装模式执行对应操作（可根据实际需求扩展）
 install_components() {
   # 读取安装模式
-  read_install_model || return 1
+  read_install_mode || return 1
 
   # 安装Web界面（如果用户选择）
   if [ "$WEB_INSTALL" = "y" ]; then
