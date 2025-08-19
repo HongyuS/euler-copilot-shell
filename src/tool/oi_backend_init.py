@@ -7,6 +7,7 @@ from pathlib import Path
 from textual.app import App
 
 from app.deployment.ui import EnvironmentCheckScreen
+from config.manager import ConfigManager
 from log.manager import get_logger
 
 
@@ -15,6 +16,20 @@ def oi_backend_init() -> None:
     logger = get_logger(__name__)
 
     try:
+        # 首先检查和更新配置文件
+        logger.info("检查配置文件...")
+
+        # 在部署阶段，使用普通配置管理器操作 root 用户的配置
+        # 这样 Agent 初始化时可以正常写入 AppID 等信息
+        # 部署完成后会将完整配置复制为全局模板
+        config_manager = ConfigManager()
+        config_updated = config_manager.validate_and_update_config()
+
+        if config_updated:
+            logger.info("配置文件已更新")
+        else:
+            logger.info("配置文件检查完成")
+
         # 获取项目根目录的绝对路径
         project_root = Path(__file__).parent.parent
         css_path = str(project_root / "app" / "css" / "styles.tcss")

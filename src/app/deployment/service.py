@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 import httpx
 import toml
 
+from config.manager import ConfigManager
 from log.manager import get_logger
 
 from .agent import AgentManager
@@ -293,10 +294,13 @@ class DeploymentService:
 
             return False
 
-        # 部署完成
+        # 部署完成，创建全局配置模板供其他用户使用
         self.state.is_running = False
         self.state.is_completed = True
         self.state.add_log("✓ openEuler Intelligence 后端部署完成！")
+
+        # 创建全局配置模板，包含部署时的配置信息
+        await self._create_global_config_template(config)
 
         if progress_callback:
             progress_callback(self.state)
@@ -945,3 +949,45 @@ class DeploymentService:
             self.state.add_log("✗ Agent 初始化失败")
 
         return success
+
+    async def _create_global_config_template(self, config: DeploymentConfig) -> None:
+        """
+        创建全局配置模板
+
+        基于当前 root 用户的实际配置创建全局配置模板，供其他用户使用
+        这样可以确保模板包含部署过程中生成的所有配置信息（如 Agent AppID 等）
+        同时将部署时经过验证的大模型配置设置为默认的 OpenAI 配置
+
+        Args:
+            config: 部署配置
+
+        """
+        try:
+            # 获取当前root用户的实际配置（包含 Agent 初始化后的完整配置）
+            current_config_manager = ConfigManager()
+
+            # 创建专用的模板配置管理器
+            template_manager = ConfigManager.create_deployment_manager()
+
+            # 将当前root用户的完整配置复制到模板中
+            template_manager.data = current_config_manager.data
+
+            # 将部署时用户输入的经过验证的大模型信息设置为默认的 OpenAI 配置
+            # 这样其他用户可以直接使用这些已验证的配置
+            template_manager.set_base_url(config.llm.endpoint)
+            template_manager.set_model(config.llm.model)
+            template_manager.set_api_key(config.llm.api_key)
+
+            # 创建全局配置模板文件
+            success = template_manager.create_global_template()
+
+            if success:
+                self.state.add_log("✓ 全局配置模板创建成功，包含已验证的大模型配置，其他用户可正常使用")
+                logger.info("全局配置模板创建成功，包含部署时的大模型配置")
+            else:
+                self.state.add_log("⚠ 全局配置模板创建失败，可能影响其他用户使用")
+                logger.warning("全局配置模板创建失败")
+
+        except Exception:
+            logger.exception("创建全局配置模板时发生异常")
+            self.state.add_log("⚠ 配置模板创建异常，可能影响其他用户使用")
