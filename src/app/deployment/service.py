@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import httpx
 import toml
 
 from log.manager import get_logger
@@ -798,15 +799,137 @@ class DeploymentService:
                 logger.warning("读取进程输出时发生错误: %s", e)
                 break
 
+    async def _check_framework_service_health(
+        self,
+        server_ip: str,
+        server_port: int,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """检查 framework 服务健康状态"""
+        # 1. 检查 systemctl framework 服务状态
+        if not await self._check_systemctl_service_status(progress_callback):
+            return False
+
+        # 2. 检查 HTTP API 接口连通性
+        return await self._check_framework_api_health(server_ip, server_port, progress_callback)
+
+    async def _check_systemctl_service_status(
+        self,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """检查 systemctl framework 服务状态，每2秒检查一次，5次后超时"""
+        max_attempts = 5
+        check_interval = 2.0  # 2秒
+
+        for attempt in range(1, max_attempts + 1):
+            self.state.add_log(f"检查 framework 服务状态 ({attempt}/{max_attempts})...")
+
+            if progress_callback:
+                progress_callback(self.state)
+
+            try:
+                # 使用 systemctl is-active 检查服务状态
+                process = await asyncio.create_subprocess_exec(
+                    "systemctl",
+                    "is-active",
+                    "framework",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+
+                stdout, stderr = await process.communicate()
+                status = stdout.decode("utf-8").strip()
+
+                if process.returncode == 0 and status == "active":
+                    self.state.add_log("✓ Framework 服务状态正常")
+                    return True
+
+                self.state.add_log(f"Framework 服务状态: {status}")
+
+                if attempt < max_attempts:
+                    self.state.add_log(f"等待 {check_interval} 秒后重试...")
+                    await asyncio.sleep(check_interval)
+
+            except (OSError, TimeoutError) as e:
+                self.state.add_log(f"检查服务状态时发生错误: {e}")
+                if attempt < max_attempts:
+                    await asyncio.sleep(check_interval)
+
+        self.state.add_log("✗ Framework 服务状态检查超时失败")
+        return False
+
+    async def _check_framework_api_health(
+        self,
+        server_ip: str,
+        server_port: int,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """检查 framework API 健康状态，每10秒检查一次，5分钟后超时"""
+        max_attempts = 30
+        check_interval = 10.0  # 10秒
+        api_url = f"http://{server_ip}:{server_port}/api/user"
+        http_ok = 200  # HTTP OK 状态码
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
+            self.state.add_log("等待 openEuler Intelligence 服务就绪")
+            for attempt in range(1, max_attempts + 1):
+                if progress_callback:
+                    progress_callback(self.state)
+
+                try:
+                    response = await client.get(api_url)
+
+                    if response.status_code == http_ok:
+                        self.state.add_log("✓ openEuler Intelligence 服务已就绪")
+                        return True
+
+                except httpx.ConnectError:
+                    self.state.add_log(f"无法连接到 {api_url}")
+                except httpx.TimeoutException:
+                    self.state.add_log(f"连接 {api_url} 超时")
+                except (httpx.RequestError, OSError) as e:
+                    self.state.add_log(f"API 连通性检查时发生错误: {e}")
+
+                if attempt < max_attempts:
+                    await asyncio.sleep(check_interval)
+
+        self.state.add_log("✗ openEuler Intelligence API 服务检查超时失败")
+        return False
+
     async def _run_agent_init(
         self,
         config: DeploymentConfig,
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """运行 Agent 初始化脚本"""
+        self.state.current_step = 7
+        self.state.current_step_name = "初始化 Agent 服务"
+        self.state.add_log("正在检查 framework 服务连通性...")
+
+        if progress_callback:
+            progress_callback(self.state)
+
         # 使用配置中的服务器 IP 和默认端口
         server_ip = config.server_ip or "127.0.0.1"
-        agent_manager = AgentManager(server_ip=server_ip, server_port=8002)
+        server_port = 8002
+
+        # 检查 framework 服务连通性
+        if not await self._check_framework_service_health(server_ip, server_port, progress_callback):
+            self.state.add_log("✗ Framework 服务连通性检查失败")
+            return False
+
+        self.state.add_log("✓ Framework 服务连通性检查通过，开始初始化 Agent...")
+
+        if progress_callback:
+            progress_callback(self.state)
 
         # 初始化 Agent 和 MCP 服务
-        return await agent_manager.initialize_agents(progress_callback)
+        agent_manager = AgentManager(server_ip=server_ip, server_port=server_port)
+        success = await agent_manager.initialize_agents(progress_callback)
+
+        if success:
+            self.state.add_log("✓ Agent 初始化完成")
+        else:
+            self.state.add_log("✗ Agent 初始化失败")
+
+        return success
