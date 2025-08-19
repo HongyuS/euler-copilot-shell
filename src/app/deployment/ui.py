@@ -405,7 +405,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             # 描述区域，显示当前部署模式的详细说明
             with Horizontal(classes="form-row"):
                 yield Static(
-                    "轻量部署：仅部署框架服务。",
+                    "轻量部署：仅部署框架服务，自动初始化 Agent。",
                     id="deployment_mode_desc",
                     classes="form-input",
                 )
@@ -533,10 +533,10 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             # 如果当前为轻量，则切换到全量
             if btn.label and "轻量" in str(btn.label):
                 btn.label = "全量部署"
-                desc.update("全量部署：部署框架服务、Web 界面和 RAG 组件。")
+                desc.update("全量部署：部署框架服务、Web 界面和 RAG 组件，需手动配置 Agent。")
             else:
                 btn.label = "轻量部署"
-                desc.update("轻量部署：仅部署框架服务。")
+                desc.update("轻量部署：仅部署框架服务，自动初始化 Agent。")
         except (AttributeError, ValueError):
             # 查询失败或属性错误时忽略
             return
