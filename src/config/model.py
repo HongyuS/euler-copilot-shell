@@ -56,6 +56,7 @@ class HermesConfig:
 
     base_url: str = field(default="https://www.eulerintelli.com")
     api_key: str = field(default="your-eulerintelli-api-key")
+    default_app: str = field(default="")
 
     @classmethod
     def from_dict(cls, d: dict) -> "HermesConfig":
@@ -63,11 +64,16 @@ class HermesConfig:
         return cls(
             base_url=d.get("base_url", cls.base_url),
             api_key=d.get("api_key", cls.api_key),
+            default_app=d.get("default_app", cls.default_app),
         )
 
     def to_dict(self) -> dict:
         """转换为字典"""
-        return {"base_url": self.base_url, "api_key": self.api_key}
+        return {
+            "base_url": self.base_url,
+            "api_key": self.api_key,
+            "default_app": self.default_app,
+        }
 
 
 @dataclass
