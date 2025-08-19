@@ -272,7 +272,8 @@ class DeploymentService:
             # 重置状态
             self.state.reset()
             self.state.is_running = True
-            self.state.total_steps = 7
+            # 根据部署模式设置总步数：轻量模式7步，全量模式6步
+            self.state.total_steps = 7 if config.deployment_mode == "light" else 6
 
             # 执行部署步骤
             success = await self._execute_deployment_steps(config, progress_callback)
@@ -366,7 +367,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """执行所有部署步骤"""
-        # 定义部署步骤
+        # 定义基础部署步骤
         steps = [
             self._check_environment,
             self._run_env_check_script,
@@ -374,13 +375,22 @@ class DeploymentService:
             self._generate_config_files,
             self._setup_deploy_mode,
             self._run_init_config_script,
-            self._run_agent_init,
         ]
+
+        # 轻量化部署模式下才自动执行 Agent 初始化
+        if config.deployment_mode == "light":
+            steps.append(self._run_agent_init)
 
         # 依次执行每个步骤
         for step in steps:
             if not await step(config, progress_callback):
                 return False
+
+        # 如果是全量部署模式，提示用户到网页端完成 Agent 配置
+        if config.deployment_mode == "full":
+            self.state.add_log("✓ 基础服务部署完成")
+            self.state.add_log("请访问网页管理界面完成 Agent 服务配置")
+            self.state.add_log(f"管理界面地址: http://{config.server_ip}:8080")
 
         return True
 
@@ -870,9 +880,11 @@ class DeploymentService:
         api_url = f"http://{server_ip}:{server_port}/api/user"
         http_ok = 200  # HTTP OK 状态码
 
+        self.state.add_log("等待 openEuler Intelligence 服务就绪")
+
         async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
-            self.state.add_log("等待 openEuler Intelligence 服务就绪")
             for attempt in range(1, max_attempts + 1):
+                logger.debug("第 %d 次检查 openEuler Intelligence 服务状态...", attempt)
                 if progress_callback:
                     progress_callback(self.state)
 
@@ -884,7 +896,7 @@ class DeploymentService:
                         return True
 
                 except httpx.ConnectError:
-                    self.state.add_log(f"无法连接到 {api_url}")
+                    pass
                 except httpx.TimeoutException:
                     self.state.add_log(f"连接 {api_url} 超时")
                 except (httpx.RequestError, OSError) as e:
@@ -904,7 +916,7 @@ class DeploymentService:
         """运行 Agent 初始化脚本"""
         self.state.current_step = 7
         self.state.current_step_name = "初始化 Agent 服务"
-        self.state.add_log("正在检查 framework 服务连通性...")
+        self.state.add_log("正在检查 openEuler Intelligence 后端服务状态...")
 
         if progress_callback:
             progress_callback(self.state)
@@ -913,12 +925,12 @@ class DeploymentService:
         server_ip = config.server_ip or "127.0.0.1"
         server_port = 8002
 
-        # 检查 framework 服务连通性
+        # 检查 openEuler Intelligence 后端服务状态
         if not await self._check_framework_service_health(server_ip, server_port, progress_callback):
-            self.state.add_log("✗ Framework 服务连通性检查失败")
+            self.state.add_log("✗ openEuler Intelligence 服务检查失败")
             return False
 
-        self.state.add_log("✓ Framework 服务连通性检查通过，开始初始化 Agent...")
+        self.state.add_log("✓ openEuler Intelligence 服务检查通过，开始初始化 Agent...")
 
         if progress_callback:
             progress_callback(self.state)

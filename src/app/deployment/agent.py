@@ -177,8 +177,18 @@ class ApiClient:
                 logger.exception(msg)
                 raise ApiError(msg) from e
 
-    async def check_mcp_service_status(self, service_id: str) -> bool:
-        """检查 MCP 服务状态"""
+    async def check_mcp_service_status(self, service_id: str) -> str | None:
+        """
+        检查 MCP 服务状态
+
+        返回值:
+        - "ready": 安装完成且成功
+        - "failed": 安装失败
+        - "cancelled": 安装取消
+        - "init": 初始化中
+        - "installing": 安装中
+        - None: 网络错误或无法获取状态
+        """
         url = f"{self.base_url}/api/mcp/{service_id}"
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -187,11 +197,24 @@ class ApiClient:
                 response.raise_for_status()
 
                 result = response.json()
-                # 假设安装成功的标志是 code == 200
-                return result.get("code") == HTTP_OK
+                # 检查 API 调用是否成功
+                if result.get("code") != HTTP_OK:
+                    logger.warning("获取 MCP 服务状态失败: %s", result.get("message", "Unknown error"))
+                    return None
 
-            except httpx.RequestError:
-                return False
+                # 获取服务状态
+                service_result = result.get("result", {})
+                status = service_result.get("status")
+
+                if status in ("ready", "failed", "cancelled", "init", "installing"):
+                    return status
+
+                logger.warning("未知的 MCP 服务状态: %s", status)
+
+            except httpx.RequestError as e:
+                logger.debug("检查 MCP 服务状态网络错误: %s", e)
+
+            return None
 
     async def wait_for_installation(
         self,
@@ -199,19 +222,42 @@ class ApiClient:
         max_wait_time: int = 300,
         check_interval: int = 10,
     ) -> bool:
-        """等待 MCP 服务安装完成"""
+        """
+        等待 MCP 服务安装完成
+
+        只要接口能打通、后端返回的状态没有明确成功或失败或取消，就会一直等下去。
+        只有在明确失败或取消时才返回 False。
+        """
         logger.info("等待 MCP 服务安装完成: %s", service_id)
 
-        for attempt in range(max_wait_time // check_interval):
-            if await self.check_mcp_service_status(service_id):
+        attempt = 0
+        while True:
+            status = await self.check_mcp_service_status(service_id)
+
+            if status == "ready":
                 logger.info("MCP 服务安装完成: %s", service_id)
                 return True
 
-            logger.debug("MCP 服务 %s 安装中... (第 %d 次检查)", service_id, attempt + 1)
-            await asyncio.sleep(check_interval)
+            if status in ("failed", "cancelled"):
+                logger.error("MCP 服务安装失败或被取消: %s (状态: %s)", service_id, status)
+                return False
 
-        logger.error("MCP 服务安装超时: %s", service_id)
-        return False
+            if status in ("init", "installing"):
+                logger.debug("MCP 服务 %s %s中... (第 %d 次检查)", service_id,
+                           "初始化" if status == "init" else "安装", attempt + 1)
+            elif status is None:
+                logger.debug("MCP 服务 %s 状态检查失败，继续等待... (第 %d 次检查)", service_id, attempt + 1)
+            else:
+                logger.debug("MCP 服务 %s 状态未知: %s，继续等待... (第 %d 次检查)", service_id, status, attempt + 1)
+
+            # 只有在超过最大等待时间时才超时返回，但仅在没有明确失败的情况下
+            attempt += 1
+            if attempt * check_interval >= max_wait_time:
+                # 这里不返回 False，而是继续等待，因为要求只要接口能打通就一直等
+                logger.warning("MCP 服务安装等待超时: %s (已等待 %d 秒，但将继续尝试)",
+                             service_id, max_wait_time)
+
+            await asyncio.sleep(check_interval)
 
     async def activate_mcp_service(self, service_id: str) -> None:
         """激活 MCP 服务"""
