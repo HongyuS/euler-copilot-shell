@@ -32,9 +32,9 @@ class LogLevel(str, Enum):
 class OpenAIConfig:
     """OpenAI 后端配置"""
 
-    base_url: str = field(default="http://127.0.0.1:1234/v1")
-    model: str = field(default="qwen/qwen3-30b-a3b-2507")
-    api_key: str = field(default="lm-studio")
+    base_url: str = field(default="")
+    model: str = field(default="")
+    api_key: str = field(default="")
 
     @classmethod
     def from_dict(cls, d: dict) -> "OpenAIConfig":
@@ -54,8 +54,8 @@ class OpenAIConfig:
 class HermesConfig:
     """Hermes 后端配置"""
 
-    base_url: str = field(default="https://www.eulerintelli.com")
-    api_key: str = field(default="your-eulerintelli-api-key")
+    base_url: str = field(default="http://127.0.0.1:8002")
+    api_key: str = field(default="")
     default_app: str = field(default="")
 
     @classmethod
@@ -80,7 +80,7 @@ class HermesConfig:
 class ConfigModel:
     """配置模型"""
 
-    backend: Backend = field(default=Backend.OPENAI)
+    backend: Backend = field(default=Backend.EULERINTELLI)
     openai: OpenAIConfig = field(default_factory=OpenAIConfig)
     eulerintelli: HermesConfig = field(default_factory=HermesConfig)
     log_level: LogLevel = field(default=LogLevel.INFO)
