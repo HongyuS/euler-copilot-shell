@@ -112,11 +112,11 @@ class McpConfigLoader:
             config_data = json.load(f)
 
         return McpConfig(
-            name=name,
-            description=name,
-            overview=name,
-            config=config_data,
-            mcp_type="sse",  # 默认类型
+            name=config_data.get("name", name),
+            description=config_data.get("description", name),
+            overview=config_data.get("overview", name),
+            config=config_data.get("config", {}),
+            mcp_type=config_data.get("mcpType", "sse"),
         )
 
 
@@ -352,7 +352,22 @@ class AgentManager:
         """初始化智能体管理器"""
         self.api_client = ApiClient(server_ip, server_port)
         self.config_manager = ConfigManager()
-        self.mcp_config_dir = Path("/usr/lib/openeuler-intelligence/scripts/5-resource/mcp_config")
+
+        # 尝试多个可能的配置路径
+        possible_paths = [
+            Path("/usr/lib/openeuler-intelligence/scripts/5-resource/mcp_config"),  # 生产环境
+            Path("scripts/deploy/5-resource/mcp_config"),  # 开发环境（相对路径）
+            Path(__file__).parent.parent.parent.parent / "scripts/deploy/5-resource/mcp_config",  # 开发环境（绝对路径）
+        ]
+
+        self.mcp_config_dir = possible_paths[0]  # 默认使用生产环境路径
+        for path in possible_paths:
+            if path.exists():
+                self.mcp_config_dir = path
+                logger.info("使用 MCP 配置目录: %s", path)
+                break
+        else:
+            logger.warning("未找到 MCP 配置目录，使用默认路径: %s", self.mcp_config_dir)
 
     async def initialize_agents(
         self,
