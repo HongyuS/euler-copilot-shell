@@ -521,7 +521,11 @@ setup_tiktoken_cache() {
   cp $token_py_file $FILE
   echo -e "${COLOR_SUCCESS}[Success] tiktoken缓存已配置: $target_file${COLOR_RESET}"
 }
-
+generate_random_password2() {
+  # 生成24位随机密码（包含大小写字母、数字和特殊字符）
+  local password=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20)
+  echo "$password"
+}
 install_framework() {
   # 1. 安装前检查
   echo -e "${COLOR_INFO}[Info] 开始初始化配置 euler-copilot-framework...${COLOR_RESET}"
@@ -581,8 +585,8 @@ install_framework() {
       mv -v "${framework_file}.bak" "$framework_file"
       return 1
     fi
-    port=8002
   else
+    port=8002
     sed -i "/\[login\.settings\]/,/^\[/ s|host = '.*'|host = 'http://${ip_address}:8000'|" "$framework_file"
     sed -i "s|login_api = '.*'|login_api = 'http://${ip_address}:8080/api/auth/login'|" $framework_file
     sed -i "s/domain = '.*'/domain = '$ip_address'/" $framework_file
@@ -611,6 +615,15 @@ EOF
     fi
   fi
 
+  #更新 security key
+  key1=$(generate_random_password2)
+  key2=$(generate_random_password2)
+  key3=$(generate_random_password2)
+  key4=$(generate_random_password2)
+  sed -i "s/half_key1 = '.*'/half_key1 = '$key1'/" $framework_file
+  sed -i "s/half_key2 = '.*'/half_key2 = '$key2'/" $framework_file
+  sed -i "s/half_key3 = '.*'/half_key3 = '$key3'/" $framework_file
+  sed -i "s/jwt_key = '.*'/jwt_key = '$key4'/" $framework_file
   # 6. 部署配置文件
   echo -e "${COLOR_INFO}[Info] 部署配置文件...${COLOR_RESET}"
   mkdir -p "$(dirname "$framework_target")"
