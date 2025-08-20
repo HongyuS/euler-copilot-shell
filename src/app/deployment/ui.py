@@ -473,6 +473,13 @@ class DeploymentConfigScreen(ModalScreen[bool]):
         with Vertical(classes="embedding-config-container"):
             yield Static("嵌入模型配置", classes="form-label")
 
+            # 添加轻量部署说明
+            yield Static(
+                "[dim]轻量部署模式下，Embedding 配置为可选项。[/dim]",
+                id="embedding_mode_hint",
+                classes="form-input",
+            )
+
             with Horizontal(classes="form-row"):
                 yield Label("API 端点:", classes="form-label")
                 yield Input(
@@ -506,7 +513,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
     async def on_deploy_button_pressed(self) -> None:
         """处理部署按钮点击"""
         if self._collect_config():
-            # 验证配置
+            # 基础配置验证
             is_valid, errors = self.config.validate()
             if not is_valid:
                 await self.app.push_screen(
@@ -514,8 +521,69 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                 )
                 return
 
-            # 推送部署进度屏幕，不再自动退出应用
-            # 部署进度屏幕会根据用户选择决定是否退出或返回配置
+            # LLM function call 能力验证
+            llm_valid, llm_message, llm_info = await self.config.validate_llm_connectivity()
+            if not llm_valid:
+                await self.app.push_screen(
+                    ErrorMessageScreen(
+                        "LLM 配置验证失败",
+                        [f"LLM 配置无效：{llm_message}"],
+                    ),
+                )
+                return
+
+            # 检查 LLM 是否支持 function call
+            if not llm_info.get("supports_function_call", False):
+                await self.app.push_screen(
+                    ErrorMessageScreen(
+                        "LLM 功能不满足要求",
+                        [
+                            "所选的 LLM 模型不支持 function call 功能，无法继续部署。",
+                            "请选择支持 function call 的模型（如 OpenAI GPT 系列、通义千问、DeepSeek 等）。",
+                        ],
+                    ),
+                )
+                return
+
+            # 轻量部署模式下的 Embedding 验证
+            if self.config.deployment_mode == "light":
+                # 检查是否填写了 Embedding 配置
+                has_embedding = any(
+                    [
+                        self.config.embedding.endpoint.strip(),
+                        self.config.embedding.api_key.strip(),
+                        self.config.embedding.model.strip(),
+                    ],
+                )
+
+                if has_embedding:
+                    # 如果填了 Embedding 配置，需要验证连通性
+                    embed_valid, embed_message, _ = await self.config.validate_embedding_connectivity()
+                    if not embed_valid:
+                        await self.app.push_screen(
+                            ErrorMessageScreen(
+                                "Embedding 配置验证失败",
+                                [
+                                    f"Embedding 配置无效：{embed_message}",
+                                    "轻量部署模式下，如果填写了 Embedding 配置，必须确保配置正确。",
+                                    "您可以选择清空 Embedding 配置字段来跳过此验证。",
+                                ],
+                            ),
+                        )
+                        return
+            else:
+                # 全量部署模式下，必须验证 Embedding
+                embed_valid, embed_message, _ = await self.config.validate_embedding_connectivity()
+                if not embed_valid:
+                    await self.app.push_screen(
+                        ErrorMessageScreen(
+                            "Embedding 配置验证失败",
+                            [f"Embedding 配置无效：{embed_message}"],
+                        ),
+                    )
+                    return
+
+            # 所有验证通过，开始部署
             await self.app.push_screen(DeploymentProgressScreen(self.config))
 
     @on(Button.Pressed, "#cancel")
@@ -530,16 +598,37 @@ class DeploymentConfigScreen(ModalScreen[bool]):
         try:
             btn = self.query_one("#deployment_mode_btn", Button)
             desc = self.query_one("#deployment_mode_desc", Static)
+
             # 如果当前为轻量，则切换到全量
             if btn.label and "轻量" in str(btn.label):
                 btn.label = "全量部署"
                 desc.update("全量部署：部署框架服务、Web 界面和 RAG 组件，需手动配置 Agent。")
+                # 更新 Embedding 配置提示
+                self._update_embedding_hint(is_light_mode=False)
             else:
                 btn.label = "轻量部署"
                 desc.update("轻量部署：仅部署框架服务，自动初始化 Agent。")
+                # 更新 Embedding 配置提示
+                self._update_embedding_hint(is_light_mode=True)
         except (AttributeError, ValueError):
             # 查询失败或属性错误时忽略
             return
+
+    def _update_embedding_hint(self, *, is_light_mode: bool) -> None:
+        """更新 Embedding 配置提示信息"""
+        try:
+            hint_widget = self.query_one("#embedding_mode_hint", Static)
+            if is_light_mode:
+                hint_widget.update(
+                    "[dim]轻量部署模式下，Embedding 配置为可选项。如果不填写，将跳过 RAG 功能。[/dim]",
+                )
+            else:
+                hint_widget.update(
+                    "[dim]全量部署模式下，Embedding 配置为必填项，用于支持 RAG 功能。[/dim]",
+                )
+        except (AttributeError, ValueError):
+            # 如果控件不存在，忽略错误
+            pass
 
     @on(Input.Changed, "#llm_endpoint, #llm_api_key, #llm_model")
     async def on_llm_field_changed(self, event: Input.Changed) -> None:
@@ -581,7 +670,23 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             endpoint = self.query_one("#embedding_endpoint", Input).value.strip()
             api_key = self.query_one("#embedding_api_key", Input).value.strip()
             model = self.query_one("#embedding_model", Input).value.strip()
+
+            # 检查部署模式
+            try:
+                btn = self.query_one("#deployment_mode_btn", Button)
+                label = str(btn.label) if btn.label is not None else ""
+                is_light_mode = "轻量" in label
+            except (AttributeError, ValueError):
+                is_light_mode = True  # 默认为轻量模式
+
+            # 轻量模式下，只有在用户填写了 Embedding 字段时才验证
+            if is_light_mode:
+                has_embedding_config = bool(endpoint or api_key or model)
+                return has_embedding_config and bool(endpoint and api_key and model)
+
+            # 全量模式下，必须验证
             return bool(endpoint and api_key and model)
+
         except (AttributeError, ValueError):
             return False
 
@@ -616,12 +721,17 @@ class DeploymentConfigScreen(ModalScreen[bool]):
 
             # 更新验证状态
             if is_valid:
-                status_widget.update(f"[green]✓ {message}[/green]")
                 # 检查是否支持 function_call
-                if info.get("supports_function_call"):
+                supports_function_call = info.get("supports_function_call", False)
+                if supports_function_call:
+                    status_widget.update(f"[green]✓ {message}[/green]")
                     self.notify("LLM 验证成功，支持 function_call 功能", severity="information")
                 else:
-                    self.notify("LLM 验证成功，但不支持 function_call 功能", severity="warning")
+                    status_widget.update("[red]✗ 不支持 function_call[/red]")
+                    self.notify(
+                        "LLM 验证失败：模型不支持 function_call 功能，无法用于部署。请选择支持 function_call 的模型。",
+                        severity="error",
+                    )
             else:
                 status_widget.update(f"[red]✗ {message}[/red]")
                 self.notify(f"LLM 验证失败: {message}", severity="error")
