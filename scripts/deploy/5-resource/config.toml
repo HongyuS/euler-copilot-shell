@@ -5,15 +5,16 @@ data_dir = '/opt/copilot'
 
 [login]
 provider = 'authhub'
+
 [login.settings]
-host = 'http://76.53.17.51:8000'
+host = ''
 host_inner = 'http://127.0.0.1:11120'
-login_api = 'http://76.53.17.51:8080/api/auth/login'
+login_api = ''
 app_id = 'ZqMwXAjOAV0GhiTghERAahuR'
 app_secret = 'g6QliWAQ89aQJ6qHtKiMuqJubxF28Juw7IGF46GRjb9Ap2g0'
 
 [fastapi]
-domain = '76.53.17.51'
+domain = ''
 
 [security]
 half_key1 = 'jtbDsFPxCv1cjXCKwzWU'
@@ -23,9 +24,9 @@ jwt_key = 'MF0DXTp0N9Ky9rscrwHz'
 
 [embedding]
 type = 'openai'
-endpoint = 'http://10.50.88.44:11434/v1'
-api_key = 'sk-123456'
-model = 'bge-m3'
+endpoint = ''
+api_key = ''
+model = ''
 
 [rag]
 rag_service = 'http://127.0.0.1:9988'
@@ -44,23 +45,23 @@ secret_key = 'ZVzc6xJr3B7HsEUibVBh'
 secure = false
 
 [llm]
-endpoint = "http://10.50.88.44:11434/v1"
-key = 'sk-123456'
-model = 'deepseek-llm-7b-chat'
+endpoint = ''
+key = ''
+model = ''
 max_tokens = 8192
 temperature = 0.7
 
 [function_call]
-backend = 'ollama'
-endpoint = 'http://10.50.88.44:11434'
-model = 'deepseek-llm-7b-chat'
-api_key = 'sk-123456'
+backend = 'function_call'
+endpoint = ''
+model = ''
+api_key = ''
 max_tokens = 8192
 temperature = 0.7
 
 [check]
 enable = false
-words_list = ""
+words_list = ''
 
 [extra]
 sql_url = ''

@@ -124,7 +124,9 @@ class DeploymentResourceManager:
             # 更新 Embedding 配置
             if "embedding" in toml_data:
                 toml_data["embedding"]["type"] = config.embedding.type
+                toml_data["embedding"]["endpoint"] = config.embedding.endpoint
                 toml_data["embedding"]["api_key"] = config.embedding.api_key
+                toml_data["embedding"]["model"] = config.embedding.model
 
             # 将更新后的数据转换回 TOML 格式
             return toml.dumps(toml_data)
