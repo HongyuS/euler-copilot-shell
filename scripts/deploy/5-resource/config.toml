@@ -7,20 +7,20 @@ data_dir = '/opt/copilot'
 provider = 'authhub'
 
 [login.settings]
-host = ''
+host = 'http://127.0.0.1:8000'
 host_inner = 'http://127.0.0.1:11120'
-login_api = ''
-app_id = 'ZqMwXAjOAV0GhiTghERAahuR'
-app_secret = 'g6QliWAQ89aQJ6qHtKiMuqJubxF28Juw7IGF46GRjb9Ap2g0'
+login_api = 'http://127.0.0.1:8080/api/auth/logon'
+app_id = ''
+app_secret = ''
 
 [fastapi]
-domain = ''
+domain = '127.0.0.1'
 
 [security]
-half_key1 = 'jtbDsFPxCv1cjXCKwzWU'
-half_key2 = 'sEEdztCiw2szN4EtmNR6'
-half_key3 = 'NXcp2KUqYjezctZDDasc'
-jwt_key = 'MF0DXTp0N9Ky9rscrwHz'
+half_key1 = ''
+half_key2 = ''
+half_key3 = ''
+jwt_key = ''
 
 [embedding]
 type = 'openai'
@@ -41,7 +41,7 @@ database = 'euler_copilot'
 [minio]
 endpoint = '127.0.0.1:9000'
 access_key = 'minioadmin'
-secret_key = 'ZVzc6xJr3B7HsEUibVBh'
+secret_key = ''
 secure = false
 
 [llm]
