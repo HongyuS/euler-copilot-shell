@@ -3,3 +3,9 @@
 
 此模块包含 openEuler Intelligence 后端部署的 TUI 界面和相关功能。
 """
+
+from .components import InitializationModeScreen
+
+__all__ = [
+    "InitializationModeScreen",
+]

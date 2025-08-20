@@ -6,12 +6,17 @@
 
 from typing import Any
 
+import httpx
 from openai import APIError, AsyncOpenAI, AuthenticationError, OpenAIError
 
 from log.manager import get_logger
 
 # 常量定义
 MAX_MODEL_DISPLAY = 5
+HTTP_OK = 200
+HTTP_UNAUTHORIZED = 401
+HTTP_FORBIDDEN = 403
+HTTP_NOT_FOUND = 404
 
 
 class APIValidator:
@@ -26,7 +31,7 @@ class APIValidator:
         endpoint: str,
         api_key: str,
         model: str,
-        timeout: int = 30,
+        timeout: int = 30,  # noqa: ASYNC109
     ) -> tuple[bool, str, dict[str, Any]]:
         """
         验证 LLM 配置
@@ -93,7 +98,7 @@ class APIValidator:
         endpoint: str,
         api_key: str,
         model: str,
-        timeout: int = 30,
+        timeout: int = 30,  # noqa: ASYNC109
     ) -> tuple[bool, str, dict[str, Any]]:
         """
         验证 Embedding 配置
@@ -251,10 +256,88 @@ class APIValidator:
                 choice = response.choices[0]
                 if hasattr(choice.message, "tool_calls") and choice.message.tool_calls:
                     tool_call = choice.message.tool_calls[0]
+                    # 安全地访问 function 属性
+                    function_name = ""
+                    function_obj = getattr(tool_call, "function", None)
+                    if function_obj and hasattr(function_obj, "name"):
+                        function_name = function_obj.name
                     return True, "支持 tools 格式的 function_call", {
-                        "function_name": tool_call.function.name,
+                        "function_name": function_name,
                         "supports_functions": True,
                         "format": "tools",
                     }
 
             return False, "不支持 function_call 功能", {"supports_functions": False}
+
+
+async def validate_oi_connection(base_url: str, access_token: str) -> tuple[bool, str]:  # noqa: PLR0911
+    """
+    验证 openEuler Intelligence 服务连接
+
+    Args:
+        base_url: 服务 URL
+        access_token: 访问令牌（可为空）
+
+    Returns:
+        tuple[bool, str]: (连接是否成功, 消息)
+
+    """
+    logger = get_logger(__name__)
+
+    try:
+        # 确保 URL 格式正确
+        if not base_url.startswith(("http://", "https://")):
+            return False, "服务 URL 必须以 http:// 或 https:// 开头"
+
+        # 移除尾部的斜杠
+        base_url = base_url.rstrip("/")
+
+        # 构造用户信息 API URL
+        api_url = f"{base_url}/api/user"
+
+        # 准备请求头
+        headers = {}
+        if access_token and access_token.strip():
+            headers["Authorization"] = f"Bearer {access_token}"
+
+        async with httpx.AsyncClient(timeout=10) as client:
+            # 发送请求
+            response = await client.get(api_url, headers=headers)
+
+            # 检查 HTTP 状态码
+            if response.status_code != HTTP_OK:
+                return _handle_http_error(response.status_code)
+
+            # 检查响应内容
+            try:
+                response_data = response.json()
+            except (ValueError, TypeError, KeyError):
+                return False, "服务返回的数据格式不正确"
+
+            # 检查 code 字段
+            code = response_data.get("code")
+            if code == HTTP_OK:
+                logger.info("openEuler Intelligence 服务连接成功")
+                return True, "连接成功"
+
+            return False, f"服务返回错误代码: {code}"
+
+    except httpx.ConnectError:
+        return False, "无法连接到服务，请检查 URL 和网络连接"
+    except httpx.TimeoutException:
+        return False, "连接超时，请检查网络连接或服务状态"
+    except Exception as e:
+        logger.exception("验证 openEuler Intelligence 连接时发生异常")
+        return False, f"连接验证失败: {e}"
+
+
+def _handle_http_error(status_code: int) -> tuple[bool, str]:
+    """处理 HTTP 错误状态码"""
+    error_messages = {
+        HTTP_UNAUTHORIZED: "访问令牌无效或已过期",
+        HTTP_FORBIDDEN: "访问权限不足",
+        HTTP_NOT_FOUND: "API 接口不存在，请检查服务版本",
+    }
+
+    message = error_messages.get(status_code, f"服务响应异常，状态码: {status_code}")
+    return False, message
