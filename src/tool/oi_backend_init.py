@@ -6,7 +6,7 @@ from pathlib import Path
 
 from textual.app import App
 
-from app.deployment.ui import EnvironmentCheckScreen
+from app.deployment import InitializationModeScreen
 from config.manager import ConfigManager
 from log.manager import get_logger
 
@@ -41,8 +41,8 @@ def oi_backend_init() -> None:
             TITLE = "openEuler Intelligence 部署助手"
 
             def on_mount(self) -> None:
-                """启动时先显示环境检查界面"""
-                self.push_screen(EnvironmentCheckScreen())
+                """启动时先显示初始化模式选择界面"""
+                self.push_screen(InitializationModeScreen())
 
         app = DeploymentApp()
         result = app.run()
