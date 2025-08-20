@@ -604,9 +604,9 @@ install_framework() {
       # 追加新的配置块到文件末尾
       cat <<EOF >>"$framework_file"
 
-
 [no_auth]
 enable = true
+
 EOF
     fi
   fi

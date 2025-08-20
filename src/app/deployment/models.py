@@ -4,6 +4,8 @@
 定义部署过程中需要的配置项数据结构。
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 
 # 常量定义
@@ -79,7 +81,7 @@ class DeploymentConfig:
         # 验证 LLM 字段
         errors.extend(self._validate_llm_fields())
 
-        # 验证 Embedding 字段
+        # 验证 Embedding 字段（根据部署模式决定是否必须）
         errors.extend(self._validate_embedding_fields())
 
         # 验证数值范围
@@ -98,7 +100,8 @@ class DeploymentConfig:
             tuple[bool, str, dict]: (是否验证成功, 消息, 验证详细信息)
 
         """
-        from .validators import APIValidator
+        # 懒导入以避免循环导入
+        from .validators import APIValidator  # noqa: PLC0415
 
         # 检查必要字段是否完整
         if not (self.llm.endpoint.strip() and self.llm.api_key.strip() and self.llm.model.strip()):
@@ -125,7 +128,8 @@ class DeploymentConfig:
             tuple[bool, str, dict]: (是否验证成功, 消息, 验证详细信息)
 
         """
-        from .validators import APIValidator
+        # 懒导入以避免循环导入
+        from .validators import APIValidator  # noqa: PLC0415
 
         # 检查必要字段是否完整
         if not (self.embedding.endpoint.strip() and self.embedding.api_key.strip() and self.embedding.model.strip()):
@@ -162,12 +166,43 @@ class DeploymentConfig:
     def _validate_embedding_fields(self) -> list[str]:
         """验证 Embedding 配置字段"""
         errors = []
-        if not self.embedding.endpoint.strip():
-            errors.append("Embedding API 端点不能为空")
-        if not self.embedding.api_key.strip():
-            errors.append("Embedding API 密钥不能为空")
-        if not self.embedding.model.strip():
-            errors.append("Embedding 模型名称不能为空")
+
+        # 检查是否有任何 Embedding 字段已填写
+        has_embedding_config = any([
+            self.embedding.endpoint.strip(),
+            self.embedding.api_key.strip(),
+            self.embedding.model.strip(),
+        ])
+
+        # 轻量部署模式下，Embedding 配置是可选的
+        if self.deployment_mode == "light":
+            # 如果用户填了任何 Embedding 字段，则所有字段都必须完整
+            if has_embedding_config:
+                if not self.embedding.endpoint.strip():
+                    errors.append(
+                        "Embedding API 端点不能为空"
+                        "（轻量部署模式下，如果填写 Embedding 配置，所有字段都必须完整）",
+                    )
+                if not self.embedding.api_key.strip():
+                    errors.append(
+                        "Embedding API 密钥不能为空"
+                        "（轻量部署模式下，如果填写 Embedding 配置，所有字段都必须完整）",
+                    )
+                if not self.embedding.model.strip():
+                    errors.append(
+                        "Embedding 模型名称不能为空"
+                        "（轻量部署模式下，如果填写 Embedding 配置，所有字段都必须完整）",
+                    )
+            # 如果没有填写，则跳过验证
+        else:
+            # 全量部署模式下，Embedding 配置是必需的
+            if not self.embedding.endpoint.strip():
+                errors.append("Embedding API 端点不能为空")
+            if not self.embedding.api_key.strip():
+                errors.append("Embedding API 密钥不能为空")
+            if not self.embedding.model.strip():
+                errors.append("Embedding 模型名称不能为空")
+
         return errors
 
     def _validate_numeric_fields(self) -> list[str]:
