@@ -111,7 +111,7 @@ install_and_verify() {
 # 安装pgvector服务
 install_pgvector() {
   local pgvector_dir="/opt/pgvector"
-  local zhparser_url="https://gitee.com/fromhsc/pgvector.git"
+  local zhparser_url="https://bgithub.xyz/pgvector/pgvector.git"
   local pgvector_installed_marker="/usr/share/pgsql/extension/vector.control" # pgvector安装后的标志文件
   echo -e "${COLOR_INFO}[Info] 开始安装pgvector...${COLOR_RESET}"
   if [ -f "$pgvector_installed_marker" ]; then
@@ -229,7 +229,7 @@ install_scws() {
 install_zhparser() {
   # 目标目录
   local zhparser_dir="/opt/zhparser"
-  local zhparser_url="https://gitee.com/fromhsc/zhparser.git"
+  local zhparser_url="https://bgithub.xyz/amutu/zhparser.git"
   local zhparser_installed_marker="/usr/share/pgsql/extension/zhparser.control" # zhparser安装后的标志文件
   echo -e "${COLOR_INFO}[Info] 开始安装zhparser...${COLOR_RESET}"
   # 检查是否已安装

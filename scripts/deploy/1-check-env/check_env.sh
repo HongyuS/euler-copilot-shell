@@ -64,8 +64,8 @@ base_urls_arm=(
 
 # RAG专用URL列表（仅当RAG启用时检测）
 rag_urls=(
-  "https://gitee.com/fromhsc/pgvector.git"
-  "https://gitee.com/fromhsc/zhparser.git"
+  "https://bgithub.xyz/pgvector/pgvector.git"
+  "https://bgithub.xyz/amutu/zhparser.git"
 )
 
 # 检测URL可达性的函数
@@ -384,7 +384,7 @@ function check_dns {
 }
 
 function check_ram {
-  local RAM_THRESHOLD=3000
+  local RAM_THRESHOLD=1024
   local current_mem=$(free -m | awk '/Mem/{print $2}')
 
   echo -e "${COLOR_INFO}[Info] 当前内存：$current_mem MB${COLOR_RESET}"
