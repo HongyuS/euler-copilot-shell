@@ -305,14 +305,6 @@ agent_manager() {
     cd "$MAIN_DIR" || exit 1
   fi
 
-  # 安装 MCP 服务
-  ./3-install-server/install_mcpserver.sh
-  # 初始化 MCP 服务
-  ./3-install-server/init_mcpserver.sh || {
-    echo -e "\n${COLOR_ERROR} 初始化 Agent 失败，请检查 MCP 服务是否可用，使用 Agent 初始化工具创建 Agent，详见部署文档...${COLOR_RESET}"
-    exit 1
-  }
-
   # 将所有接收的参数传递给 Python 脚本
   python3 4-other-script/agent_manager.py "$@"
   return 0
