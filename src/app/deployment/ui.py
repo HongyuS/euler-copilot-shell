@@ -31,6 +31,8 @@ if TYPE_CHECKING:
 from .models import DeploymentConfig, DeploymentState, EmbeddingConfig, LLMConfig
 from .service import DeploymentService
 
+FULL_PROGRESS = 100
+
 
 class DeploymentConfigScreen(ModalScreen[bool]):
     """
@@ -604,9 +606,9 @@ class DeploymentProgressScreen(ModalScreen[bool]):
     }
 
     .progress-container {
-        width: 90%;
-        max-width: 120;
-        height: 90%;
+        width: 95%;
+        max-width: 130;
+        height: 95%;
         background: $surface;
         border: solid $primary;
         padding: 1;
@@ -619,7 +621,7 @@ class DeploymentProgressScreen(ModalScreen[bool]):
     }
 
     #progress_bar {
-        width: 100%;
+        margin: 0 1;
     }
 
     #step_label {
@@ -654,6 +656,7 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         self.deployment_task: asyncio.Task[None] | None = None
         self.deployment_success = False
         self.deployment_errors: list[str] = []
+        self.deployment_progress_value = 0
 
     def compose(self) -> ComposeResult:
         """组合界面组件"""
@@ -662,7 +665,7 @@ class DeploymentProgressScreen(ModalScreen[bool]):
 
             with Vertical(classes="progress-section"):
                 yield Static("部署进度:", id="progress_label")
-                yield ProgressBar(total=100, show_eta=False, id="progress_bar")
+                yield ProgressBar(total=FULL_PROGRESS, show_eta=False, id="progress_bar")
                 yield Static("准备开始部署...", id="step_label")
 
             with Container(classes="log-section"):
@@ -694,9 +697,7 @@ class DeploymentProgressScreen(ModalScreen[bool]):
     @on(Button.Pressed, "#reconfigure")
     async def on_reconfigure_button_pressed(self) -> None:
         """处理重新配置按钮点击"""
-        # 返回配置屏幕
-        await self.app.push_screen(DeploymentConfigScreen())
-        # 关闭当前屏幕
+        # 关闭当前屏幕，返回配置屏幕
         self.dismiss(result=False)
 
     @on(Button.Pressed, "#cancel")
@@ -732,13 +733,14 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         log_widget = self.query_one("#deployment_log", RichLog)
         log_widget.clear()
 
-        # 重置进度
-        self.query_one("#progress_bar", ProgressBar).update(progress=0)
-        self.query_one("#step_label", Static).update("")
-
         # 重置状态
         self.deployment_success = False
         self.deployment_errors.clear()
+        self.deployment_progress_value = 0  # 重置进度记录
+
+        # 重置进度
+        self.query_one("#progress_bar", ProgressBar).update(progress=self.deployment_progress_value)
+        self.query_one("#step_label", Static).update("")
 
         # 重置按钮状态
         self.query_one("#finish", Button).disabled = True
@@ -815,6 +817,8 @@ class DeploymentProgressScreen(ModalScreen[bool]):
             # 更新界面状态
             if success:
                 self.deployment_success = True
+                self.query_one("#progress_bar", ProgressBar).update(progress=FULL_PROGRESS)
+
                 self.query_one("#step_label", Static).update("部署完成！")
                 self.query_one("#deployment_log", RichLog).write(
                     "[bold green]部署成功完成！[/bold green]",
@@ -841,8 +845,14 @@ class DeploymentProgressScreen(ModalScreen[bool]):
     def _on_progress_update(self, state: DeploymentState) -> None:
         """处理进度更新"""
         # 更新进度条
-        progress = (state.current_step / state.total_steps * 100) if state.total_steps > 0 else 0
-        self.query_one("#progress_bar", ProgressBar).update(progress=progress)
+        completed_steps = max(0, state.current_step - 1)  # 前面的步骤已完成
+        progress = (completed_steps / state.total_steps * FULL_PROGRESS) if state.total_steps > 0 else 0
+
+        # 记录最后的真实进度值，但避免倒退（除非是重置操作）
+        # 只有在进度实际前进或者是初始状态时才更新
+        if progress >= self.deployment_progress_value or self.deployment_progress_value == 0:
+            self.deployment_progress_value = progress
+        self.query_one("#progress_bar", ProgressBar).update(progress=self.deployment_progress_value)
 
         # 更新步骤标签
         step_text = f"步骤 {state.current_step}/{state.total_steps}: {state.current_step_name}"
