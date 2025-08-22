@@ -614,7 +614,17 @@ class DeploymentProgressScreen(ModalScreen[bool]):
 
     .progress-section {
         margin: 1 0;
-        height: 6;
+        height: auto;
+        min-height: 6;
+    }
+
+    #progress_bar {
+        width: 100%;
+    }
+
+    #step_label {
+        min-height: 1;
+        height: auto;
     }
 
     .log-section {
@@ -653,7 +663,7 @@ class DeploymentProgressScreen(ModalScreen[bool]):
             with Vertical(classes="progress-section"):
                 yield Static("部署进度:", id="progress_label")
                 yield ProgressBar(total=100, show_eta=False, id="progress_bar")
-                yield Static("", id="step_label")
+                yield Static("准备开始部署...", id="step_label")
 
             with Container(classes="log-section"):
                 yield RichLog(id="deployment_log", highlight=True, markup=True)

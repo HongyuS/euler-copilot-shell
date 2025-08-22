@@ -168,11 +168,13 @@ class DeploymentConfig:
         errors = []
 
         # 检查是否有任何 Embedding 字段已填写
-        has_embedding_config = any([
-            self.embedding.endpoint.strip(),
-            self.embedding.api_key.strip(),
-            self.embedding.model.strip(),
-        ])
+        has_embedding_config = any(
+            [
+                self.embedding.endpoint.strip(),
+                self.embedding.api_key.strip(),
+                self.embedding.model.strip(),
+            ],
+        )
 
         # 轻量部署模式下，Embedding 配置是可选的
         if self.deployment_mode == "light":
@@ -180,18 +182,15 @@ class DeploymentConfig:
             if has_embedding_config:
                 if not self.embedding.endpoint.strip():
                     errors.append(
-                        "Embedding API 端点不能为空"
-                        "（轻量部署模式下，如果填写 Embedding 配置，所有字段都必须完整）",
+                        "Embedding API 端点不能为空（轻量部署模式下，如果填写 Embedding 配置，所有字段都必须完整）",
                     )
                 if not self.embedding.api_key.strip():
                     errors.append(
-                        "Embedding API 密钥不能为空"
-                        "（轻量部署模式下，如果填写 Embedding 配置，所有字段都必须完整）",
+                        "Embedding API 密钥不能为空（轻量部署模式下，如果填写 Embedding 配置，所有字段都必须完整）",
                     )
                 if not self.embedding.model.strip():
                     errors.append(
-                        "Embedding 模型名称不能为空"
-                        "（轻量部署模式下，如果填写 Embedding 配置，所有字段都必须完整）",
+                        "Embedding 模型名称不能为空（轻量部署模式下，如果填写 Embedding 配置，所有字段都必须完整）",
                     )
             # 如果没有填写，则跳过验证
         else:
