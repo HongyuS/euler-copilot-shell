@@ -367,7 +367,7 @@ Static {
     background: rgba(76, 175, 80, 0.2);
 }
 
-/* 初始化模式选择界面样式 */
+/* 初始化 - 模式选择界面 */
 .mode-container {
     background: $surface;
     border: solid $primary;
@@ -421,7 +421,7 @@ Static {
     outline: none;
 }
 
-/* 连接现有服务界面样式 */
+/* 初始化 - 连接现有服务界面 */
 .connect-container {
     background: $surface;
     border: solid $primary;
@@ -448,33 +448,14 @@ Static {
     padding: 1;
 }
 
-.form-row {
-    height: 3;
-    margin: 1 0;
-    align: left middle;
-}
-
-.form-label {
-    color: #4963b1;
-    text-style: bold;
-    width: 20;
-    content-align: left middle;
-    padding-right: 1;
-    padding-top: 1;
-}
-
-.form-input {
-    width: 1fr;
-    margin-left: 1;
-}
-
-.button-row {
+/* 初始化 - 选择部署模式 - 底部按钮 */
+.mode-button-row {
     height: 3;
     align: center middle;
     dock: bottom;
 }
 
-.button-row > Button {
+.mode-button-row > Button {
     margin: 0 1;
     width: auto;
     min-height: 3;
