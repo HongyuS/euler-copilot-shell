@@ -529,6 +529,16 @@ class AgentManager:
         callback: Callable[[DeploymentState], None] | None,
     ) -> str | None:
         """处理单个 MCP 服务"""
+        # 如果是 SSE 类型，先验证 URL可用且为SSE
+        if config.mcp_type == "sse":
+            valid = await self._validate_sse_endpoint(config, state, callback)
+            if not valid:
+                self._report_progress(
+                    state,
+                    f"  ❌ MCP 服务 {config.name} SSE Endpoint 验证失败",
+                    callback,
+                )
+                return None
         try:
             # 注册服务
             service_id = await self._register_mcp_service(config, state, callback)
@@ -547,3 +557,44 @@ class AgentManager:
 
         else:
             return service_id
+
+    async def _validate_sse_endpoint(
+        self,
+        config: McpConfig,
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """验证 SSE Endpoint 是否可用"""
+        url = config.config.get("url") or ""
+        self._report_progress(
+            state,
+            f"🔍 验证 SSE Endpoint: {config.name} -> {url}",
+            callback,
+        )
+        try:
+            async with httpx.AsyncClient(timeout=self.api_client.timeout) as client:
+                response = await client.get(
+                    url,
+                    headers={"Accept": "text/event-stream"},
+                )
+                if response.status_code != HTTP_OK:
+                    self._report_progress(
+                        state,
+                        f"  ❌ {config.name} URL 响应码非 200: {response.status_code}",
+                        callback,
+                    )
+                    return False
+                content_type = response.headers.get("content-type", "")
+                if "text/event-stream" not in content_type:
+                    self._report_progress(
+                        state,
+                        f"  ❌ {config.name} Content-Type 非 SSE: {content_type}",
+                        callback,
+                    )
+                    return False
+                self._report_progress(state, f"  ✅ {config.name} SSE Endpoint 验证通过", callback)
+                return True
+        except Exception as e:
+            self._report_progress(state, f"  ❌ {config.name} SSE 验证失败: {e}", callback)
+            logger.exception("验证 SSE Endpoint 失败: %s", url)
+            return False

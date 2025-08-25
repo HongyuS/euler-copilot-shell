@@ -84,7 +84,7 @@ class InitializationModeScreen(ModalScreen[bool]):
                     variant="default",
                 )
 
-            with Horizontal(classes="button-row"):
+            with Horizontal(classes="mode-button-row"):
                 yield Button("退出", id="exit", variant="error", classes="exit-button")
 
     def on_mount(self) -> None:
@@ -121,6 +121,28 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
     允许用户输入现有 openEuler Intelligence 服务的连接信息。
     """
 
+    CSS = """
+    .form-row {
+        height: 3;
+        margin: 1 0;
+        align: left middle;
+    }
+
+    .form-label {
+        color: #4963b1;
+        text-style: bold;
+        width: 20;
+        content-align: left middle;
+        padding-right: 1;
+        padding-top: 1;
+    }
+
+    .form-input {
+        width: 1fr;
+        margin-left: 1;
+    }
+    """
+
     BINDINGS: ClassVar = [
         Binding("escape", "back", "返回"),
         Binding("ctrl+q", "app.quit", "退出"),
@@ -144,7 +166,7 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
             with Horizontal(classes="form-row"):
                 yield Label("服务 URL:", classes="form-label")
                 yield Input(
-                    placeholder="例如：http://your-server.com:8002",
+                    placeholder="例如：http://your-server:8002",
                     id="service_url",
                     classes="form-input",
                 )
@@ -169,7 +191,7 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
                 classes="help-text",
             )
 
-            with Horizontal(classes="button-row"):
+            with Horizontal(classes="mode-button-row"):
                 yield Button("连接并保存", id="connect", variant="success", disabled=True)
                 yield Button("返回", id="back", variant="primary")
                 yield Button("退出", id="exit", variant="error")
