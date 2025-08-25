@@ -268,7 +268,7 @@ class IntelligentTerminal(App):
         yield FocusableContainer(id="output-container")
         with Container(id="input-container", classes="normal-mode"):
             yield CommandInput()
-        yield Footer()
+        yield Footer(show_command_palette=False)
 
     def action_settings(self) -> None:
         """打开设置页面"""
