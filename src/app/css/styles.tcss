@@ -263,7 +263,6 @@ Static {
 #input-container.mcp-mode {
     height: auto;
     min-height: 10;
-    max-height: 15;
 }
 
 /* 正常模式下的输入容器 */
