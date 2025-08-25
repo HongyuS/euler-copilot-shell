@@ -91,8 +91,8 @@ class SettingsScreen(Screen):
                 Static("", id="spacer"),
                 # 操作按钮
                 Horizontal(
-                    Button("保存", id="save-btn", classes="settings-button"),
-                    Button("取消", id="cancel-btn", classes="settings-button"),
+                    Button("保存", id="save-btn", variant="primary"),
+                    Button("取消", id="cancel-btn", variant="default"),
                     id="action-buttons",
                     classes="settings-option",
                 ),
