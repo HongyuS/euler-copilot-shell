@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -252,9 +253,49 @@ class DeploymentState:
             message: 日志消息
 
         """
+        # 转换 ANSI 颜色标记为 Textual 富文本标记
+        rich_message = self._convert_shell_colors_to_rich(message)
+
         # 如果日志为空，或者新消息与最后一条消息不同，则添加
-        if not self.output_log or self.output_log[-1] != message:
-            self.output_log.append(message)
+        if not self.output_log or self.output_log[-1] != rich_message:
+            self.output_log.append(rich_message)
+
+    def _convert_shell_colors_to_rich(self, text: str) -> str:
+        r"""
+        将 Shell ANSI 颜色码转换为 Textual Rich 标记
+
+        基于脚本中实际使用的颜色标记进行转换:
+        - COLOR_INFO='\033[34m'    # 蓝色信息 -> [blue]
+        - COLOR_SUCCESS='\033[32m' # 绿色成功 -> [green]
+        - COLOR_ERROR='\033[31m'   # 红色错误 -> [red]
+        - COLOR_WARNING='\033[33m' # 黄色警告 -> [yellow]
+        - COLOR_RESET='\033[0m'    # 重置颜色 -> [/]
+
+        Args:
+            text: 包含 ANSI 颜色码的文本
+
+        Returns:
+            转换后的 Rich 标记文本
+
+        """
+        # ANSI 颜色码到 Rich 标记的映射
+        color_map = {
+            r"\033\[34m": "[blue]",      # 蓝色信息
+            r"\033\[32m": "[green]",     # 绿色成功
+            r"\033\[31m": "[red]",       # 红色错误
+            r"\033\[33m": "[yellow]",    # 黄色警告
+            r"\033\[0;32m": "[green]",   # 绿色 (GREEN 变量)
+            r"\033\[0;33m": "[yellow]",  # 黄色 (YELLOW 变量)
+            r"\033\[0;34m": "[blue]",    # 蓝色 (BLUE 变量)
+            r"\033\[0m": "[/]",          # 重置颜色
+        }
+
+        # 应用颜色转换
+        result = text
+        for ansi_code, rich_markup in color_map.items():
+            result = re.sub(ansi_code, rich_markup, result)
+
+        return result
 
     def clear_log(self) -> None:
         """清空日志"""
