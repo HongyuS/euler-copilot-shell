@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from datetime import datetime, timedelta, timezone
+import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -107,12 +108,12 @@ class LogManager:
     def _setup_logging(self) -> None:
         """配置日志系统"""
         # 生成当前时间的日志文件名
-        current_time = datetime.now(tz=timezone.utc).astimezone()
+        current_time = datetime.now(tz=UTC).astimezone()
         log_filename = f"smart-shell-{current_time.strftime('%Y%m%d-%H%M%S')}.log"
         self._current_log_file = self._log_dir / log_filename
 
         # 从配置中获取日志级别
-        log_level = logging.INFO  # 默认级别
+        log_level = logging.DEBUG  # 默认级别
         if self._config_manager is not None:
             try:
                 config_log_level = self._config_manager.get_log_level()
@@ -120,9 +121,8 @@ class LogManager:
             except (AttributeError, ValueError, TypeError) as e:
                 # 如果配置管理器不可用或配置有误，使用默认级别
                 # 在这里我们还不能使用 logger，因为 logging 还没完全设置好
-                import sys
-                sys.stderr.write(f"警告: 获取日志级别配置失败: {e}, 使用默认级别 INFO\n")
-                log_level = logging.INFO
+                sys.stderr.write(f"警告: 获取日志级别配置失败: {e}, 使用默认级别 DEBUG\n")
+                log_level = logging.DEBUG
 
         # 配置根日志记录器
         handlers = [logging.FileHandler(self._current_log_file, encoding="utf-8")]
@@ -141,7 +141,7 @@ class LogManager:
         """解析日志文件名中的日期"""
         try:
             file_date_str = log_file.stem.split("-", 2)[2][:8]  # 提取 YYYYMMDD
-            return datetime.strptime(file_date_str, "%Y%m%d").replace(tzinfo=timezone.utc).astimezone()
+            return datetime.strptime(file_date_str, "%Y%m%d").replace(tzinfo=UTC).astimezone()
         except (ValueError, IndexError):
             return None
 
@@ -149,7 +149,7 @@ class LogManager:
         """清理7天前的旧日志文件"""
         logger = logging.getLogger(__name__)
         try:
-            cutoff_date = datetime.now(tz=timezone.utc).astimezone() - timedelta(days=7)
+            cutoff_date = datetime.now(tz=UTC).astimezone() - timedelta(days=7)
 
             for log_file in self._log_dir.glob("smart-shell-*.log"):
                 try:
