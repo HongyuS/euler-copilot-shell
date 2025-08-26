@@ -7,10 +7,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 
 # 常量定义
 MAX_TEMPERATURE = 2.0
 MIN_TEMPERATURE = 0.0
+
+
+class AgentInitStatus(Enum):
+    """智能体初始化状态"""
+
+    SUCCESS = "success"      # 成功完成
+    SKIPPED = "skipped"      # 跳过（RPM包不可用）
+    FAILED = "failed"        # 失败（其他错误）
 
 
 @dataclass
