@@ -20,7 +20,7 @@ from config.manager import ConfigManager
 from log.manager import get_logger
 
 from .agent import AgentManager
-from .models import DeploymentConfig, DeploymentState
+from .models import AgentInitStatus, DeploymentConfig, DeploymentState
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
@@ -947,14 +947,19 @@ class DeploymentService:
 
         # 初始化 Agent 和 MCP 服务
         agent_manager = AgentManager(server_ip=server_ip, server_port=server_port)
-        success = await agent_manager.initialize_agents(progress_callback)
+        init_status = await agent_manager.initialize_agents(progress_callback)
 
-        if success:
+        if init_status == AgentInitStatus.SUCCESS:
             self.state.add_log("✓ Agent 初始化完成")
-        else:
-            self.state.add_log("✗ Agent 初始化失败")
+            return True
 
-        return success
+        if init_status == AgentInitStatus.SKIPPED:
+            self.state.add_log("⚠ Agent 初始化已跳过（RPM 包不可用），但部署将继续进行")
+            return True  # 跳过不算失败，继续部署
+
+        # FAILED
+        self.state.add_log("✗ Agent 初始化失败")
+        return False
 
     async def _create_global_config_template(self, config: DeploymentConfig) -> None:
         """
