@@ -83,7 +83,7 @@ class ConfigModel:
     backend: Backend = field(default=Backend.EULERINTELLI)
     openai: OpenAIConfig = field(default_factory=OpenAIConfig)
     eulerintelli: HermesConfig = field(default_factory=HermesConfig)
-    log_level: LogLevel = field(default=LogLevel.INFO)
+    log_level: LogLevel = field(default=LogLevel.DEBUG)
 
     @classmethod
     def from_dict(cls, d: dict) -> "ConfigModel":
@@ -97,7 +97,7 @@ class ConfigModel:
         else:
             backend = Backend.OPENAI
 
-        log_level_value = d.get("log_level", LogLevel.INFO)
+        log_level_value = d.get("log_level", LogLevel.DEBUG)
         # 确保 log_level 始终是 LogLevel 枚举类型
         if isinstance(log_level_value, LogLevel):
             log_level = log_level_value
@@ -105,9 +105,9 @@ class ConfigModel:
             try:
                 log_level = LogLevel(log_level_value)
             except ValueError:
-                log_level = LogLevel.INFO
+                log_level = LogLevel.DEBUG
         else:
-            log_level = LogLevel.INFO
+            log_level = LogLevel.DEBUG
 
         return cls(
             backend=backend,
