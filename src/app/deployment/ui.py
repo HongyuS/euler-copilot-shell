@@ -19,7 +19,6 @@ from textual.widgets import (
     Header,
     Input,
     Label,
-    ProgressBar,
     RichLog,
     Static,
     TabbedContent,
@@ -621,13 +620,10 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         min-height: 6;
     }
 
-    #progress_bar {
-        margin: 0 1;
-    }
-
     #step_label {
         min-height: 1;
         height: auto;
+        color: $primary;
     }
 
     .log-section {
@@ -667,7 +663,6 @@ class DeploymentProgressScreen(ModalScreen[bool]):
 
             with Vertical(classes="progress-section"):
                 yield Static("部署进度:", id="progress_label")
-                yield ProgressBar(total=FULL_PROGRESS, show_eta=False, id="progress_bar")
                 yield Static("准备开始部署...", id="step_label")
 
             with Container(classes="log-section"):
@@ -742,7 +737,6 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         self.latest_log = ""
 
         # 重置进度
-        self.query_one("#progress_bar", ProgressBar).update(progress=self.deployment_progress_value)
         self.query_one("#step_label", Static).update("")
 
         # 重置按钮状态
@@ -820,7 +814,6 @@ class DeploymentProgressScreen(ModalScreen[bool]):
             # 更新界面状态
             if success:
                 self.deployment_success = True
-                self.query_one("#progress_bar", ProgressBar).update(progress=FULL_PROGRESS)
 
                 self.query_one("#step_label", Static).update("部署完成！")
                 self.query_one("#deployment_log", RichLog).write(
@@ -855,7 +848,6 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         # 只有在进度实际前进或者是初始状态时才更新
         if progress >= self.deployment_progress_value or self.deployment_progress_value == 0:
             self.deployment_progress_value = progress
-        self.query_one("#progress_bar", ProgressBar).update(progress=self.deployment_progress_value)
 
         # 更新步骤标签
         step_text = f"步骤 {state.current_step}/{state.total_steps}: {state.current_step_name}"
