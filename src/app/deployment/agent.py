@@ -400,20 +400,30 @@ class AgentManager:
                 return AgentInitStatus.FAILED
 
             # 处理 MCP 服务
-            service_ids = await self._process_all_mcp_services(configs, state, progress_callback)
-            if not service_ids:
+            os_service_ids, systrace_service_ids = await self._process_all_mcp_services(
+                configs,
+                state,
+                progress_callback,
+            )
+
+            if not os_service_ids and not systrace_service_ids:
                 self._report_progress(state, "[red]所有 MCP 服务处理失败[/red]", progress_callback)
                 return AgentInitStatus.FAILED
 
             # 创建智能体
-            app_id = await self._create_and_publish_agent(service_ids, state, progress_callback)
+            default_app_id = await self._create_multiple_agents(
+                os_service_ids,
+                systrace_service_ids,
+                state,
+                progress_callback,
+            )
 
             self._report_progress(
                 state,
-                f"[bold green]智能体初始化完成! App ID: {app_id}[/bold green]",
+                f"[bold green]智能体初始化完成! 默认 App ID: {default_app_id}[/bold green]",
                 progress_callback,
             )
-            logger.info("智能体初始化成功完成，App ID: %s", app_id)
+            logger.info("智能体初始化成功完成，默认 App ID: %s", default_app_id)
 
         except Exception as e:
             error_msg = f"智能体初始化失败: {e}"
@@ -458,45 +468,82 @@ class AgentManager:
         configs: list[tuple[Path, McpConfig]],
         state: DeploymentState,
         callback: Callable[[DeploymentState], None] | None,
-    ) -> list[str]:
-        """处理所有 MCP 服务"""
-        service_ids = []
-        for _config_path, config in configs:
+    ) -> tuple[list[str], list[str]]:
+        """
+        处理所有 MCP 服务
+
+        Returns:
+            tuple[list[str], list[str]]: (os_service_ids, systrace_service_ids)
+
+        """
+        os_service_ids = []
+        systrace_service_ids = []
+
+        for config_path, config in configs:
             self._report_progress(state, f"[magenta]处理 MCP 服务: {config.name}[/magenta]", callback)
 
             service_id = await self._process_mcp_service(config, state, callback)
             if service_id:
-                service_ids.append(service_id)
+                # 根据配置路径判断是否为 sysTrace 相关服务
+                if "systrace" in config_path.parent.name.lower() or "systrace" in config.name.lower():
+                    systrace_service_ids.append(service_id)
+                else:
+                    os_service_ids.append(service_id)
             else:
                 self._report_progress(state, f"[red]MCP 服务 {config.name} 处理失败[/red]", callback)
 
-        return service_ids
+        return os_service_ids, systrace_service_ids
 
-    async def _create_and_publish_agent(
+    async def _create_multiple_agents(
         self,
-        service_ids: list[str],
+        os_service_ids: list[str],
+        systrace_service_ids: list[str],
         state: DeploymentState,
         callback: Callable[[DeploymentState], None] | None,
     ) -> str:
-        """创建并发布智能体"""
-        self._report_progress(
-            state,
-            f"[bold cyan]创建智能体 (包含 {len(service_ids)} 个 MCP 服务)[/bold cyan]",
-            callback,
-        )
+        """创建多个智能体，返回默认智能体 ID"""
+        default_app_id = None
 
-        app_id = await self.api_client.create_agent(
-            "OS 智能助手",
-            "OS 智能助手",
-            service_ids,
-        )
+        # 创建 OS 智能助手（如果有相应的服务）
+        if os_service_ids:
+            self._report_progress(
+                state,
+                f"[bold cyan]创建 OS 智能助手 (包含 {len(os_service_ids)} 个 MCP 服务)[/bold cyan]",
+                callback,
+            )
 
-        await self.api_client.publish_agent(app_id)
+            os_app_id = await self.api_client.create_agent(
+                "OS 智能助手",
+                "openEuler 智能助手",
+                os_service_ids,
+            )
+            await self.api_client.publish_agent(os_app_id)
 
-        self._report_progress(state, "[dim]保存智能体配置...[/dim]", callback)
-        self.config_manager.set_default_app(app_id)
+            self._report_progress(state, "[green]OS 智能助手创建成功[/green]", callback)
+            default_app_id = os_app_id  # OS 智能助手作为默认应用
 
-        return app_id
+        # 创建慢卡检测智能助手（如果有相应的服务）
+        if systrace_service_ids:
+            self._report_progress(
+                state,
+                f"[bold magenta]创建慢卡检测智能助手 (包含 {len(systrace_service_ids)} 个 MCP 服务)[/bold magenta]",
+                callback,
+            )
+
+            systrace_app_id = await self.api_client.create_agent(
+                "慢卡检测智能助手",
+                "检测集群中的慢卡问题",
+                systrace_service_ids,
+            )
+            await self.api_client.publish_agent(systrace_app_id)
+
+            self._report_progress(state, "[green]慢卡检测智能助手创建成功[/green]", callback)
+
+        if default_app_id:
+            self._report_progress(state, "[dim]保存默认智能体配置...[/dim]", callback)
+            self.config_manager.set_default_app(default_app_id)
+
+        return default_app_id or ""
 
     async def _register_mcp_service(
         self,
