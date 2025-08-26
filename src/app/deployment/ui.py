@@ -10,6 +10,7 @@ import asyncio
 import contextlib
 from typing import TYPE_CHECKING
 
+from rich.errors import MarkupError
 from textual import on
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import ModalScreen
@@ -657,6 +658,7 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         self.deployment_success = False
         self.deployment_errors: list[str] = []
         self.deployment_progress_value = 0
+        self.latest_log: str = ""
 
     def compose(self) -> ComposeResult:
         """组合界面组件"""
@@ -737,6 +739,7 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         self.deployment_success = False
         self.deployment_errors.clear()
         self.deployment_progress_value = 0  # 重置进度记录
+        self.latest_log = ""
 
         # 重置进度
         self.query_one("#progress_bar", ProgressBar).update(progress=self.deployment_progress_value)
@@ -860,15 +863,19 @@ class DeploymentProgressScreen(ModalScreen[bool]):
 
         # 添加最新的日志条目
         log_widget = self.query_one("#deployment_log", RichLog)
-        if state.output_log:
+        if state.output_log and self.latest_log != state.output_log[-1]:
             # 只显示最新的日志条目
-            latest_log = state.output_log[-1]
-            if latest_log.startswith("✓"):
-                log_widget.write(f"[green]{latest_log}[/green]")
-            elif latest_log.startswith("✗"):
-                log_widget.write(f"[red]{latest_log}[/red]")
-            else:
-                log_widget.write(latest_log)
+            self.latest_log = state.output_log[-1]
+            try:
+                if self.latest_log.startswith("✓"):
+                    log_widget.write(f"[green]{self.latest_log}[/green]")
+                elif self.latest_log.startswith("✗"):
+                    log_widget.write(f"[red]{self.latest_log}[/red]")
+                else:
+                    log_widget.write(self.latest_log)
+            except MarkupError:
+                # 忽略日志消息格式错误
+                pass
 
 
 class ErrorMessageScreen(ModalScreen[None]):

@@ -425,8 +425,8 @@ class AgentManager:
             )
             logger.info("智能体初始化成功完成，默认 App ID: %s", default_app_id)
 
-        except Exception as e:
-            error_msg = f"智能体初始化失败: {e}"
+        except Exception:
+            error_msg = "智能体初始化失败"
             self._report_progress(state, f"[red]{error_msg}[/red]", progress_callback)
             logger.exception(error_msg)
             return AgentInitStatus.FAILED
@@ -658,7 +658,7 @@ class AgentManager:
                 self._report_progress(state, f"  [green]{config.name} SSE Endpoint 验证通过[/green]", callback)
                 return True
         except Exception as e:
-            self._report_progress(state, f"  [red]{config.name} SSE 验证失败: {e}[/red]", callback)
+            self._report_progress(state, f"  [red]{config.name} SSE 验证失败:[/red] {e}", callback)
             logger.exception("验证 SSE Endpoint 失败: %s", url)
             return False
 
@@ -685,8 +685,8 @@ class AgentManager:
             # 安装 mcp-servers.rpmlist 中的包
             return await self._install_rpm_packages("mcp-servers.rpmlist", state, callback)
 
-        except Exception as e:
-            error_msg = f"安装必要包失败: {e}"
+        except Exception:
+            error_msg = "安装必要包失败"
             self._report_progress(state, f"[red]{error_msg}[/red]", callback)
             logger.exception(error_msg)
             return False
@@ -731,7 +731,7 @@ class AgentManager:
             except Exception as e:
                 self._report_progress(
                     state,
-                    f"[red]读取 RPM 列表文件失败: {rpm_list_file} - {e}[/red]",
+                    f"[red]读取 RPM 列表文件失败:[/red] {rpm_list_file} - {e}",
                     callback,
                 )
                 logger.exception("读取 RPM 列表文件失败: %s", rpm_list_path)
@@ -764,7 +764,7 @@ class AgentManager:
             except Exception as e:
                 self._report_progress(
                     state,
-                    f"  [red]检查包 {package} 失败: {e}[/red]",
+                    f"  [red]检查包 {package} 失败:[/red] {e}",
                     callback,
                 )
                 logger.exception("检查 RPM 包可用性失败: %s", package)
@@ -820,8 +820,8 @@ class AgentManager:
                 )
                 return AgentInitStatus.SKIPPED
 
-        except Exception as e:
-            error_msg = f"检查 RPM 包可用性失败: {e}"
+        except Exception:
+            error_msg = "检查 RPM 包可用性失败"
             self._report_progress(state, f"[red]{error_msg}[/red]", callback)
             logger.exception(error_msg)
             return AgentInitStatus.SKIPPED  # 检查失败也视为跳过，而不是整个部署失败
@@ -929,8 +929,8 @@ class AgentManager:
                 logger.error("RPM 包安装失败: %s, 输出: %s", package_list, output)
                 return False
 
-        except Exception as e:
-            error_msg = f"安装 {rpm_list_file} 失败: {e}"
+        except Exception:
+            error_msg = f"安装 {rpm_list_file} 失败"
             self._report_progress(state, f"  [red]{error_msg}[/red]", callback)
             logger.exception(error_msg)
             return False
@@ -998,8 +998,8 @@ class AgentManager:
                 logger.error("sysTrace 服务启动失败: %s, 输出: %s", service_name, output)
                 return False
 
-        except Exception as e:
-            error_msg = f"设置 {service_name} 服务失败: {e}"
+        except Exception:
+            error_msg = f"设置 {service_name} 服务失败"
             self._report_progress(state, f"  [red]{error_msg}[/red]", callback)
             logger.exception(error_msg)
             return False
