@@ -246,11 +246,15 @@ class DeploymentState:
         """
         添加日志消息
 
+        避免输出重复内容，只有当新消息与最后一条消息不同时才添加
+
         Args:
             message: 日志消息
 
         """
-        self.output_log.append(message)
+        # 如果日志为空，或者新消息与最后一条消息不同，则添加
+        if not self.output_log or self.output_log[-1] != message:
+            self.output_log.append(message)
 
     def clear_log(self) -> None:
         """清空日志"""
