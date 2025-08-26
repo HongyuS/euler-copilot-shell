@@ -18,9 +18,9 @@ MIN_TEMPERATURE = 0.0
 class AgentInitStatus(Enum):
     """智能体初始化状态"""
 
-    SUCCESS = "success"      # 成功完成
-    SKIPPED = "skipped"      # 跳过（RPM包不可用）
-    FAILED = "failed"        # 失败（其他错误）
+    SUCCESS = "success"  # 成功完成
+    SKIPPED = "skipped"  # 跳过（RPM包不可用）
+    FAILED = "failed"  # 失败（其他错误）
 
 
 @dataclass
@@ -271,6 +271,8 @@ class DeploymentState:
         - COLOR_WARNING='\033[33m' # 黄色警告 -> [yellow]
         - COLOR_RESET='\033[0m'    # 重置颜色 -> [/]
 
+        处理跨行颜色标记，确保 Rich 标记的完整性，避免 MarkupError。
+
         Args:
             text: 包含 ANSI 颜色码的文本
 
@@ -280,14 +282,14 @@ class DeploymentState:
         """
         # ANSI 颜色码到 Rich 标记的映射
         color_map = {
-            r"\033\[34m": "[blue]",      # 蓝色信息
-            r"\033\[32m": "[green]",     # 绿色成功
-            r"\033\[31m": "[red]",       # 红色错误
-            r"\033\[33m": "[yellow]",    # 黄色警告
-            r"\033\[0;32m": "[green]",   # 绿色 (GREEN 变量)
+            r"\033\[34m": "[blue]",  # 蓝色信息
+            r"\033\[32m": "[green]",  # 绿色成功
+            r"\033\[31m": "[red]",  # 红色错误
+            r"\033\[33m": "[yellow]",  # 黄色警告
+            r"\033\[0;32m": "[green]",  # 绿色 (GREEN 变量)
             r"\033\[0;33m": "[yellow]",  # 黄色 (YELLOW 变量)
-            r"\033\[0;34m": "[blue]",    # 蓝色 (BLUE 变量)
-            r"\033\[0m": "[/]",          # 重置颜色
+            r"\033\[0;34m": "[blue]",  # 蓝色 (BLUE 变量)
+            r"\033\[0m": "[/]",  # 重置颜色
         }
 
         # 应用颜色转换
@@ -295,7 +297,74 @@ class DeploymentState:
         for ansi_code, rich_markup in color_map.items():
             result = re.sub(ansi_code, rich_markup, result)
 
-        return result
+        # 检查是否存在未配对的Rich标记，避免MarkupError
+        return self._ensure_balanced_rich_tags(result)
+
+    def _ensure_balanced_rich_tags(self, text: str) -> str:
+        """
+        确保 Rich 标记的平衡性，避免跨行导致的 MarkupError
+
+        处理以下情况：
+        1. 只有开始标记没有结束标记：自动添加结束标记
+        2. 只有结束标记没有开始标记：移除孤立的结束标记
+        3. 嵌套不当的标记：进行修复
+
+        Args:
+            text: 包含 Rich 标记的文本
+
+        Returns:
+            平衡的 Rich 标记文本
+
+        """
+        close_pattern = r"\[/\]"
+        color_pattern = r"\[(blue|green|red|yellow)\]"
+
+        # 找到所有开始标记和结束标记，包含结束位置
+        open_matches = [
+            {"pos": match.start(), "end": match.end(), "type": "open", "tag": match.group(1)}
+            for match in re.finditer(color_pattern, text)
+        ]
+
+        close_matches = [
+            {"pos": match.start(), "end": match.end(), "type": "close", "tag": "close"}
+            for match in re.finditer(close_pattern, text)
+        ]
+
+        # 合并并按位置排序
+        all_matches = open_matches + close_matches
+        all_matches.sort(key=lambda x: x["pos"])
+
+        # 使用栈来跟踪标记平衡
+        open_stack = []
+        balanced_text = ""
+        last_pos = 0
+
+        for match in all_matches:
+            # 添加匹配前的文本
+            balanced_text += text[last_pos : match["pos"]]
+
+            if match["type"] == "open":
+                # 开始标记：入栈并添加到结果
+                open_stack.append(match["tag"])
+                balanced_text += f"[{match['tag']}]"
+            elif match["type"] == "close":
+                if open_stack:
+                    # 有匹配的开始标记：出栈并添加结束标记
+                    open_stack.pop()
+                    balanced_text += "[/]"
+                # 如果没有匹配的开始标记，忽略这个结束标记（不添加到结果中）
+
+            last_pos = match["end"]
+
+        # 添加剩余的文本
+        balanced_text += text[last_pos:]
+
+        # 为未闭合的开始标记添加结束标记
+        while open_stack:
+            balanced_text += "[/]"
+            open_stack.pop()
+
+        return balanced_text
 
     def clear_log(self) -> None:
         """清空日志"""
