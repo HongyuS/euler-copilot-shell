@@ -23,7 +23,7 @@ import httpx
 from config.manager import ConfigManager
 from log.manager import get_logger
 
-from .models import DeploymentState
+from .models import AgentInitStatus, DeploymentState
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -373,26 +373,37 @@ class AgentManager:
     async def initialize_agents(
         self,
         progress_callback: Callable[[DeploymentState], None] | None = None,
-    ) -> bool:
-        """初始化智能体"""
+    ) -> AgentInitStatus:
+        """
+        初始化智能体
+
+        Returns:
+            AgentInitStatus: 初始化状态 (SUCCESS/SKIPPED/FAILED)
+
+        """
         state = DeploymentState()
         self._report_progress(state, "[bold blue]开始初始化智能体...[/bold blue]", progress_callback)
 
         try:
-            # 预处理：安装必要的 RPM 包
+            # 预处理：检查必要的 RPM 包可用性
+            rpm_availability_result = await self._check_prerequisite_packages_availability(state, progress_callback)
+            if rpm_availability_result == AgentInitStatus.SKIPPED:
+                return AgentInitStatus.SKIPPED
+
+            # 安装必要的 RPM 包
             if not await self._install_prerequisite_packages(state, progress_callback):
-                return False
+                return AgentInitStatus.FAILED
 
             # 加载配置
             configs = await self._load_mcp_configs(state, progress_callback)
             if not configs:
-                return False
+                return AgentInitStatus.FAILED
 
             # 处理 MCP 服务
             service_ids = await self._process_all_mcp_services(configs, state, progress_callback)
             if not service_ids:
                 self._report_progress(state, "[red]所有 MCP 服务处理失败[/red]", progress_callback)
-                return False
+                return AgentInitStatus.FAILED
 
             # 创建智能体
             app_id = await self._create_and_publish_agent(service_ids, state, progress_callback)
@@ -408,10 +419,10 @@ class AgentManager:
             error_msg = f"智能体初始化失败: {e}"
             self._report_progress(state, f"[red]{error_msg}[/red]", progress_callback)
             logger.exception(error_msg)
-            return False
+            return AgentInitStatus.FAILED
 
         else:
-            return True
+            return AgentInitStatus.SUCCESS
 
     def _report_progress(
         self,
@@ -609,11 +620,12 @@ class AgentManager:
         state: DeploymentState,
         callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
-        """安装必要的 RPM 包"""
+        """安装必要的 RPM 包（已知包可用的情况下）"""
         try:
-            # 1. 检查是否存在以 "systrace" 开头的子目录（不区分大小写）
+            # 检查是否存在以 "systrace" 开头的子目录（不区分大小写）
             systrace_exists = self._check_systrace_config(state, callback)
 
+            # 安装包（此时已知包是可用的）
             if systrace_exists:
                 # 安装 sysTrace.rpmlist 中的包
                 if not await self._install_rpm_packages("sysTrace.rpmlist", state, callback):
@@ -623,7 +635,7 @@ class AgentManager:
                 if not await self._setup_systrace_service(state, callback):
                     return False
 
-            # 2. 安装 mcp-servers.rpmlist 中的包
+            # 安装 mcp-servers.rpmlist 中的包
             return await self._install_rpm_packages("mcp-servers.rpmlist", state, callback)
 
         except Exception as e:
@@ -631,6 +643,144 @@ class AgentManager:
             self._report_progress(state, f"[red]{error_msg}[/red]", callback)
             logger.exception(error_msg)
             return False
+
+    async def _check_rpm_packages_availability(
+        self,
+        rpm_list_files: list[str],
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """检查 RPM 包是否在 yum 源中可用"""
+        self._report_progress(state, "[cyan]检查 RPM 包在 yum 源中的可用性...[/cyan]", callback)
+
+        if not self.resource_dir:
+            self._report_progress(
+                state,
+                "[red]资源目录未找到，无法检查 RPM 包可用性[/red]",
+                callback,
+            )
+            logger.error("资源目录未找到，无法检查 RPM 包可用性")
+            return False
+
+        all_packages = []
+
+        # 收集所有需要检查的包
+        for rpm_list_file in rpm_list_files:
+            rpm_list_path = self.resource_dir / rpm_list_file
+
+            if not rpm_list_path.exists():
+                self._report_progress(
+                    state,
+                    f"[yellow]RPM 列表文件不存在: {rpm_list_file}，跳过检查[/yellow]",
+                    callback,
+                )
+                logger.warning("RPM 列表文件不存在: %s", rpm_list_path)
+                continue
+
+            try:
+                with rpm_list_path.open(encoding="utf-8") as f:
+                    packages = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+                    all_packages.extend(packages)
+            except Exception as e:
+                self._report_progress(
+                    state,
+                    f"[red]读取 RPM 列表文件失败: {rpm_list_file} - {e}[/red]",
+                    callback,
+                )
+                logger.exception("读取 RPM 列表文件失败: %s", rpm_list_path)
+                return False
+
+        if not all_packages:
+            self._report_progress(state, "[dim]没有要检查的 RPM 包[/dim]", callback)
+            return True
+
+        # 检查每个包的可用性
+        unavailable_packages = []
+
+        for package in all_packages:
+            # 使用 dnf list available 检查包是否可用
+            check_cmd = f"dnf list available {package}"
+
+            try:
+                process = await asyncio.create_subprocess_shell(
+                    check_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+
+                stdout, stderr = await process.communicate()
+
+                if process.returncode != 0:
+                    unavailable_packages.append(package)
+                    logger.warning("RPM 包不可用: %s", package)
+
+            except Exception as e:
+                self._report_progress(
+                    state,
+                    f"  [red]检查包 {package} 失败: {e}[/red]",
+                    callback,
+                )
+                logger.exception("检查 RPM 包可用性失败: %s", package)
+                unavailable_packages.append(package)
+
+        # 如果有不可用的包，返回 False
+        if unavailable_packages:
+            self._report_progress(
+                state,
+                f"[dim]以下 RPM 包不可用，跳过智能体初始化: {', '.join(unavailable_packages)}[/dim]",
+                callback,
+            )
+            logger.error("发现不可用的 RPM 包，跳过智能体初始化: %s", unavailable_packages)
+            return False
+
+        self._report_progress(
+            state,
+            "[green]所有 RPM 包均可用，继续智能体初始化[/green]",
+            callback,
+        )
+        logger.info("所有 RPM 包均可用")
+        return True
+
+    async def _check_prerequisite_packages_availability(
+        self,
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+    ) -> AgentInitStatus:
+        """
+        检查必要的 RPM 包是否在 yum 源中可用
+
+        Returns:
+            AgentInitStatus: SUCCESS 表示所有包可用，SKIPPED 表示有包不可用应跳过
+
+        """
+        try:
+            # 准备要检查的 RPM 列表文件
+            rpm_files_to_check = ["mcp-servers.rpmlist"]
+
+            # 检查是否存在以 "systrace" 开头的子目录（不区分大小写）
+            systrace_exists = self._check_systrace_config(state, callback)
+            if systrace_exists:
+                rpm_files_to_check.append("sysTrace.rpmlist")
+
+            # 检查包可用性
+            packages_available = await self._check_rpm_packages_availability(rpm_files_to_check, state, callback)
+
+            if not packages_available:
+                self._report_progress(
+                    state,
+                    "[yellow]MCP Server 相关 RPM 包可用性检查失败，跳过智能体初始化，其他部署步骤将继续进行[/yellow]",
+                    callback,
+                )
+                return AgentInitStatus.SKIPPED
+
+        except Exception as e:
+            error_msg = f"检查 RPM 包可用性失败: {e}"
+            self._report_progress(state, f"[red]{error_msg}[/red]", callback)
+            logger.exception(error_msg)
+            return AgentInitStatus.SKIPPED  # 检查失败也视为跳过，而不是整个部署失败
+
+        else:
+            return AgentInitStatus.SUCCESS
 
     def _check_systrace_config(
         self,

@@ -4,6 +4,8 @@
 这个脚本会测试：
 1. 检查 systrace 配置目录是否存在
 2. 模拟 RPM 包安装过程
+
+使用方法: source .venv/bin/activate && PYTHONPATH=src python tests/app/deployment/test_agent_manager.py
 """
 
 import asyncio
