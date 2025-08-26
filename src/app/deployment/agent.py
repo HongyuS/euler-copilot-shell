@@ -243,8 +243,12 @@ class ApiClient:
                 return False
 
             if status in ("init", "installing"):
-                logger.debug("MCP 服务 %s %s中... (第 %d 次检查)", service_id,
-                           "初始化" if status == "init" else "安装", attempt + 1)
+                logger.debug(
+                    "MCP 服务 %s %s中... (第 %d 次检查)",
+                    service_id,
+                    "初始化" if status == "init" else "安装",
+                    attempt + 1,
+                )
             elif status is None:
                 logger.debug("MCP 服务 %s 状态检查失败，继续等待... (第 %d 次检查)", service_id, attempt + 1)
             else:
@@ -254,8 +258,7 @@ class ApiClient:
             attempt += 1
             if attempt * check_interval >= max_wait_time:
                 # 这里不返回 False，而是继续等待，因为要求只要接口能打通就一直等
-                logger.warning("MCP 服务安装等待超时: %s (已等待 %d 秒，但将继续尝试)",
-                             service_id, max_wait_time)
+                logger.warning("MCP 服务安装等待超时: %s (已等待 %d 秒，但将继续尝试)", service_id, max_wait_time)
 
             await asyncio.sleep(check_interval)
 
@@ -353,21 +356,19 @@ class AgentManager:
         self.api_client = ApiClient(server_ip, server_port)
         self.config_manager = ConfigManager()
 
-        # 尝试多个可能的配置路径
-        possible_paths = [
-            Path("/usr/lib/openeuler-intelligence/scripts/5-resource/mcp_config"),  # 生产环境
-            Path("scripts/deploy/5-resource/mcp_config"),  # 开发环境（相对路径）
-            Path(__file__).parent.parent.parent.parent / "scripts/deploy/5-resource/mcp_config",  # 开发环境（绝对路径）
+        resource_paths = [
+            Path("/usr/lib/openeuler-intelligence/scripts/5-resource"),  # 生产环境
+            Path("scripts/deploy/5-resource"),  # 开发环境（相对路径）
+            Path(__file__).parent.parent.parent / "scripts/deploy/5-resource",  # 开发环境（绝对路径）
         ]
 
-        self.mcp_config_dir = possible_paths[0]  # 默认使用生产环境路径
-        for path in possible_paths:
-            if path.exists():
-                self.mcp_config_dir = path
-                logger.info("使用 MCP 配置目录: %s", path)
-                break
-        else:
-            logger.warning("未找到 MCP 配置目录，使用默认路径: %s", self.mcp_config_dir)
+        self.resource_dir = next((p for p in resource_paths if p.exists()), None)
+        if not self.resource_dir:
+            logger.error("[DeploymentHelper] 未找到有效的资源路径")
+            return
+        logger.info("[DeploymentHelper] 使用资源路径: %s", self.resource_dir)
+
+        self.mcp_config_dir = self.resource_dir / "mcp_config"
 
     async def initialize_agents(
         self,
@@ -378,6 +379,10 @@ class AgentManager:
         self._report_progress(state, "🚀 开始初始化智能体...", progress_callback)
 
         try:
+            # 预处理：安装必要的 RPM 包
+            if not await self._install_prerequisite_packages(state, progress_callback):
+                return False
+
             # 加载配置
             configs = await self._load_mcp_configs(state, progress_callback)
             if not configs:
@@ -598,3 +603,208 @@ class AgentManager:
             self._report_progress(state, f"  ❌ {config.name} SSE 验证失败: {e}", callback)
             logger.exception("验证 SSE Endpoint 失败: %s", url)
             return False
+
+    async def _install_prerequisite_packages(
+        self,
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """安装必要的 RPM 包"""
+        try:
+            # 1. 检查是否存在以 "systrace" 开头的子目录（不区分大小写）
+            systrace_exists = self._check_systrace_config(state, callback)
+
+            if systrace_exists:
+                # 安装 sysTrace.rpmlist 中的包
+                if not await self._install_rpm_packages("sysTrace.rpmlist", state, callback):
+                    return False
+
+                # 设置 systrace-mcpserver 服务开机启动并立即启动
+                if not await self._setup_systrace_service(state, callback):
+                    return False
+
+            # 2. 安装 mcp-servers.rpmlist 中的包
+            return await self._install_rpm_packages("mcp-servers.rpmlist", state, callback)
+
+        except Exception as e:
+            error_msg = f"安装必要包失败: {e}"
+            self._report_progress(state, f"❌ {error_msg}", callback)
+            logger.exception(error_msg)
+            return False
+
+    def _check_systrace_config(
+        self,
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """检查是否存在以 systrace 开头的配置目录"""
+        self._report_progress(state, "🔍 检查 sysTrace 配置...", callback)
+
+        if not self.resource_dir or not self.mcp_config_dir:
+            self._report_progress(state, "⚠️ 资源目录或 MCP 配置目录不存在", callback)
+            return False
+
+        if not self.mcp_config_dir.exists():
+            self._report_progress(state, "⚠️ MCP 配置目录不存在", callback)
+            return False
+
+        for subdir in self.mcp_config_dir.iterdir():
+            if subdir.is_dir() and subdir.name.lower().startswith("systrace"):
+                self._report_progress(state, f"✅ 发现 sysTrace 配置: {subdir.name}", callback)
+                logger.info("发现 sysTrace 配置目录: %s", subdir.name)
+                return True
+
+        self._report_progress(state, "ℹ️ 未发现 sysTrace 配置", callback)
+        return False
+
+    async def _install_rpm_packages(
+        self,
+        rpm_list_file: str,
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """安装指定 RPM 列表文件中的包"""
+        if not self.resource_dir:
+            self._report_progress(
+                state,
+                f"❌ 资源目录未找到，无法安装 {rpm_list_file}",
+                callback,
+            )
+            logger.error("资源目录未找到，无法安装 RPM 包: %s", rpm_list_file)
+            return False
+
+        rpm_list_path = self.resource_dir / rpm_list_file
+
+        if not rpm_list_path.exists():
+            self._report_progress(
+                state,
+                f"⚠️ RPM 列表文件不存在: {rpm_list_file}",
+                callback,
+            )
+            logger.warning("RPM 列表文件不存在: %s", rpm_list_path)
+            return True  # 文件不存在不算失败，继续执行
+
+        self._report_progress(state, f"📦 安装 {rpm_list_file} 中的 RPM 包...", callback)
+
+        try:
+            # 读取 RPM 包列表
+            with rpm_list_path.open(encoding="utf-8") as f:
+                packages = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+
+            if not packages:
+                self._report_progress(state, f"ℹ️ {rpm_list_file} 中没有要安装的包", callback)
+                return True
+
+            # 使用 dnf 安装包
+            package_list = " ".join(packages)
+            install_cmd = f"sudo dnf install -y {package_list}"
+
+            self._report_progress(
+                state,
+                f"  📥 执行安装命令: {install_cmd}",
+                callback,
+            )
+            logger.info("执行 RPM 包安装命令: %s", install_cmd)
+
+            # 使用 asyncio.create_subprocess_shell 执行命令
+            process = await asyncio.create_subprocess_shell(
+                install_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+
+            stdout, _ = await process.communicate()
+            output = stdout.decode("utf-8") if stdout else ""
+
+            if process.returncode == 0:
+                self._report_progress(
+                    state,
+                    f"  ✅ {rpm_list_file} 中的包安装成功",
+                    callback,
+                )
+                logger.info("RPM 包安装成功: %s", package_list)
+            else:
+                self._report_progress(
+                    state,
+                    f"  ❌ {rpm_list_file} 中的包安装失败 (返回码: {process.returncode})",
+                    callback,
+                )
+                logger.error("RPM 包安装失败: %s, 输出: %s", package_list, output)
+                return False
+
+        except Exception as e:
+            error_msg = f"安装 {rpm_list_file} 失败: {e}"
+            self._report_progress(state, f"  ❌ {error_msg}", callback)
+            logger.exception(error_msg)
+            return False
+
+        return True
+
+    async def _setup_systrace_service(
+        self,
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """设置 systrace-mcpserver 服务"""
+        service_name = "systrace-mcpserver"
+        self._report_progress(state, f"⚙️ 设置 {service_name} 服务...", callback)
+
+        try:
+            # 启用服务开机启动
+            enable_cmd = f"sudo systemctl enable {service_name}"
+            self._report_progress(state, f"  🔧 设置开机启动: {enable_cmd}", callback)
+
+            process = await asyncio.create_subprocess_shell(
+                enable_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+
+            stdout, _ = await process.communicate()
+            output = stdout.decode("utf-8") if stdout else ""
+
+            if process.returncode != 0:
+                self._report_progress(
+                    state,
+                    f"  ❌ 设置 {service_name} 开机启动失败: {output}",
+                    callback,
+                )
+                logger.error("设置服务开机启动失败: %s, 输出: %s", service_name, output)
+                return False
+
+            # 启动服务
+            start_cmd = f"sudo systemctl start {service_name}"
+            self._report_progress(state, f"  🚀 启动服务: {start_cmd}", callback)
+
+            process = await asyncio.create_subprocess_shell(
+                start_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+
+            stdout, _ = await process.communicate()
+            output = stdout.decode("utf-8") if stdout else ""
+
+            if process.returncode == 0:
+                self._report_progress(
+                    state,
+                    f"  ✅ {service_name} 服务启动成功",
+                    callback,
+                )
+                logger.info("sysTrace 服务启动成功: %s", service_name)
+            else:
+                self._report_progress(
+                    state,
+                    f"  ❌ {service_name} 服务启动失败: {output}",
+                    callback,
+                )
+                logger.error("sysTrace 服务启动失败: %s, 输出: %s", service_name, output)
+                return False
+
+        except Exception as e:
+            error_msg = f"设置 {service_name} 服务失败: {e}"
+            self._report_progress(state, f"  ❌ {error_msg}", callback)
+            logger.exception(error_msg)
+            return False
+
+        return True
