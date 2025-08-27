@@ -1,6 +1,7 @@
 """应用入口点"""
 
 import argparse
+import asyncio
 import atexit
 import sys
 
@@ -16,20 +17,26 @@ from log.manager import (
     setup_logging,
 )
 from tool.oi_backend_init import oi_backend_init
+from tool.oi_select_agent import select_agent
 
 
 def parse_args() -> argparse.Namespace:
     """解析命令行参数"""
     parser = argparse.ArgumentParser(description="openEuler Intelligence")
     parser.add_argument(
-        "--logs",
-        action="store_true",
-        help="显示最新的日志内容（最多1000行）",
-    )
-    parser.add_argument(
         "--init",
         action="store_true",
         help="初始化 openEuler Intelligence 后端",
+    )
+    parser.add_argument(
+        "--agent",
+        action="store_true",
+        help="选择默认智能体",
+    )
+    parser.add_argument(
+        "--logs",
+        action="store_true",
+        help="显示最新的日志内容（最多1000行）",
     )
     parser.add_argument(
         "--log-level",
@@ -71,6 +78,10 @@ def main() -> None:
 
     if args.init:
         oi_backend_init()
+        return
+
+    if args.agent:
+        asyncio.run(select_agent())
         return
 
     # 初始化配置和日志系统
