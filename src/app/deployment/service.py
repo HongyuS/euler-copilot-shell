@@ -420,30 +420,11 @@ class DeploymentService:
         # 读取安装输出
         output_lines = []
         if process.stdout:
-            while True:
-                try:
-                    # 使用超时读取，避免长时间阻塞
-                    line = await asyncio.wait_for(
-                        process.stdout.readline(),
-                        timeout=0.1,  # 100ms 超时
-                    )
-                except TimeoutError:
-                    # 超时时让出控制权给 UI 事件循环
-                    await asyncio.sleep(0)
-                    continue
-
-                if not line:
-                    break
-
-                decoded_line = line.decode("utf-8", errors="ignore").strip()
-                if decoded_line:
-                    output_lines.append(decoded_line)
-                    if progress_callback:
-                        temp_state.add_log(f"安装: {decoded_line}")
-                        progress_callback(temp_state)
-
-                # 每次读取后让出控制权
-                await asyncio.sleep(0)
+            async for line in self._read_process_output_lines(process):
+                output_lines.append(line)
+                if progress_callback:
+                    temp_state.add_log(f"安装: {line}")
+                    progress_callback(temp_state)
 
         # 等待进程结束
         return_code = await process.wait()
@@ -578,7 +559,7 @@ class DeploymentService:
 
             try:
                 # 读取输出
-                async for line in self._read_process_output():
+                async for line in self._read_process_output_lines(self._process):
                     self.state.add_log(line)
                     if progress_callback:
                         progress_callback(self.state)
@@ -787,24 +768,14 @@ class DeploymentService:
             msg = f"写入 config.toml 文件失败: {error_msg}"
             raise RuntimeError(msg)
 
-    async def _read_process_output(self) -> AsyncGenerator[str, None]:
-        """读取进程输出"""
-        if not self._process or not self._process.stdout:
+    async def _read_process_output_lines(self, process: asyncio.subprocess.Process) -> AsyncGenerator[str, None]:
+        """读取进程输出行"""
+        if not process.stdout:
             return
 
-        while True:
+        while not process.stdout.at_eof():
             try:
-                # 使用超时读取，避免长时间阻塞
-                try:
-                    line = await asyncio.wait_for(
-                        self._process.stdout.readline(),
-                        timeout=0.1,  # 100ms 超时
-                    )
-                except TimeoutError:
-                    # 超时时让出控制权给 UI 事件循环
-                    await asyncio.sleep(0)
-                    continue
-
+                line = await process.stdout.readline()
                 if not line:
                     break
 
