@@ -68,6 +68,28 @@ def show_logs() -> None:
         sys.exit(1)
 
 
+def set_log_level(config_manager: ConfigManager, level: str) -> None:
+    """设置日志级别"""
+    if level not in LogLevel.__members__:
+        sys.stderr.write(f"无效的日志级别: {level}\n")
+        sys.exit(1)
+    config_manager.set_log_level(LogLevel(level))
+
+    # 初始化日志系统并验证设置
+    setup_logging(config_manager)
+    enable_console_output()  # 启用控制台输出以显示验证信息
+
+    logger = get_logger(__name__)
+    logger.info("日志级别已设置为: %s", level)
+    logger.debug("这是一条 DEBUG 级别的测试消息")
+    logger.info("这是一条 INFO 级别的测试消息")
+    logger.warning("这是一条 WARNING 级别的测试消息")
+    logger.error("这是一条 ERROR 级别的测试消息")
+
+    sys.stdout.write(f"✓ 日志级别已成功设置为: {level}\n")
+    sys.stdout.write("✓ 日志系统初始化完成\n")
+
+
 def main() -> None:
     """主函数"""
     args = parse_args()
@@ -89,24 +111,7 @@ def main() -> None:
 
     # 处理命令行参数设置的日志级别
     if args.log_level:
-        if args.log_level not in LogLevel.__members__:
-            sys.stderr.write(f"无效的日志级别: {args.log_level}\n")
-            sys.exit(1)
-        config_manager.set_log_level(LogLevel(args.log_level))
-
-        # 初始化日志系统并验证设置
-        setup_logging(config_manager)
-        enable_console_output()  # 启用控制台输出以显示验证信息
-
-        logger = get_logger(__name__)
-        logger.info("日志级别已设置为: %s", args.log_level)
-        logger.debug("这是一条 DEBUG 级别的测试消息")
-        logger.info("这是一条 INFO 级别的测试消息")
-        logger.warning("这是一条 WARNING 级别的测试消息")
-        logger.error("这是一条 ERROR 级别的测试消息")
-
-        sys.stdout.write(f"✓ 日志级别已成功设置为: {args.log_level}\n")
-        sys.stdout.write("✓ 日志系统初始化完成\n")
+        set_log_level(config_manager, args.log_level)
         return
 
     setup_logging(config_manager)
