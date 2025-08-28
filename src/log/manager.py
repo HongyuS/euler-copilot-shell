@@ -95,6 +95,21 @@ class LogManager:
         except (OSError, UnicodeDecodeError) as e:
             return [f"读取日志文件失败: {e}"]
 
+    def reconfigure_logging(self, config_manager: ConfigManager | None = None) -> None:
+        """重新配置日志系统（用于运行时更新配置）"""
+        # 更新配置管理器
+        if config_manager is not None:
+            self._config_manager = config_manager
+
+        # 获取新的日志级别并更新
+        log_level = self._get_log_level()
+        root_logger = logging.getLogger()
+        root_logger.setLevel(log_level)
+
+        # 同时更新所有现有处理器的级别
+        for handler in root_logger.handlers:
+            handler.setLevel(log_level)
+
     def cleanup_empty_logs(self) -> None:
         """清理空的日志文件（应用退出时调用）"""
         with contextlib.suppress(OSError):
@@ -105,14 +120,8 @@ class LogManager:
                     with contextlib.suppress(OSError):
                         log_file.unlink()
 
-    def _setup_logging(self) -> None:
-        """配置日志系统"""
-        # 生成当前时间的日志文件名
-        current_time = datetime.now(tz=UTC).astimezone()
-        log_filename = f"smart-shell-{current_time.strftime('%Y%m%d-%H%M%S')}.log"
-        self._current_log_file = self._log_dir / log_filename
-
-        # 从配置中获取日志级别
+    def _get_log_level(self) -> int:
+        """获取当前配置的日志级别"""
         log_level = logging.DEBUG  # 默认级别
         if self._config_manager is not None:
             try:
@@ -123,8 +132,17 @@ class LogManager:
                 # 在这里我们还不能使用 logger，因为 logging 还没完全设置好
                 sys.stderr.write(f"警告: 获取日志级别配置失败: {e}, 使用默认级别 DEBUG\n")
                 log_level = logging.DEBUG
+        return log_level
 
-        # 配置根日志记录器
+    def _setup_logging(self) -> None:
+        """配置日志系统"""
+        # 生成当前时间的日志文件名
+        current_time = datetime.now(tz=UTC).astimezone()
+        log_filename = f"smart-shell-{current_time.strftime('%Y%m%d-%H%M%S')}.log"
+        self._current_log_file = self._log_dir / log_filename
+
+        # 获取日志级别并配置根日志记录器
+        log_level = self._get_log_level()
         handlers = [logging.FileHandler(self._current_log_file, encoding="utf-8")]
 
         logging.basicConfig(
@@ -177,11 +195,23 @@ class _LogManagerSingleton:
 
     def __init__(self) -> None:
         self._instance: LogManager | None = None
+        self._last_config_log_level: str | None = None
 
     def get_instance(self, config_manager: ConfigManager | None = None) -> LogManager:
         """获取日志管理器实例"""
         if self._instance is None:
+            # 首次创建实例
             self._instance = LogManager(config_manager)
+            if config_manager is not None:
+                self._last_config_log_level = config_manager.get_log_level().value
+        elif config_manager is not None:
+            # 实例已存在，检查配置是否改变
+            current_log_level = config_manager.get_log_level().value
+            if self._last_config_log_level != current_log_level:
+                # 配置改变，重新配置日志系统
+                self._instance.reconfigure_logging(config_manager)
+                self._last_config_log_level = current_log_level
+
         return self._instance
 
 
