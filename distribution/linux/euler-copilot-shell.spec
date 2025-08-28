@@ -3,7 +3,7 @@
 %global debug_package %{nil}
 
 Name:           euler-copilot-shell
-Version:        0.10.0
+Version:        1.0.0
 Release:        1%{?dist}
 Summary:        openEuler Intelligence 智能命令行工具集
 License:        MulanPSL-2.0
@@ -99,6 +99,11 @@ ln -sf /usr/lib/openeuler-intelligence/scripts/deploy %{buildroot}%{_bindir}/ope
 %{_bindir}/openeuler-intelligence-installer
 
 %changelog
+* Thu Aug 28 2025 openEuler <contact@openeuler.org> - 1.0.0-1
+- 新增 openEuler Intelligence 部署功能 TUI
+- 新增选择默认 Agent 功能
+- 版本号升级至 1.0.0
+
 * Wed Aug 13 2025 openEuler <contact@openeuler.org> - 0.10.0-1
 - 重构为子包形式：openeuler-intelligence-cli 和 openeuler-intelligence-installer
 - openeuler-intelligence-cli 替换原 euler-copilot-shell 包
