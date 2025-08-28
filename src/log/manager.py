@@ -133,10 +133,6 @@ class LogManager:
             handlers=handlers,
         )
 
-        # 为 httpx 设置更高的日志级别以减少噪音
-        logging.getLogger("httpx").setLevel(logging.WARNING)
-        logging.getLogger("openai").setLevel(logging.WARNING)
-
     def _parse_log_file_date(self, log_file: Path) -> datetime | None:
         """解析日志文件名中的日期"""
         try:
