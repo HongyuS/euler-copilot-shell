@@ -1,6 +1,5 @@
 """OpenAI 大模型客户端"""
 
-import re
 import time
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING
@@ -14,26 +13,12 @@ if TYPE_CHECKING:
     from openai.types.chat import ChatCompletionMessageParam
 
 
-def validate_url(url: str) -> bool:
-    """
-    校验 URL 是否合法
-
-    校验 URL 是否以 http:// 或 https:// 开头。
-    """
-    return re.match(r"^https?://", url) is not None
-
-
 class OpenAIClient(LLMClientBase):
     """OpenAI 大模型客户端"""
 
     def __init__(self, base_url: str, model: str, api_key: str = "") -> None:
         """初始化 OpenAI 大模型客户端"""
         self.logger = get_logger(__name__)
-
-        if not validate_url(base_url):
-            msg = "无效的 API URL，请确保 URL 以 http:// 或 https:// 开头。"
-            self.logger.error(msg)
-            raise ValueError(msg)
 
         self.model = model
         self.base_url = base_url

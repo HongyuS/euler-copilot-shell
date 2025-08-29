@@ -1,6 +1,6 @@
 """Hermes Chat API 模块"""
 
-from .client import HermesChatClient, validate_url
+from .client import HermesChatClient
 from .exceptions import HermesAPIError
 from .models import HermesAgent, HermesApp, HermesChatRequest, HermesFeatures, HermesMessage
 from .services.agent import HermesAgentManager
@@ -23,5 +23,4 @@ __all__ = [
     "HermesModelManager",
     "HermesStreamEvent",
     "HermesStreamProcessor",
-    "validate_url",
 ]
