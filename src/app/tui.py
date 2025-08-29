@@ -1261,7 +1261,7 @@ class IntelligentTerminal(App):
             "后端配置验证失败，请检查并修改配置",
             title="配置错误",
             severity="error",
-            timeout=0.5,
+            timeout=1,
         )
 
     async def _show_settings_for_config_fix(self) -> None:
