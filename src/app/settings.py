@@ -306,9 +306,9 @@ class SettingsScreen(Screen):
         base_url = self.query_one("#base-url", Input).value.strip()
         api_key = self.query_one("#api-key", Input).value.strip()
 
-        if not base_url or not api_key:
+        if not base_url:
             self.is_validated = False
-            self.validation_message = "Base URL 和 API Key 不能为空"
+            self.validation_message = "Base URL 不能为空"
             self._update_save_button_state()
             return
 
