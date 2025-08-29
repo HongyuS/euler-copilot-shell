@@ -13,6 +13,7 @@ from textual.widgets import Button, Input, Label, Static
 from backend.hermes import HermesChatClient
 from backend.openai import OpenAIClient
 from config import Backend, ConfigManager
+from tool.validators import APIValidator, validate_oi_connection
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -36,6 +37,11 @@ class SettingsScreen(Screen):
         self.selected_model = self.config_manager.get_model()
         # 添加保存任务的集合
         self.background_tasks: set[asyncio.Task] = set()
+
+        # 验证相关状态
+        self.is_validated = False
+        self.validation_message = ""
+        self.validator = APIValidator()
 
     def compose(self) -> ComposeResult:
         """构建设置页面"""
@@ -109,6 +115,11 @@ class SettingsScreen(Screen):
             self.background_tasks.add(task)
             task.add_done_callback(self.background_tasks.discard)
 
+        # 启动配置验证
+        validation_task = asyncio.create_task(self._validate_configuration())
+        self.background_tasks.add(validation_task)
+        validation_task.add_done_callback(self.background_tasks.discard)
+
         # 确保操作按钮始终可见
         self._ensure_buttons_visible()
 
@@ -134,9 +145,14 @@ class SettingsScreen(Screen):
 
     @on(Input.Changed, "#base-url, #api-key")
     def on_config_changed(self) -> None:
-        """当 Base URL 或 API Key 改变时更新客户端"""
+        """当 Base URL 或 API Key 改变时更新客户端并验证配置"""
         if self.backend == Backend.OPENAI:
             self._update_llm_client()
+
+        # 重新验证配置
+        validation_task = asyncio.create_task(self._validate_configuration())
+        self.background_tasks.add(validation_task)
+        validation_task.add_done_callback(self.background_tasks.discard)
 
     @on(Button.Pressed, "#backend-btn")
     def toggle_backend(self) -> None:
@@ -197,6 +213,11 @@ class SettingsScreen(Screen):
         # 确保按钮可见
         self._ensure_buttons_visible()
 
+        # 切换后端后重新验证配置
+        validation_task = asyncio.create_task(self._validate_configuration())
+        self.background_tasks.add(validation_task)
+        validation_task.add_done_callback(self.background_tasks.discard)
+
     @on(Button.Pressed, "#model-btn")
     def toggle_model(self) -> None:
         """循环切换模型"""
@@ -216,6 +237,11 @@ class SettingsScreen(Screen):
             # 更新按钮文本
             model_btn = self.query_one("#model-btn", Button)
             model_btn.label = self.selected_model
+
+            # 模型改变时重新验证配置
+            validation_task = asyncio.create_task(self._validate_configuration())
+            self.background_tasks.add(validation_task)
+            validation_task.add_done_callback(self.background_tasks.discard)
         except (IndexError, ValueError):
             # 处理任何可能的异常
             self.selected_model = self.models[0] if self.models else "默认模型"
@@ -225,6 +251,10 @@ class SettingsScreen(Screen):
     @on(Button.Pressed, "#save-btn")
     def save_settings(self) -> None:
         """保存设置"""
+        # 检查验证状态
+        if not self.is_validated:
+            return
+
         self.config_manager.set_backend(self.backend)
 
         base_url = self.query_one("#base-url", Input).value
@@ -270,6 +300,49 @@ class SettingsScreen(Screen):
         task = asyncio.create_task(scroll_to_buttons())
         self.background_tasks.add(task)
         task.add_done_callback(self.background_tasks.discard)
+
+    async def _validate_configuration(self) -> None:
+        """验证当前配置"""
+        base_url = self.query_one("#base-url", Input).value.strip()
+        api_key = self.query_one("#api-key", Input).value.strip()
+
+        if not base_url or not api_key:
+            self.is_validated = False
+            self.validation_message = "Base URL 和 API Key 不能为空"
+            self._update_save_button_state()
+            return
+
+        try:
+            if self.backend == Backend.OPENAI:
+                # 验证 OpenAI 配置
+                model = self.selected_model if self.selected_model else "gpt-3.5-turbo"
+                valid, message, _ = await self.validator.validate_llm_config(
+                    endpoint=base_url,
+                    api_key=api_key,
+                    model=model,
+                    timeout=10,
+                )
+                self.is_validated = valid
+                self.validation_message = message
+            else:
+                # 验证 openEuler Intelligence 配置
+                valid, message = await validate_oi_connection(base_url, api_key)
+                self.is_validated = valid
+                self.validation_message = message
+
+        except (TimeoutError, ValueError, RuntimeError) as e:
+            self.is_validated = False
+            self.validation_message = f"验证过程中发生错误: {e!s}"
+
+        self._update_save_button_state()
+
+    def _update_save_button_state(self) -> None:
+        """根据验证状态更新保存按钮"""
+        save_btn = self.query_one("#save-btn", Button)
+        if self.is_validated:
+            save_btn.disabled = False
+        else:
+            save_btn.disabled = True
 
     def _update_llm_client(self) -> None:
         """根据当前UI中的配置更新LLM客户端"""

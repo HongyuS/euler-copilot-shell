@@ -16,10 +16,10 @@ from textual.containers import Container, Horizontal
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
-from app.deployment.validators import validate_oi_connection
 from config.manager import ConfigManager
 from config.model import Backend
 from log.manager import get_logger
+from tool.validators import validate_oi_connection
 
 from . import EnvironmentCheckScreen
 

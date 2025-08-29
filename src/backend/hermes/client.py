@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 import time
 from typing import TYPE_CHECKING, Self
 from urllib.parse import urljoin
@@ -31,26 +30,12 @@ if TYPE_CHECKING:
     from .models import HermesAgent
 
 
-def validate_url(url: str) -> bool:
-    """
-    校验 URL 是否合法
-
-    校验 URL 是否以 http:// 或 https:// 开头。
-    """
-    return re.match(r"^https?://", url) is not None
-
-
 class HermesChatClient(LLMClientBase):
     """Hermes Chat API 客户端 - 重构版本"""
 
     def __init__(self, base_url: str, auth_token: str = "") -> None:
         """初始化 Hermes Chat API 客户端"""
         self.logger = get_logger(__name__)
-
-        if not validate_url(base_url):
-            msg = "无效的 API URL，请确保 URL 以 http:// 或 https:// 开头。"
-            self.logger.error(msg)
-            raise ValueError(msg)
 
         # HTTP 管理器 - 立即初始化
         self.http_manager = HermesHttpManager(base_url, auth_token)

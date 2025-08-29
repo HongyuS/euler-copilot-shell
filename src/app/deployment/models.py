@@ -10,6 +10,8 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 
+from tool.validators import APIValidator
+
 # 常量定义
 MAX_TEMPERATURE = 2.0
 MIN_TEMPERATURE = 0.0
@@ -110,9 +112,6 @@ class DeploymentConfig:
             tuple[bool, str, dict]: (是否验证成功, 消息, 验证详细信息)
 
         """
-        # 懒导入以避免循环导入
-        from .validators import APIValidator  # noqa: PLC0415
-
         # 检查必要字段是否完整
         if not (self.llm.endpoint.strip() and self.llm.api_key.strip() and self.llm.model.strip()):
             return False, "LLM 基础配置不完整", {}
@@ -138,9 +137,6 @@ class DeploymentConfig:
             tuple[bool, str, dict]: (是否验证成功, 消息, 验证详细信息)
 
         """
-        # 懒导入以避免循环导入
-        from .validators import APIValidator  # noqa: PLC0415
-
         # 检查必要字段是否完整
         if not (self.embedding.endpoint.strip() and self.embedding.api_key.strip() and self.embedding.model.strip()):
             return False, "Embedding 基础配置不完整", {}
