@@ -504,23 +504,23 @@ class AgentManager:
         """创建多个智能体，返回默认智能体 ID"""
         default_app_id = None
 
-        # 创建 OS 智能助手（如果有相应的服务）
+        # 创建智能运维 Agent（如果有相应的服务）
         if os_service_ids:
             self._report_progress(
                 state,
-                f"[bold cyan]创建 OS 智能助手 (包含 {len(os_service_ids)} 个 MCP 服务)[/bold cyan]",
+                f"[bold cyan]创建智能运维 Agent (包含 {len(os_service_ids)} 个 MCP 服务)[/bold cyan]",
                 callback,
             )
 
             os_app_id = await self.api_client.create_agent(
-                "OS 智能助手",
-                "openEuler 智能助手",
+                "智能运维",
+                "openEuler 智能运维助手",
                 os_service_ids,
             )
             await self.api_client.publish_agent(os_app_id)
 
-            self._report_progress(state, "[green]OS 智能助手创建成功[/green]", callback)
-            default_app_id = os_app_id  # OS 智能助手作为默认应用
+            self._report_progress(state, "[green]智能运维 Agent 创建成功[/green]", callback)
+            default_app_id = os_app_id  # 智能运维作为默认 Agent
 
         # 创建慢卡检测智能助手（如果有相应的服务）
         if systrace_service_ids:
