@@ -27,8 +27,10 @@ from backend.hermes.mcp_helpers import (
     is_mcp_message,
 )
 from config import ConfigManager
+from config.model import Backend
 from log.manager import get_logger, log_exception
 from tool.command_processor import process_command
+from tool.validators import APIValidator, validate_oi_connection
 
 if TYPE_CHECKING:
     from textual.events import Key as KeyEvent
@@ -1192,14 +1194,137 @@ class IntelligentTerminal(App):
         self._initialize_default_agent()
 
     def _initialize_default_agent(self) -> None:
-        """初始化默认智能体，如果需要的话异步更新智能体名称"""
-        # 如果当前智能体是基于 default_app 配置的，且需要更新名称
-        app_id, name = self.current_agent
-        if app_id and app_id == name:  # 这表示我们在 _get_initial_agent 中使用了临时方案
-            # 异步获取智能体信息并更新名称
-            task = asyncio.create_task(self._update_agent_name_from_list())
-            self.background_tasks.add(task)
-            task.add_done_callback(self._task_done_callback)
+        """初始化默认智能体，包含配置验证"""
+        # 首先验证后端配置
+        validation_task = asyncio.create_task(self._validate_and_setup_configuration())
+        self.background_tasks.add(validation_task)
+        validation_task.add_done_callback(self._task_done_callback)
+
+    async def _validate_and_setup_configuration(self) -> None:
+        """验证配置并设置智能体，如果配置无效则弹出设置页面"""
+        try:
+            # 获取当前后端配置
+            backend = self.config_manager.get_backend()
+
+            # 验证配置
+            is_valid = await self._validate_backend_configuration(backend)
+
+            if is_valid:
+                # 配置验证通过，继续初始化智能体
+                await self._setup_agent_after_validation()
+            else:
+                # 配置验证失败，显示通知并弹出设置页面
+                self._show_config_validation_notification()
+                await self._show_settings_for_config_fix()
+
+        except Exception:
+            self.logger.exception("配置验证过程中发生错误")
+            # 即使验证出错，也弹出设置页面让用户手动配置
+            self._show_config_validation_notification()
+            await self._show_settings_for_config_fix()
+
+    async def _validate_backend_configuration(self, backend: Backend) -> bool:
+        """验证后端配置"""
+        try:
+            validator = APIValidator()
+
+            if backend == Backend.OPENAI:
+                # 验证 OpenAI 配置
+                base_url = self.config_manager.get_base_url()
+                api_key = self.config_manager.get_api_key()
+                model = self.config_manager.get_model()
+                valid, _, _ = await validator.validate_llm_config(
+                    endpoint=base_url,
+                    api_key=api_key,
+                    model=model,
+                    timeout=10,
+                )
+                return valid
+
+            if backend == Backend.EULERINTELLI:
+                # 验证 openEuler Intelligence 配置
+                base_url = self.config_manager.get_eulerintelli_url()
+                api_key = self.config_manager.get_eulerintelli_key()
+                valid, _ = await validate_oi_connection(base_url, api_key)
+                return valid
+
+        except Exception:
+            self.logger.exception("验证后端配置时发生错误")
+            return False
+
+        else:
+            return False
+
+    def _show_config_validation_notification(self) -> None:
+        """显示配置验证失败的通知"""
+        self.notify(
+            "后端配置验证失败，请检查并修改配置",
+            title="配置错误",
+            severity="error",
+            timeout=0.5,
+        )
+
+    async def _show_settings_for_config_fix(self) -> None:
+        """弹出设置页面让用户修改配置"""
+        try:
+            # 弹出设置页面
+            settings_screen = SettingsScreen(self.config_manager, self.get_llm_client())
+            self.push_screen(settings_screen)
+
+            # 等待设置页面退出
+            await self._wait_for_settings_screen_exit()
+
+            # 设置页面退出后，重新验证配置
+            backend = self.config_manager.get_backend()
+            is_valid = await self._validate_backend_configuration(backend)
+
+            if not is_valid:
+                # 如果还是无效，递归调用自己再次弹出设置页面
+                self._show_config_validation_notification()
+                await self._show_settings_for_config_fix()
+            else:
+                # 配置验证通过，继续初始化智能体
+                await self._setup_agent_after_validation()
+
+        except Exception:
+            self.logger.exception("显示设置页面时发生错误")
+
+    async def _wait_for_settings_screen_exit(self) -> None:
+        """等待设置页面退出"""
+        # 使用事件来等待设置页面退出，而不是轮询
+        exit_event = asyncio.Event()
+
+        # 创建一个任务来监控屏幕栈变化
+        async def monitor_screen_stack() -> None:
+            current_stack_length = len(self.screen_stack)
+            while current_stack_length > 1:
+                await asyncio.sleep(0.05)  # 短暂等待后重新检查
+                current_stack_length = len(self.screen_stack)
+            exit_event.set()
+
+        # 启动监控任务
+        monitor_task = asyncio.create_task(monitor_screen_stack())
+
+        # 等待退出事件或超时（5分钟）
+        try:
+            await asyncio.wait_for(exit_event.wait(), timeout=300.0)
+        except TimeoutError:
+            self.logger.warning("等待设置页面退出超时")
+        finally:
+            # 取消监控任务
+            if not monitor_task.done():
+                monitor_task.cancel()
+
+    async def _setup_agent_after_validation(self) -> None:
+        """配置验证通过后设置智能体"""
+        try:
+            # 如果当前智能体是基于 default_app 配置的，且需要更新名称
+            app_id, name = self.current_agent
+            if app_id and app_id == name:  # 这表示我们在 _get_initial_agent 中使用了临时方案
+                # 异步获取智能体信息并更新名称
+                await self._update_agent_name_from_list()
+        except Exception:
+            self.logger.exception("设置智能体时发生错误")
 
     async def _update_agent_name_from_list(self) -> None:
         """从智能体列表中更新当前智能体的名称"""
