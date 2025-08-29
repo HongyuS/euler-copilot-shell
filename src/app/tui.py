@@ -252,8 +252,8 @@ class IntelligentTerminal(App):
         self.background_tasks: set[asyncio.Task] = set()
         # 创建并保持单一的 LLM 客户端实例以维持对话历史
         self._llm_client: LLMClientBase | None = None
-        # 当前选择的智能体
-        self.current_agent: tuple[str, str] = ("", "智能问答")
+        # 当前选择的智能体 - 根据配置的 default_app 初始化
+        self.current_agent: tuple[str, str] = self._get_initial_agent()
         # MCP 状态
         self._mcp_mode: str = "normal"  # "normal", "confirm", "parameter"
         self._current_mcp_task_id: str = ""
@@ -354,6 +354,9 @@ class IntelligentTerminal(App):
 
         self._focus_current_input_widget()
 
+        # 初始化默认智能体
+        self._initialize_default_agent()
+
     def get_llm_client(self) -> LLMClientBase:
         """获取大模型客户端，使用单例模式维持对话历史"""
         if self._llm_client is None:
@@ -369,6 +372,9 @@ class IntelligentTerminal(App):
     def refresh_llm_client(self) -> None:
         """刷新 LLM 客户端实例，用于配置更改后重新创建客户端"""
         self._llm_client = BackendFactory.create_client(self.config_manager)
+
+        # 后端切换时重新初始化智能体状态
+        self._reinitialize_agent_state()
 
     def exit(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
         """退出应用前取消所有后台任务"""
@@ -982,6 +988,7 @@ class IntelligentTerminal(App):
             else:
                 self.logger.info("当前客户端不支持智能体功能，显示默认选项")
 
+            # 使用当前智能体状态，不重新读取配置
             await self._display_agent_dialog(agent_list, llm_client)
 
         except (OSError, ValueError, RuntimeError) as e:
@@ -994,7 +1001,11 @@ class IntelligentTerminal(App):
             except (OSError, ValueError, RuntimeError, AttributeError):
                 self.logger.exception("无法显示智能体选择对话框")
 
-    async def _display_agent_dialog(self, agent_list: list[tuple[str, str]], llm_client: LLMClientBase) -> None:
+    async def _display_agent_dialog(
+        self,
+        agent_list: list[tuple[str, str]],
+        llm_client: LLMClientBase,
+    ) -> None:
         """显示智能体选择对话框"""
 
         def on_agent_selected(selected_agent: tuple[str, str]) -> None:
@@ -1164,3 +1175,61 @@ class IntelligentTerminal(App):
         except asyncio.CancelledError:
             output_container.mount(OutputLine("🚫 MCP 响应被取消"))
             raise
+
+    def _get_initial_agent(self) -> tuple[str, str]:
+        """根据配置获取初始智能体，只在应用启动时调用"""
+        default_app = self.config_manager.get_default_app()
+        if default_app:
+            # 如果配置了默认智能体，尝试获取对应的名称
+            # 这里先返回 ID 和 ID 作为临时方案，后续在智能体列表加载后更新名称
+            return (default_app, default_app)
+        # 如果没有配置默认智能体，使用智能问答
+        return ("", "智能问答")
+
+    def _reinitialize_agent_state(self) -> None:
+        """重新初始化智能体状态，用于后端切换时"""
+        # 尝试异步更新智能体信息（如果新后端支持智能体功能）
+        self._initialize_default_agent()
+
+    def _initialize_default_agent(self) -> None:
+        """初始化默认智能体，如果需要的话异步更新智能体名称"""
+        # 如果当前智能体是基于 default_app 配置的，且需要更新名称
+        app_id, name = self.current_agent
+        if app_id and app_id == name:  # 这表示我们在 _get_initial_agent 中使用了临时方案
+            # 异步获取智能体信息并更新名称
+            task = asyncio.create_task(self._update_agent_name_from_list())
+            self.background_tasks.add(task)
+            task.add_done_callback(self._task_done_callback)
+
+    async def _update_agent_name_from_list(self) -> None:
+        """从智能体列表中更新当前智能体的名称"""
+        try:
+            llm_client = self.get_llm_client()
+            if hasattr(llm_client, "get_available_agents"):
+                available_agents = await llm_client.get_available_agents()  # type: ignore[attr-defined]
+                app_id, _ = self.current_agent
+
+                # 查找匹配的智能体
+                agent_found = False
+                for agent in available_agents:
+                    if hasattr(agent, "app_id") and hasattr(agent, "name") and agent.app_id == app_id:
+                        # 更新智能体信息
+                        self.current_agent = (agent.app_id, agent.name)
+                        # 设置智能体到客户端
+                        if hasattr(llm_client, "set_current_agent"):
+                            llm_client.set_current_agent(app_id)  # type: ignore[attr-defined]
+                        agent_found = True
+                        break
+
+                # 如果没有找到匹配的智能体，说明配置的默认智能体ID已无效
+                if not agent_found and app_id:
+                    self.logger.warning("配置的默认智能体 '%s' 不存在，回退到智能问答并清理配置", app_id)
+                    # 回退到智能问答
+                    self.current_agent = ("", "智能问答")
+                    # 清理配置中的无效ID
+                    self.config_manager.set_default_app("")
+                    # 确保客户端也切换到智能问答
+                    if hasattr(llm_client, "set_current_agent"):
+                        llm_client.set_current_agent("")  # type: ignore[attr-defined]
+        except (AttributeError, OSError, ValueError, RuntimeError) as e:
+            self.logger.warning("无法更新智能体名称: %s", str(e))
