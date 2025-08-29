@@ -20,7 +20,7 @@
    cd euler-copilot-shell
    ```
 
-2. 安装依赖:
+2. 安装依赖（建议使用 Python 虚拟环境）:
 
    ```sh
    pip install -r requirements.txt
@@ -38,13 +38,7 @@ sudo dnf install openeuler-intelligence-cli
 
 ## 使用方法
 
-直接运行应用程序:
-
-```sh
-python src/main.py
-```
-
-或者安装 RPM 包后:
+安装 RPM 包后:
 
 ```sh
 oi
@@ -53,25 +47,25 @@ oi
 查看最新的日志内容:
 
 ```sh
-python src/main.py --logs
-# 或安装后使用
 oi --logs
 ```
 
 设置日志级别并验证:
 
 ```sh
-python src/main.py --log-level DEBUG
-# 或安装后使用
 oi --log-level INFO
 ```
 
 初始化 openEuler Intelligence 后端（仅支持 openEuler 操作系统）:
 
 ```sh
-python src/main.py --init
-# 或安装后使用
 oi --init
+```
+
+选择和设置默认智能体（仅适用于 openEuler Intelligence 后端）:
+
+```sh
+oi --agent
 ```
 
 应用启动后，您可以直接在输入框中输入命令。如果命令无效或无法执行，应用程序将基于您的输入提供智能建议。
@@ -93,7 +87,7 @@ oi --init
 
 应用程序使用内联交互模式，不会打开模态对话框，确保流畅的用户体验。
 
-### --init 命令详细说明
+### --init 命令说明
 
 `--init` 命令用于在 openEuler 操作系统上自动安装和配置 openEuler Intelligence 后端，它将执行以下步骤：
 
@@ -110,6 +104,27 @@ oi --init
 
 **注意**: 此命令会自动安装系统服务，请在生产环境使用前仔细评估。
 
+### --agent 命令说明
+
+`--agent` 命令用于在命令行中选择和设置默认智能体，它提供了一个 TUI 界面来管理智能体配置：
+
+1. **智能体列表**: 自动获取并显示所有可用的智能体
+2. **可视化选择**: 通过图形化界面选择要设置为默认的智能体
+3. **配置保存**: 自动将选择保存到配置文件中的 `eulerintelli.default_app` 字段
+4. **即时反馈**: 设置完成后显示确认信息
+
+**使用要求**:
+
+- 必须配置为 openEuler Intelligence 后端
+- 需要有效的服务器连接来获取智能体列表
+- 如果后端不是 openEuler Intelligence，会显示错误提示并引导切换
+
+**功能特点**:
+
+- 包含"智能问答"选项（无智能体）作为默认选择
+- 支持取消操作，不会更改现有配置
+- 自动处理网络错误和异常情况
+
 ## 配置说明
 
 应用程序支持两种后端配置，配置文件会自动保存在 `~/.config/eulerintelli/smart-shell.json`：
@@ -117,7 +132,7 @@ oi --init
 ### 后端类型
 
 1. **OpenAI 兼容 API** (包括 LM Studio、vLLM、Ollama 等)
-2. **openEuler Intelligence (Hermes)**
+2. **openEuler Intelligence**
 
 ### 配置示例
 
@@ -143,12 +158,55 @@ oi --init
 
 使用 `Ctrl+T` 可以在运行时切换不同的智能体。
 
+#### 默认智能体配置
+
+应用程序支持配置默认启动的智能体：
+
+- **默认智能体配置**: 决定应用启动时激活哪个智能体，持久保存
+- **运行时智能体切换**: 在当前会话中临时切换智能体，不影响默认配置
+
+##### 方式一：命令行（修改默认配置）
+
+```sh
+oi --agent
+```
+
+通过图形化界面选择默认智能体，选择会自动保存到配置文件。
+
+##### 方式二：手动修改配置文件（不推荐）
+
+直接编辑配置文件 `~/.config/eulerintelli/smart-shell.json`，修改 `eulerintelli.default_app` 字段的值：
+
+- 设置为空字符串 `""` 或删除该字段：使用"智能问答"（没有调用工具的能力）
+- 设置为有效的智能体ID：使用指定的智能体作为默认
+- 设置为无效的智能体ID：应用启动时会自动清理并回退到"智能问答"
+
+##### 配置详情
+
+- **配置位置**: `~/.config/eulerintelli/smart-shell.json` 中的 `eulerintelli.default_app` 字段
+- **默认行为**: 如果未设置或为空，将默认使用"智能问答"（通用助手）
+- **自动应用**: 应用启动时会自动加载配置的默认智能体
+- **自动清理**: 如果配置的智能体ID不存在（如服务器数据更改），会自动清理配置并回退到"智能问答"
+
+**配置示例**:
+
+```json
+{
+  "backend": "eulerintelli",
+  "eulerintelli": {
+    "base_url": "http://your-server:8002",
+    "api_key": "your-api-key",
+    "default_app": "your-preferred-agent-id"
+  }
+}
+```
+
 ### 日志配置
 
 应用程序提供多级日志记录：
 
-- **DEBUG**: 详细调试信息
-- **INFO**: 基本信息（默认）
+- **DEBUG**: 详细调试信息（默认）
+- **INFO**: 基本信息
 - **WARNING**: 警告信息
 - **ERROR**: 仅错误信息
 

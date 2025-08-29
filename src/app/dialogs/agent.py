@@ -23,7 +23,7 @@ class BackendRequiredDialog(ModalScreen):
         yield Container(
             Container(
                 Label("智能体功能提示", id="backend-dialog-title"),
-                Label("请选择 openHermes 后端来使用智能体功能", id="backend-dialog-text"),
+                Label("请选择 openEuler Intelligence 后端来使用智能体功能", id="backend-dialog-text"),
                 Label("按任意键关闭", id="backend-dialog-help"),
                 id="backend-dialog",
             ),
@@ -96,7 +96,7 @@ class AgentSelectionDialog(ModalScreen):
 
         yield Container(
             Container(
-                Label("选择智能体", id="agent-dialog-title"),
+                Label("OS 智能助手", id="agent-dialog-title"),
                 agent_content,
                 Label("使用上下键选择，回车确认，ESC取消 | ✓ 表示当前选中", id="agent-dialog-help"),
                 id="agent-dialog",
