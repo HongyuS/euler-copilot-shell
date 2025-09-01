@@ -133,6 +133,13 @@ class SettingsScreen(Screen):
             # 使用当前选中的客户端获取模型列表
             self.models = await self.llm_client.get_available_models()
 
+            # 过滤掉嵌入模型，只保留语言模型
+            self.models = [
+                model
+                for model in self.models
+                if not any(keyword in model.lower() for keyword in ["text-embedding-", "embedding", "embed", "bge"])
+            ]
+
             if self.models and self.selected_model not in self.models:
                 self.selected_model = self.models[0]
 
@@ -148,6 +155,10 @@ class SettingsScreen(Screen):
         """当 Base URL 或 API Key 改变时更新客户端并验证配置"""
         if self.backend == Backend.OPENAI:
             self._update_llm_client()
+            # 重新加载模型列表
+            task = asyncio.create_task(self.load_models())
+            self.background_tasks.add(task)
+            task.add_done_callback(self.background_tasks.discard)
 
         # 重新验证配置
         validation_task = asyncio.create_task(self._validate_configuration())
