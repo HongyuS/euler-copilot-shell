@@ -381,10 +381,10 @@ class DeploymentService:
         # 定义基础部署步骤
         steps = [
             self._check_environment,
+            self._setup_deploy_mode,
             self._run_env_check_script,
             self._run_install_dependency_script,
             self._generate_config_files,
-            self._setup_deploy_mode,
             self._run_init_config_script,
         ]
 
@@ -465,13 +465,62 @@ class DeploymentService:
 
         return True
 
+    async def _setup_deploy_mode(
+        self,
+        config: DeploymentConfig,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """设置部署模式"""
+        self.state.current_step = 2
+        self.state.current_step_name = "设置部署模式"
+        self.state.add_log("正在设置部署模式...")
+
+        if progress_callback:
+            progress_callback(self.state)
+
+        try:
+            # 生成部署模式文件内容
+            mode_content = self.resource_manager.create_deploy_mode_content(config)
+
+            # 写入系统配置文件
+            cmd = [
+                "sudo",
+                "tee",
+                str(self.resource_manager.INSTALL_MODE_FILE),
+            ]
+
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            stdout, stderr = await process.communicate(mode_content.encode())
+
+            if process.returncode != 0:
+                error_msg = stderr.decode("utf-8", errors="ignore").strip()
+                self.state.add_log(f"✗ 设置部署模式失败: {error_msg}")
+                return False
+
+            web_status = "启用" if config.enable_web else "禁用"
+            rag_status = "启用" if config.enable_rag else "禁用"
+            self.state.add_log(f"✓ 部署模式设置完成 (Web界面: {web_status}, RAG: {rag_status})")
+
+        except Exception as e:
+            self.state.add_log(f"✗ 设置部署模式失败: {e}")
+            logger.exception("设置部署模式失败")
+            return False
+
+        return True
+
     async def _run_env_check_script(
         self,
         config: DeploymentConfig,
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """运行环境检查脚本"""
-        self.state.current_step = 2
+        self.state.current_step = 3
         self.state.current_step_name = "环境检查"
         self.state.add_log("正在执行系统环境检查...")
 
@@ -492,7 +541,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """运行依赖安装脚本"""
-        self.state.current_step = 3
+        self.state.current_step = 4
         self.state.current_step_name = "安装依赖组件"
         self.state.add_log("正在安装 openEuler Intelligence 依赖组件...")
 
@@ -605,7 +654,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """生成配置文件"""
-        self.state.current_step = 4
+        self.state.current_step = 5
         self.state.current_step_name = "更新配置文件"
         self.state.add_log("正在更新配置文件...")
 
@@ -624,55 +673,6 @@ class DeploymentService:
         except Exception as e:
             self.state.add_log(f"✗ 更新配置文件失败: {e}")
             logger.exception("更新配置文件失败")
-            return False
-
-        return True
-
-    async def _setup_deploy_mode(
-        self,
-        config: DeploymentConfig,
-        progress_callback: Callable[[DeploymentState], None] | None,
-    ) -> bool:
-        """设置部署模式"""
-        self.state.current_step = 5
-        self.state.current_step_name = "设置部署模式"
-        self.state.add_log("正在设置部署模式...")
-
-        if progress_callback:
-            progress_callback(self.state)
-
-        try:
-            # 生成部署模式文件内容
-            mode_content = self.resource_manager.create_deploy_mode_content(config)
-
-            # 写入系统配置文件
-            cmd = [
-                "sudo",
-                "tee",
-                str(self.resource_manager.INSTALL_MODE_FILE),
-            ]
-
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-
-            stdout, stderr = await process.communicate(mode_content.encode())
-
-            if process.returncode != 0:
-                error_msg = stderr.decode("utf-8", errors="ignore").strip()
-                self.state.add_log(f"✗ 设置部署模式失败: {error_msg}")
-                return False
-
-            web_status = "启用" if config.enable_web else "禁用"
-            rag_status = "启用" if config.enable_rag else "禁用"
-            self.state.add_log(f"✓ 部署模式设置完成 (Web界面: {web_status}, RAG: {rag_status})")
-
-        except Exception as e:
-            self.state.add_log(f"✗ 设置部署模式失败: {e}")
-            logger.exception("设置部署模式失败")
             return False
 
         return True
