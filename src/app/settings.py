@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from textual import on
 from textual.containers import Container, Horizontal
-from textual.screen import Screen
+from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
 from backend.hermes import HermesChatClient
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from backend.base import LLMClientBase
 
 
-class SettingsScreen(Screen):
+class SettingsScreen(ModalScreen):
     """设置页面"""
 
     CSS_PATH = "css/styles.tcss"
@@ -42,6 +42,10 @@ class SettingsScreen(Screen):
         self.is_validated = False
         self.validation_message = ""
         self.validator = APIValidator()
+
+        # 防抖和验证任务管理
+        self._validation_task: asyncio.Task | None = None
+        self._debounce_timer: asyncio.Task | None = None
 
     def compose(self) -> ComposeResult:
         """构建设置页面"""
@@ -116,9 +120,7 @@ class SettingsScreen(Screen):
             task.add_done_callback(self.background_tasks.discard)
 
         # 启动配置验证
-        validation_task = asyncio.create_task(self._validate_configuration())
-        self.background_tasks.add(validation_task)
-        validation_task.add_done_callback(self.background_tasks.discard)
+        self._schedule_validation()
 
         # 确保操作按钮始终可见
         self._ensure_buttons_visible()
@@ -161,9 +163,7 @@ class SettingsScreen(Screen):
             task.add_done_callback(self.background_tasks.discard)
 
         # 重新验证配置
-        validation_task = asyncio.create_task(self._validate_configuration())
-        self.background_tasks.add(validation_task)
-        validation_task.add_done_callback(self.background_tasks.discard)
+        self._schedule_validation()
 
     @on(Button.Pressed, "#backend-btn")
     def toggle_backend(self) -> None:
@@ -225,9 +225,7 @@ class SettingsScreen(Screen):
         self._ensure_buttons_visible()
 
         # 切换后端后重新验证配置
-        validation_task = asyncio.create_task(self._validate_configuration())
-        self.background_tasks.add(validation_task)
-        validation_task.add_done_callback(self.background_tasks.discard)
+        self._schedule_validation()
 
     @on(Button.Pressed, "#model-btn")
     def toggle_model(self) -> None:
@@ -250,9 +248,7 @@ class SettingsScreen(Screen):
             model_btn.label = self.selected_model
 
             # 模型改变时重新验证配置
-            validation_task = asyncio.create_task(self._validate_configuration())
-            self.background_tasks.add(validation_task)
-            validation_task.add_done_callback(self.background_tasks.discard)
+            self._schedule_validation()
         except (IndexError, ValueError):
             # 处理任何可能的异常
             self.selected_model = self.models[0] if self.models else "默认模型"
@@ -262,6 +258,12 @@ class SettingsScreen(Screen):
     @on(Button.Pressed, "#save-btn")
     def save_settings(self) -> None:
         """保存设置"""
+        # 取消所有后台任务
+        for task in self.background_tasks:
+            if not task.done():
+                task.cancel()
+        self.background_tasks.clear()
+
         # 检查验证状态
         if not self.is_validated:
             return
@@ -289,13 +291,47 @@ class SettingsScreen(Screen):
     @on(Button.Pressed, "#cancel-btn")
     def cancel_settings(self) -> None:
         """取消设置"""
+        # 取消所有后台任务
+        for task in self.background_tasks:
+            if not task.done():
+                task.cancel()
+        self.background_tasks.clear()
+
         self.app.pop_screen()
 
     def on_key(self, event: Key) -> None:
         """处理键盘事件"""
         if event.key == "escape":
+            # 取消所有后台任务
+            for task in self.background_tasks:
+                if not task.done():
+                    task.cancel()
+            self.background_tasks.clear()
             # ESC 键退出设置页面，等效于取消
             self.app.pop_screen()
+
+    def _schedule_validation(self) -> None:
+        """调度验证任务，带防抖机制"""
+        # 取消之前的定时器
+        if self._debounce_timer and not self._debounce_timer.done():
+            self._debounce_timer.cancel()
+
+        # 取消之前的验证任务
+        if self._validation_task and not self._validation_task.done():
+            self._validation_task.cancel()
+
+        # 创建新的定时器，1秒后启动验证
+        async def debounce_and_validate() -> None:
+            await asyncio.sleep(1.0)  # 防抖延迟
+            if self._validation_task and not self._validation_task.done():
+                return  # 如果已经有验证任务在运行，跳过
+            self._validation_task = asyncio.create_task(self._validate_configuration())
+            self.background_tasks.add(self._validation_task)
+            self._validation_task.add_done_callback(self.background_tasks.discard)
+
+        self._debounce_timer = asyncio.create_task(debounce_and_validate())
+        self.background_tasks.add(self._debounce_timer)
+        self._debounce_timer.add_done_callback(self.background_tasks.discard)
 
     def _ensure_buttons_visible(self) -> None:
         """确保操作按钮始终可见"""
@@ -325,12 +361,16 @@ class SettingsScreen(Screen):
 
         try:
             if self.backend == Backend.OPENAI:
+                # 检查是否有有效的模型选择
+                if not self.selected_model or not self.models:
+                    # 如果没有模型，跳过验证，不更改验证状态
+                    return
+
                 # 验证 OpenAI 配置
-                model = self.selected_model if self.selected_model else "gpt-3.5-turbo"
                 valid, message, _ = await self.validator.validate_llm_config(
                     endpoint=base_url,
                     api_key=api_key,
-                    model=model,
+                    model=self.selected_model,
                     timeout=10,
                 )
                 self.is_validated = valid
@@ -345,6 +385,7 @@ class SettingsScreen(Screen):
             self.is_validated = False
             self.validation_message = f"验证过程中发生错误: {e!s}"
 
+        self.notify(self.validation_message, severity="error" if not self.is_validated else "information")
         self._update_save_button_state()
 
     def _update_save_button_state(self) -> None:
