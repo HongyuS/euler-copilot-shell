@@ -208,6 +208,10 @@ function check_os_version {
     local supported_versions=("24.03")
     check_version "$version" "${supported_versions[@]}" "$sp"
     ;;
+  "hce")
+    echo -e "${COLOR_INFO}[Info] 检测到 HCE 发行版，跳过版本检查${COLOR_RESET}"
+    return 0
+    ;;
   *)
     echo -e "${COLOR_ERROR}[Error] 发行版不受支持，脚本将退出${COLOR_RESET}"
     return 1

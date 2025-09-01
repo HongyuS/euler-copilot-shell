@@ -221,12 +221,13 @@ class DeploymentService:
             os_release_path = Path("/etc/os-release")
             if os_release_path.exists():
                 content = os_release_path.read_text(encoding="utf-8").lower()
-                if "openeuler" in content:
+                if "openeuler" in content or "huawei cloud euleros" in content:
                     return True
 
             # 检查 /etc/openEuler-release
             openeuler_release_path = Path("/etc/openEuler-release")
-            if openeuler_release_path.exists():
+            hce_release_path = Path("/etc/hce-release")
+            if openeuler_release_path.exists() or hce_release_path.exists():
                 return True
 
         except OSError as e:
