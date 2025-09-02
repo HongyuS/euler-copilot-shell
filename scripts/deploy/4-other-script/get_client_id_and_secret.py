@@ -83,6 +83,11 @@ if __name__ == "__main__":
     parser.add_argument("eulercopilot_domain", help="EulerCopilot域名（例如：example.com）")
     args = parser.parse_args()
 
+    # 检查参数是否为空
+    if not args.eulercopilot_domain or args.eulercopilot_domain.strip() == "":
+        sys.stderr.write("错误: 域名参数为空\n")
+        sys.exit(1)
+
     # 获取服务信息
     namespace = "euler-copilot"
     service_name = "authhub-web-service"
