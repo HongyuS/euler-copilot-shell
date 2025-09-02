@@ -445,7 +445,7 @@ check_ports() {
   done
 
   if [ ${#occupied[@]} -gt 0 ]; then
-    echo -e "${COLOR_ERROR}[Error]错误：以下端口已被占用: ${occupied[*]}${COLOR_RESET}"
+    echo -e "${COLOR_ERROR}[Error]错误: 以下端口已被占用: ${occupied[*]}${COLOR_RESET}"
     echo -e "${COLOR_ERROR}[Error]请先释放这些端口再运行脚本${COLOR_RESET}"
     return 1
   fi

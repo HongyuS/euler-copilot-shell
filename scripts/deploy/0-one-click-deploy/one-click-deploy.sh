@@ -85,7 +85,7 @@ run_script_with_check() {
   local extra_args=("$@") # 使用数组来存储额外参数
   # 前置检查：脚本是否存在
   if [ ! -f "$script_path" ]; then
-    echo -e "\n${BOLD}${RED}✗ 致命错误：${RESET}${YELLOW}${script_name}${RESET}${RED} 不存在 (路径: ${CYAN}${script_path}${RED})${RESET}" >&2
+    echo -e "\n${BOLD}${RED}✗ 致命错误: ${RESET}${YELLOW}${script_name}${RESET}${RED} 不存在 (路径: ${CYAN}${script_path}${RED})${RESET}" >&2
     return 1 # 使用 return 而不是 exit，以便调用者可以处理错误
   fi
 

@@ -85,7 +85,7 @@ smart_install() {
     sleep 1
   done
 
-  echo "${COLOR_ERROR}[Error] 错误：$pkg 安装失败！${COLOR_RESET}"
+  echo "${COLOR_ERROR}[Error] 错误: $pkg 安装失败！${COLOR_RESET}"
   missing_pkgs+=("$pkg")
   install_success=false
 

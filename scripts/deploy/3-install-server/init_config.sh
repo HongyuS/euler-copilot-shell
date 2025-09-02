@@ -101,7 +101,7 @@ import_sql_file() {
 
     # 删除现有数据库
     if ! mysql -u "$DB_USER" -e "DROP DATABASE $DB_NAME" 2>/dev/null; then
-      echo -e "${COLOR_ERROR}[Error] 错误：无法删除现有数据库 $DB_NAME${COLOR_RESET}"
+      echo -e "${COLOR_ERROR}[Error] 错误: 无法删除现有数据库 $DB_NAME${COLOR_RESET}"
       return 1
     fi
     echo -e "${COLOR_SUCCESS} 成功删除旧数据库${COLOR_RESET}"
@@ -154,7 +154,7 @@ EOF
     echo -e "${COLOR_SUCCESS} 创建 authhub 用户成功${COLOR_RESET}"
   else
     echo -e "${COLOR_ERROR}[Error] 失败${COLOR_RESET}"
-    echo -e "${COLOR_ERROR}[Error] 错误：无法创建MySQL用户${COLOR_RESET}"
+    echo -e "${COLOR_ERROR}[Error] 错误: 无法创建MySQL用户${COLOR_RESET}"
     return 1
   fi
 
@@ -167,7 +167,7 @@ EOF
     return 0
   else
     echo -e "${COLOR_ERROR}[Error] 失败${COLOR_RESET}"
-    echo -e "${COLOR_ERROR}[Error] 错误：权限设置失败，请检查oauth2数据库是否存在${COLOR_RESET}"
+    echo -e "${COLOR_ERROR}[Error] 错误: 权限设置失败，请检查oauth2数据库是否存在${COLOR_RESET}"
     return 1
   fi
 }
@@ -524,6 +524,35 @@ setup_tiktoken_cache() {
   cp $token_py_file $FILE
   echo -e "${COLOR_SUCCESS}[Success] tiktoken缓存已配置: $target_file${COLOR_RESET}"
 }
+
+get_client_info_auto() {
+  # 声明全局变量
+  declare -g client_id=""
+  declare -g client_secret=""
+
+  # 直接调用Python脚本并传递域名参数
+  python3 "../4-other-script/get_client_id_and_secret.py" "$1" >client_info.tmp 2>&1
+
+  # 检查Python脚本执行结果
+  if [ $? -ne 0 ]; then
+    echo -e "${COLOR_ERROR}[Error] Python脚本执行失败${COLOR_RESET}"
+    cat client_info.tmp
+    rm -f client_info.tmp
+    return 1
+  fi
+
+  # 提取凭证信息
+  client_id=$(grep "client_id: " client_info.tmp | awk '{print $2}')
+  client_secret=$(grep "client_secret: " client_info.tmp | awk '{print $2}')
+  rm -f client_info.tmp
+
+  # 验证结果
+  if [ -z "$client_id" ] || [ -z "$client_secret" ]; then
+    echo -e "${COLOR_ERROR}[Error] 无法获取有效的客户端凭证${COLOR_RESET}" >&2
+    return 1
+  fi
+}
+
 install_framework() {
   # 1. 安装前检查
   echo -e "${COLOR_INFO}[Info] 开始初始化配置 euler-copilot-framework...${COLOR_RESET}"
@@ -697,34 +726,6 @@ EOF
 uninstall_pkg() {
   dnf remove -y euler-copilot-rag
   dnf remove -y euler-copilot-framework
-}
-
-get_client_info_auto() {
-  # 声明全局变量
-  declare -g client_id=""
-  declare -g client_secret=""
-
-  # 直接调用Python脚本并传递域名参数
-  python3 "../4-other-script/get_client_id_and_secret.py" "$1" >client_info.tmp 2>&1
-
-  # 检查Python脚本执行结果
-  if [ $? -ne 0 ]; then
-    echo -e "${COLOR_ERROR}[Error] Python脚本执行失败${COLOR_RESET}"
-    cat client_info.tmp
-    rm -f client_info.tmp
-    return 1
-  fi
-
-  # 提取凭证信息
-  client_id=$(grep "client_id: " client_info.tmp | awk '{print $2}')
-  client_secret=$(grep "client_secret: " client_info.tmp | awk '{print $2}')
-  rm -f client_info.tmp
-
-  # 验证结果
-  if [ -z "$client_id" ] || [ -z "$client_secret" ]; then
-    echo -e "${COLOR_ERROR}[Error] 无法获取有效的客户端凭证${COLOR_RESET}" >&2
-    return 1
-  fi
 }
 
 # 读取安装模式的方法
