@@ -652,6 +652,7 @@ class DeploymentProgressScreen(ModalScreen[bool]):
         self.service = DeploymentService()
         self.deployment_task: asyncio.Task[None] | None = None
         self.deployment_success = False
+        self.deployment_cancelled = False
         self.deployment_errors: list[str] = []
         self.deployment_progress_value = 0
         self.latest_log: str = ""
@@ -704,6 +705,7 @@ class DeploymentProgressScreen(ModalScreen[bool]):
             # 取消部署任务
             self.service.cancel_deployment()
             self.deployment_task.cancel()
+            self.deployment_cancelled = True
 
             # 更新界面
             self.query_one("#step_label", Static).update("部署已取消")
@@ -732,6 +734,7 @@ class DeploymentProgressScreen(ModalScreen[bool]):
 
         # 重置状态
         self.deployment_success = False
+        self.deployment_cancelled = False
         self.deployment_errors.clear()
         self.deployment_progress_value = 0  # 重置进度记录
         self.latest_log = ""
@@ -784,9 +787,11 @@ class DeploymentProgressScreen(ModalScreen[bool]):
                 # 获取任务结果，如果有异常会在这里抛出
                 self.deployment_task.result()
             except asyncio.CancelledError:
-                self.query_one("#step_label", Static).update("部署已取消")
-                self.query_one("#deployment_log", RichLog).write("部署被取消")
-                self._update_buttons_after_failure()
+                if not self.deployment_cancelled:
+                    self.deployment_cancelled = True
+                    self.query_one("#step_label", Static).update("部署已取消")
+                    self.query_one("#deployment_log", RichLog).write("部署被取消")
+                    self._update_buttons_after_failure()
             except (OSError, RuntimeError, ValueError) as e:
                 self.query_one("#step_label", Static).update("部署异常")
                 self.query_one("#deployment_log", RichLog).write(f"部署异常: {e}")
