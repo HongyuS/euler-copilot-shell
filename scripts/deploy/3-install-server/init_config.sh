@@ -11,8 +11,9 @@ INSTALL_MODE_FILE="/etc/euler_Intelligence_install_mode"
 ## 配置参数
 # 生成随机密码函数
 generate_random_password() {
-  # 生成24位随机密码（包含大小写字母、数字和特殊字符）
-  local password=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)
+  local length=${1:-24} # 默认 24 位
+  local password
+  password=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c "$length")
   echo "$password"
 }
 
@@ -100,7 +101,7 @@ import_sql_file() {
 
     # 删除现有数据库
     if ! mysql -u "$DB_USER" -e "DROP DATABASE $DB_NAME" 2>/dev/null; then
-      echo -e "${COLOR_ERROR}[Error] 错误：无法删除现有数据库 $DB_NAME${COLOR_RESET}"
+      echo -e "${COLOR_ERROR}[Error] 错误: 无法删除现有数据库 $DB_NAME${COLOR_RESET}"
       return 1
     fi
     echo -e "${COLOR_SUCCESS} 成功删除旧数据库${COLOR_RESET}"
@@ -153,7 +154,7 @@ EOF
     echo -e "${COLOR_SUCCESS} 创建 authhub 用户成功${COLOR_RESET}"
   else
     echo -e "${COLOR_ERROR}[Error] 失败${COLOR_RESET}"
-    echo -e "${COLOR_ERROR}[Error] 错误：无法创建MySQL用户${COLOR_RESET}"
+    echo -e "${COLOR_ERROR}[Error] 错误: 无法创建MySQL用户${COLOR_RESET}"
     return 1
   fi
 
@@ -166,7 +167,7 @@ EOF
     return 0
   else
     echo -e "${COLOR_ERROR}[Error] 失败${COLOR_RESET}"
-    echo -e "${COLOR_ERROR}[Error] 错误：权限设置失败，请检查oauth2数据库是否存在${COLOR_RESET}"
+    echo -e "${COLOR_ERROR}[Error] 错误: 权限设置失败，请检查oauth2数据库是否存在${COLOR_RESET}"
     return 1
   fi
 }
@@ -280,7 +281,8 @@ install_tika() {
     echo -e "${COLOR_ERROR}[Error] Tika服务启动失败${COLOR_RESET}"
 
     # 检查服务状态获取更多信息
-    local service_status=$(systemctl status tika --no-pager 2>&1)
+    local service_status
+    service_status=$(systemctl status tika --no-pager 2>&1)
     echo -e "${COLOR_INFO}[Debug] 服务状态信息:\n$service_status${COLOR_RESET}"
 
     journalctl -u tika --no-pager -n 20 | grep -i error
@@ -363,7 +365,8 @@ configure_postgresql() {
 
   # 5. 查找并修改pg_hba.conf
   echo -e "${COLOR_INFO}[Info] 配置认证方式...${COLOR_RESET}"
-  local pg_hba_conf=$(find / -name pg_hba.conf 2>/dev/null | head -n 1)
+  local pg_hba_conf
+  pg_hba_conf=$(find / -name pg_hba.conf 2>/dev/null | head -n 1)
 
   if [ -z "$pg_hba_conf" ]; then
     echo -e "${COLOR_ERROR}[Error] 找不到 pg_hba.conf 文件${COLOR_RESET}"
@@ -521,11 +524,35 @@ setup_tiktoken_cache() {
   cp $token_py_file $FILE
   echo -e "${COLOR_SUCCESS}[Success] tiktoken缓存已配置: $target_file${COLOR_RESET}"
 }
-generate_random_password2() {
-  # 生成24位随机密码（包含大小写字母、数字和特殊字符）
-  local password=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20)
-  echo "$password"
+
+get_client_info_auto() {
+  # 声明全局变量
+  declare -g client_id=""
+  declare -g client_secret=""
+
+  # 直接调用Python脚本并传递域名参数
+  python3 "../4-other-script/get_client_id_and_secret.py" "$1" >client_info.tmp 2>&1
+
+  # 检查Python脚本执行结果
+  if [ $? -ne 0 ]; then
+    echo -e "${COLOR_ERROR}[Error] Python脚本执行失败${COLOR_RESET}"
+    cat client_info.tmp
+    rm -f client_info.tmp
+    return 1
+  fi
+
+  # 提取凭证信息
+  client_id=$(grep "client_id: " client_info.tmp | awk '{print $2}')
+  client_secret=$(grep "client_secret: " client_info.tmp | awk '{print $2}')
+  rm -f client_info.tmp
+
+  # 验证结果
+  if [ -z "$client_id" ] || [ -z "$client_secret" ]; then
+    echo -e "${COLOR_ERROR}[Error] 无法获取有效的客户端凭证${COLOR_RESET}" >&2
+    return 1
+  fi
 }
+
 install_framework() {
   # 1. 安装前检查
   echo -e "${COLOR_INFO}[Info] 开始初始化配置 euler-copilot-framework...${COLOR_RESET}"
@@ -540,9 +567,24 @@ install_framework() {
   # 3. 获取本机IP
   local ip_address
   config_toml_path="../5-resource/config.toml"
-  # 提取 domain 的值（假设文件为 config.ini）
-  ip_address=$(grep -E "^\s*domain\s*=" $config_toml_path | awk -F"'" '{print $2}')
-  echo -e "${COLOR_INFO} [Info] 提取的IP地址: $ip_address"
+  # 提取 domain 的值，支持多种 TOML 字符串格式（双引号、单引号、无引号）
+  if [ ! -f "$config_toml_path" ]; then
+    echo -e "${COLOR_ERROR}[Error] 配置文件不存在: $config_toml_path${COLOR_RESET}"
+    return 1
+  fi
+  # 使用 grep 和 sed 提取 domain 值，支持多种引号格式
+  local domain_line
+  domain_line=$(grep -E "^[[:space:]]*domain[[:space:]]*=[[:space:]]*" "$config_toml_path")
+  if [ -z "$domain_line" ]; then
+    echo -e "${COLOR_ERROR}[Error] 配置文件中未找到 domain 配置项${COLOR_RESET}"
+    return 1
+  fi
+  ip_address=$(echo "$domain_line" | sed 's/.*=[[:space:]]*//' | sed 's/^["'"'"']//' | sed 's/["'"'"']$//')
+  if [ -z "$ip_address" ]; then
+    echo -e "${COLOR_ERROR}[Error] 无法从配置文件中提取有效的 domain 值，部署失败${COLOR_RESET}"
+    return 1
+  fi
+  echo -e "${COLOR_INFO} [Info] 提取的 IP 地址: '$ip_address'${COLOR_RESET}"
 
   # 4. 获取客户端信息
   # 针对代理服务器做特殊处理
@@ -577,10 +619,10 @@ install_framework() {
       echo -e "${COLOR_ERROR}[Error] 获取客户端凭证失败${COLOR_RESET}"
       return 1
     fi
-    sed -i "s/app_id = '.*'/app_id = '$client_id'/" $framework_file
-    sed -i "s/app_secret = '.*'/app_secret = '$client_secret'/" $framework_file
+    sed -i "s@app_id = \".*\"@app_id = \"$client_id\"@" $framework_file
+    sed -i "s@app_secret = \".*\"@app_secret = \"$client_secret\"@" $framework_file
     # 验证替换结果
-    if ! grep -q "app_id = '$client_id'" "$framework_file" || ! grep -q "app_secret = '$client_secret'" "$framework_file"; then
+    if ! grep -q "app_id = \"$client_id\"" "$framework_file" || ! grep -q "app_secret = \"$client_secret\"" "$framework_file"; then
       echo -e "${COLOR_ERROR}[Error] 配置文件验证失败${COLOR_RESET}"
       mv -v "${framework_file}.bak" "$framework_file"
       return 1
@@ -616,10 +658,10 @@ EOF
   fi
 
   #更新 security key
-  key1=$(generate_random_password2)
-  key2=$(generate_random_password2)
-  key3=$(generate_random_password2)
-  key4=$(generate_random_password2)
+  key1=$(generate_random_password 20)
+  key2=$(generate_random_password 20)
+  key3=$(generate_random_password 20)
+  key4=$(generate_random_password 20)
   sed -i "s/half_key1 = '.*'/half_key1 = '$key1'/" $framework_file
   sed -i "s/half_key2 = '.*'/half_key2 = '$key2'/" $framework_file
   sed -i "s/half_key3 = '.*'/half_key3 = '$key3'/" $framework_file
@@ -686,34 +728,6 @@ uninstall_pkg() {
   dnf remove -y euler-copilot-framework
 }
 
-get_client_info_auto() {
-  # 声明全局变量
-  declare -g client_id=""
-  declare -g client_secret=""
-
-  # 直接调用Python脚本并传递域名参数
-  python3 "../4-other-script/get_client_id_and_secret.py" "$1" >client_info.tmp 2>&1
-
-  # 检查Python脚本执行结果
-  if [ $? -ne 0 ]; then
-    echo -e "${RED}错误：Python脚本执行失败${NC}"
-    cat client_info.tmp
-    rm -f client_info.tmp
-    return 1
-  fi
-
-  # 提取凭证信息
-  client_id=$(grep "client_id: " client_info.tmp | awk '{print $2}')
-  client_secret=$(grep "client_secret: " client_info.tmp | awk '{print $2}')
-  rm -f client_info.tmp
-
-  # 验证结果
-  if [ -z "$client_id" ] || [ -z "$client_secret" ]; then
-    echo -e "${RED}错误：无法获取有效的客户端凭证${NC}" >&2
-    return 1
-  fi
-}
-
 # 读取安装模式的方法
 read_install_mode() {
   # 检查文件是否存在
@@ -723,8 +737,10 @@ read_install_mode() {
   fi
 
   # 从文件读取配置（格式：key=value）
-  local web_install=$(grep "web_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
-  local rag_install=$(grep "rag_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
+  local web_install
+  local rag_install
+  web_install=$(grep "web_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
+  rag_install=$(grep "rag_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
 
   # 验证读取结果
   if [ -z "$web_install" ] || [ -z "$rag_install" ]; then

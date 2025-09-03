@@ -240,7 +240,7 @@ manual_deployment_loop() {
 restart_service() {
   local service="$1"
   if [[ -z "$service" ]]; then
-    echo -e "${COLOR_ERROR}[Error] 错误：请输入服务名称${COLOR_RESET}"
+    echo -e "${COLOR_ERROR}[Error] 错误: 请输入服务名称${COLOR_RESET}"
     return 1
   fi
 
