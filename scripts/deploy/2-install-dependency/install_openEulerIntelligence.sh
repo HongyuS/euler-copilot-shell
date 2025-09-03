@@ -47,6 +47,55 @@ EOF
   dnf makecache
 
 }
+# 安装MinIO
+install_minio() {
+  echo -e "${COLOR_INFO}[Info] 开始安装MinIO...${COLOR_RESET}"
+  local minio_dir="/opt/minio"
+  if ! mkdir -p "$minio_dir"; then
+    echo -e "${COLOR_ERROR}[Error] 创建目录失败: $minio_dir${COLOR_RESET}"
+    return 1
+  fi
+  ! is_x86_architecture || {
+  local minio_url="https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20250524170830.0.0-1.x86_64.rpm"
+  local minio_src="../5-resource/rpm/minio-20250524170830.0.0-1.x86_64.rpm"
+  local minio_file="/opt/minio/minio-20250524170830.0.0-1.x86_64.rpm"
+
+  if [ -f "$minio_src" ]; then
+    cp -r "$minio_src" "$minio_file"
+    sleep 1
+  fi
+  if [ ! -f "$minio_file" ]; then
+    echo -e "${COLOR_INFO}[Info] 正在下载MinIO软件包...${COLOR_RESET}"
+    if ! wget "$minio_url" --no-check-certificate -O "$minio_file"; then
+      echo -e "${COLOR_ERROR}[Error] MinIO下载失败${COLOR_RESET}"
+      return 1
+    fi
+  fi
+
+  dnf install -y $minio_file || {
+    echo -e "${COLOR_ERROR}[Error] MinIO安装失败${COLOR_RESET}"
+    return 1
+  }
+  echo -e "${COLOR_SUCCESS}[Success] MinIO安装成功...${COLOR_RESET}"
+  return 0
+  }
+  echo -e "${COLOR_INFO}[Info] 下载MinIO二进制文件（aarch64）...${COLOR_RESET}"
+  local minio_url="https://dl.min.io/server/minio/release/linux-arm64/minio"
+  local temp_dir=$minio_dir
+  local minio_path="../5-resource/rpm/minio"
+
+  # 检查文件是否已存在
+  if [ -f "$minio_path" ]; then
+    cp -r $minio_path $temp_dir
+    echo -e "${COLOR_INFO}[Info] MinIO二进制文件已存在，跳过下载${COLOR_RESET}"
+  else
+    if ! wget -q --show-progress "$minio_url" -O "$temp_dir/minio" --no-check-certificate; then
+      echo -e "${COLOR_ERROR}[Error] 下载MinIO失败，请检查网络连接${COLOR_RESET}"
+      rm -rf "$temp_dir"
+      return 1
+    fi
+  fi
+}
 # 智能安装函数
 smart_install() {
   local pkg=$1
@@ -415,16 +464,62 @@ install_mongodb() {
   return 0
 }
 
-check_pip() {
+check_pip_rag() {
   # 定义需要检查的包和版本
   declare -A REQUIRED_PACKAGES=(
     ["sqlalchemy"]="2.0.23"
-    ["paddlepaddle"]="2.6.2"
+    ["paddlepaddle"]="3.0.0"
     ["paddleocr"]="2.9.1"
+    ["tiktoken"]=""
+  )
+
+  local need_install=0
+  local install_list=()
+
+  echo -e "${COLOR_INFO}[Info] 检查Python依赖包...${COLOR_RESET}"
+
+  # 检查每个包是否需要安装
+  for pkg in "${!REQUIRED_PACKAGES[@]}"; do
+    local required_ver="${REQUIRED_PACKAGES[$pkg]}"
+    local installed_ver=$(pip show "$pkg" 2>/dev/null | grep '^Version:' | awk '{print $2}')
+
+    if [[ -z "$installed_ver" ]]; then
+      echo -e "${COLOR_WARNING}[Warning] 未安装包: $pkg${COLOR_RESET}"
+      need_install=1
+      if [[ -n "$required_ver" ]]; then
+        install_list+=("${pkg}==${required_ver}")
+      else
+        install_list+=("$pkg")
+      fi
+    elif [[ -n "$required_ver" && "$installed_ver" != "$required_ver" ]]; then
+      echo -e "${COLOR_WARNING}[Warning] 包版本不匹配: $pkg (已安装: $installed_ver, 需要: $required_ver)${COLOR_RESET}"
+      need_install=1
+      install_list+=("${pkg}==${required_ver}")
+    else
+      echo -e "${COLOR_SUCCESS}[OK] 已安装: $pkg${COLOR_RESET}"
+    fi
+  done
+
+  # 如果需要安装，则执行安装命令
+  if [[ "$need_install" -eq 1 ]]; then
+    echo -e "${COLOR_INFO}[Info] 开始安装Python依赖...${COLOR_RESET}"
+    pip install --retries 10 --timeout 120 "${install_list[@]}" -i https://repo.huaweicloud.com/repository/pypi/simple || {
+      echo -e "${COLOR_ERROR}[Error] Python依赖安装失败！${COLOR_RESET}"
+      return 1
+    }
+    echo -e "${COLOR_SUCCESS}[Success] Python依赖安装完成！${COLOR_RESET}"
+  else
+    echo -e "${COLOR_SUCCESS}[Success] Python依赖已满足要求，跳过安装${COLOR_RESET}"
+  fi
+
+  return 0
+}
+check_pip() {
+  # 定义需要检查的包和版本
+  declare -A REQUIRED_PACKAGES=(
     ["pymongo"]=""
     ["requests"]=""
     ["pydantic"]=""
-    ["tiktoken"]=""
     ["aiohttp"]=""
   )
 
@@ -464,7 +559,7 @@ check_pip() {
     }
     echo -e "${COLOR_SUCCESS}[Success] Python依赖安装完成！${COLOR_RESET}"
   else
-    echo -e "${COLOR_SUCCESS}[Success] 所有Python依赖已满足要求，跳过安装${COLOR_RESET}"
+    echo -e "${COLOR_SUCCESS}[Success] Python依赖已满足要求，跳过安装${COLOR_RESET}"
   fi
 
   return 0
@@ -510,6 +605,10 @@ install_rag() {
   install_pgvector || return 1
   cd "$SCRIPT_DIR" || return 1
   install_zhparser || return 1
+  cd "$SCRIPT_DIR" || return 1
+  install_minio || return 1
+  cd "$SCRIPT_DIR" || return 1
+  check_pip_rag || return 1
 }
 install_web() {
   local pkgs=(

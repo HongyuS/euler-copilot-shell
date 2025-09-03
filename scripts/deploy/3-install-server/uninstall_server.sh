@@ -119,6 +119,14 @@ uninstall_server() {
   rm -rf /var/lib/mongo
   rm -rf /var/log/mongodb
   rm -rf /etc/mongod.conf
+  rm -rf /usr/lib/euler-copilot-rag
+  rm -rf /var/log/openEulerIntelligence
+  rm -rf /etc/euler-copilot-framework
+  rm -rf /etc/euler-copilot-rag
+  rm -rf /etc/euler_Intelligence_install_mode
+  rm -rf /etc/nginx/conf.d/authhub.nginx.conf.bak
+  rm -rf /etc/systemd/system/framework.service
+  rm -rf /etc/systemd/system/multi-user.target.wants/framework.service
 
   # 清理系统配置
   systemctl daemon-reload
