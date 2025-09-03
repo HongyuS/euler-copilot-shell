@@ -270,6 +270,9 @@ class DeploymentService:
             bool: 部署是否成功
 
         """
+        # 在部署开始时更新当前用户的配置，确保使用正确的后端 URL
+        self._update_backend_url_config(config)
+
         try:
             logger.info("开始部署 openEuler Intelligence 后端")
 
@@ -946,27 +949,27 @@ class DeploymentService:
 
         """
         try:
-            # 获取当前root用户的实际配置（包含 Agent 初始化后的完整配置）
+            # 获取当前 root 用户的实际配置（包含 Agent 初始化后的完整配置）
             current_config_manager = ConfigManager()
+
+            # 将部署时用户输入的经过验证的大模型信息设置为默认的 OpenAI 配置
+            # 这样其他用户可以直接使用这些已验证的配置
+            current_config_manager.set_base_url(config.llm.endpoint)
+            current_config_manager.set_model(config.llm.model)
+            current_config_manager.set_api_key(config.llm.api_key)
 
             # 创建专用的模板配置管理器
             template_manager = ConfigManager.create_deployment_manager()
 
-            # 将当前root用户的完整配置复制到模板中
+            # 将当前 root 用户的完整配置复制到模板中
             template_manager.data = current_config_manager.data
-
-            # 将部署时用户输入的经过验证的大模型信息设置为默认的 OpenAI 配置
-            # 这样其他用户可以直接使用这些已验证的配置
-            template_manager.set_base_url(config.llm.endpoint)
-            template_manager.set_model(config.llm.model)
-            template_manager.set_api_key(config.llm.api_key)
 
             # 创建全局配置模板文件
             success = template_manager.create_global_template()
 
             if success:
                 self.state.add_log("✓ 全局配置模板创建成功，其他用户可正常使用")
-                logger.info("全局配置模板创建成功，包含部署时的大模型配置")
+                logger.info("全局配置模板创建成功，包含部署时的完整配置信息")
             else:
                 self.state.add_log("⚠ 全局配置模板创建失败，可能影响其他用户使用")
                 logger.warning("全局配置模板创建失败")
@@ -974,6 +977,35 @@ class DeploymentService:
         except Exception:
             logger.exception("创建全局配置模板时发生异常")
             self.state.add_log("⚠ 配置模板创建异常，可能影响其他用户使用")
+
+    def _update_backend_url_config(self, config: DeploymentConfig) -> None:
+        """
+        更新当前用户的配置
+
+        在部署开始时根据用户填写的服务器IP和部署模式
+        更新 openEuler Intelligence 后端 URL
+
+        Args:
+            config: 部署配置
+
+        """
+        try:
+            config_manager = ConfigManager()
+
+            # 根据部署配置更新 openEuler Intelligence 后端 URL
+            server_ip = config.server_ip or "127.0.0.1"
+            if config.deployment_mode == "full":
+                # 全量部署模式：有 nginx，端口是 8080
+                eulerintelli_url = f"http://{server_ip}:8080"
+            else:
+                # 轻量部署模式：无 nginx，端口是 8002
+                eulerintelli_url = f"http://{server_ip}:8002"
+
+            config_manager.set_eulerintelli_url(eulerintelli_url)
+            logger.info("已更新当前用户 openEuler Intelligence 后端 URL: %s", eulerintelli_url)
+
+        except Exception:
+            logger.exception("更新当前用户配置时发生异常")
 
     async def _check_and_stop_old_service(
         self,
