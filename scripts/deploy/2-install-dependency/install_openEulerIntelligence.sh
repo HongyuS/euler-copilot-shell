@@ -569,6 +569,15 @@ check_pip_framework() {
       ["toml"]="0.10.2"
       ["uvicorn"]="0.34.0"
     )
+    # 对于 Python 3.9，单独安装 MCP 的 wheel 包
+    local wheel_path="../5-resource/pip/mcp-1.6.0-py3-none-any.whl"
+    if [ -f "$wheel_path" ]; then
+      echo -e "${COLOR_INFO}[Info] 为 Python 3.9 安装 wheel 包: $wheel_path${COLOR_RESET}"
+      install_list+=("$wheel_path")
+      need_install=1
+    else
+      echo -e "${COLOR_WARNING}[Warning] Wheel 文件不存在: $wheel_path${COLOR_RESET}"
+    fi
   else
     echo -e "${COLOR_WARNING}[Warning] 不支持的 Python 版本: $python_version，使用默认列表${COLOR_RESET}"
     REQUIRED_PACKAGES=(
@@ -639,8 +648,8 @@ install_framework() {
     return 1
   fi
   cd "$SCRIPT_DIR" || return 1
-  cd "$SCRIPT_DIR" || return 1
   install_mongodb || return 1
+  cd "$SCRIPT_DIR" || return 1
   check_pip_framework || return 1
 }
 
