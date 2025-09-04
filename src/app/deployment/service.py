@@ -10,6 +10,7 @@ import asyncio
 import contextlib
 import platform
 import re
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -192,6 +193,13 @@ class DeploymentService:
             errors.append("仅支持 openEuler 操作系统")
             return False, errors
 
+        # 检查 Python 版本兼容性
+        python_version = sys.version_info
+        current_version = f"{python_version.major}.{python_version.minor}"
+        if python_version < (3, 10) and progress_callback:
+            temp_state.add_log(f"⚠ 检测到 Python {current_version}，低于 3.10 版本将不支持全量部署模式")
+            progress_callback(temp_state)
+
         # 检查并安装 openeuler-intelligence-installer
         if not self.resource_manager.check_installer_available():
             if progress_callback:
@@ -237,6 +245,35 @@ class DeploymentService:
             # 检查 platform 信息
             system_info = platform.platform().lower()
             return "openeuler" in system_info
+
+    def check_python_version_for_deployment(self, deployment_mode: str) -> tuple[bool, str]:
+        """
+        检查 Python 版本是否支持指定的部署模式
+
+        Args:
+            deployment_mode: 部署模式 ("light" 或 "full")
+
+        Returns:
+            tuple[bool, str]: (是否支持, 错误信息)
+
+        """
+        try:
+            python_version = sys.version_info
+            current_version = f"{python_version.major}.{python_version.minor}"
+
+            # 检查是否低于 3.10
+            if python_version < (3, 10) and deployment_mode == "full":
+                return False, (
+                    "当前 openEuler 版本低于 24.03 LTS，"
+                    "不支持全量部署模式。请使用轻量部署模式或升级到 openEuler 24.03+ 版本"
+                )
+
+        except Exception as e:
+            logger.exception("检查 Python 环境版本时发生错误")
+            return False, f"无法检查 Python 环境: {e}"
+        else:
+            # Python 版本符合要求
+            return True, f"Python 环境版本 {current_version} 符合要求"
 
     async def check_sudo_privileges(self) -> bool:
         """检查 sudo 权限"""
@@ -452,6 +489,12 @@ class DeploymentService:
             self.state.add_log("✗ 错误: 仅支持 openEuler 操作系统")
             return False
         self.state.add_log("✓ 检测到 openEuler 操作系统")
+
+        # 检查 openEuler & Python 版本是否支持指定的部署模式
+        python_check_ok, python_msg = self.check_python_version_for_deployment(config.deployment_mode)
+        if not python_check_ok:
+            self.state.add_log(f"✗ 错误: {python_msg}")
+            return False
 
         # 检查安装器资源
         if not self.resource_manager.check_installer_available():
