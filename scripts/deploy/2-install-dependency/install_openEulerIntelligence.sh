@@ -517,14 +517,67 @@ check_pip_rag() {
 
   return 0
 }
-check_pip() {
-  # 定义需要检查的包和版本
-  declare -A REQUIRED_PACKAGES=(
-    ["pymongo"]=""
-    ["requests"]=""
-    ["pydantic"]=""
-    ["aiohttp"]=""
-  )
+
+check_pip_framework() {
+  # 获取 Python 版本
+  local python_version
+  python_version=$(python3 --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
+
+  # 根据 Python 版本选择包列表
+  declare -A REQUIRED_PACKAGES
+  if [[ "$python_version" =~ ^3\.(11|[2-9][0-9])$ ]]; then
+    # Python 3.11 或更新版本，使用当前列表
+    REQUIRED_PACKAGES=(
+      ["pymongo"]=""
+      ["requests"]=""
+      ["pydantic"]=""
+      ["aiohttp"]=""
+    )
+  elif [[ "$python_version" =~ ^3\.(9|10)$ ]]; then
+    # Python 3.9 或 3.10，使用完整列表
+    REQUIRED_PACKAGES=(
+      ["requests"]=""
+      ["aiohttp"]=""
+      ["aiofiles"]="24.1.0"
+      ["asyncer"]="0.0.8"
+      ["asyncpg"]="0.30.0"
+      ["cryptography"]="44.0.2"
+      ["fastapi"]="0.115.12"
+      ["httpx"]="0.28.1"
+      ["httpx-sse"]="0.4.0"
+      ["jinja2"]="3.1.6"
+      ["jionlp"]="1.5.20"
+      ["jsonschema"]="4.23.0"
+      ["lancedb"]="0.21.2"
+      ["minio"]="7.2.15"
+      ["ollama"]="0.5.1"
+      ["openai"]="1.91.0"
+      ["pandas"]="2.2.3"
+      ["pgvector"]="0.4.1"
+      ["pillow"]="10.3.0"
+      ["pydantic"]="2.11.7"
+      ["pymongo"]="4.12.1"
+      ["python-jsonpath"]="1.3.0"
+      ["python-magic"]="0.4.27"
+      ["python-multipart"]="0.0.20"
+      ["pytz"]="2025.2"
+      ["pyyaml"]="6.0.2"
+      ["rich"]="13.9.4"
+      ["sqids"]="0.5.1"
+      ["sqlalchemy"]="2.0.41"
+      ["tiktoken"]="0.9.0"
+      ["toml"]="0.10.2"
+      ["uvicorn"]="0.34.0"
+    )
+  else
+    echo -e "${COLOR_WARNING}[Warning] 不支持的 Python 版本: $python_version，使用默认列表${COLOR_RESET}"
+    REQUIRED_PACKAGES=(
+      ["pymongo"]=""
+      ["requests"]=""
+      ["pydantic"]=""
+      ["aiohttp"]=""
+    )
+  fi
 
   local need_install=0
   local install_list=()
@@ -569,6 +622,7 @@ check_pip() {
 
   return 0
 }
+
 install_framework() {
   echo -e "\n${COLOR_INFO}[Info] 开始安装框架服务...${COLOR_RESET}"
   local pkgs=(
@@ -587,8 +641,9 @@ install_framework() {
   cd "$SCRIPT_DIR" || return 1
   cd "$SCRIPT_DIR" || return 1
   install_mongodb || return 1
-  check_pip || return 1
+  check_pip_framework || return 1
 }
+
 install_rag() {
   local pkgs=(
     "euler-copilot-rag"
@@ -615,6 +670,7 @@ install_rag() {
   cd "$SCRIPT_DIR" || return 1
   check_pip_rag || return 1
 }
+
 install_web() {
   local pkgs=(
     "nginx"
@@ -631,6 +687,7 @@ install_web() {
     return 1
   fi
 }
+
 # 读取安装模式的方法
 read_install_mode() {
   if [ ! -f "$INSTALL_MODE_FILE" ]; then
@@ -660,6 +717,7 @@ read_install_mode() {
   RAG_INSTALL=$rag_install
   return 0
 }
+
 # 示例：根据安装模式执行对应操作（可根据实际需求扩展）
 install_components() {
   # 读取安装模式
