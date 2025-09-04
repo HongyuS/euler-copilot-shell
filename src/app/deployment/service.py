@@ -10,6 +10,7 @@ import asyncio
 import contextlib
 import platform
 import re
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -192,6 +193,13 @@ class DeploymentService:
             errors.append("仅支持 openEuler 操作系统")
             return False, errors
 
+        # 检查 Python 版本兼容性
+        python_version = sys.version_info
+        current_version = f"{python_version.major}.{python_version.minor}"
+        if python_version < (3, 10) and progress_callback:
+            temp_state.add_log(f"⚠ 检测到 Python {current_version}，低于 3.10 版本将不支持全量部署模式")
+            progress_callback(temp_state)
+
         # 检查并安装 openeuler-intelligence-installer
         if not self.resource_manager.check_installer_available():
             if progress_callback:
@@ -238,6 +246,35 @@ class DeploymentService:
             system_info = platform.platform().lower()
             return "openeuler" in system_info
 
+    def check_python_version_for_deployment(self, deployment_mode: str) -> tuple[bool, str]:
+        """
+        检查 Python 版本是否支持指定的部署模式
+
+        Args:
+            deployment_mode: 部署模式 ("light" 或 "full")
+
+        Returns:
+            tuple[bool, str]: (是否支持, 错误信息)
+
+        """
+        try:
+            python_version = sys.version_info
+            current_version = f"{python_version.major}.{python_version.minor}"
+
+            # 检查是否低于 3.10
+            if python_version < (3, 10) and deployment_mode == "full":
+                return False, (
+                    "当前 openEuler 版本低于 24.03 LTS，"
+                    "不支持全量部署模式。请使用轻量部署模式或升级到 openEuler 24.03+ 版本"
+                )
+
+        except Exception as e:
+            logger.exception("检查 Python 环境版本时发生错误")
+            return False, f"无法检查 Python 环境: {e}"
+        else:
+            # Python 版本符合要求
+            return True, f"Python 环境版本 {current_version} 符合要求"
+
     async def check_sudo_privileges(self) -> bool:
         """检查 sudo 权限"""
         try:
@@ -279,8 +316,8 @@ class DeploymentService:
             # 重置状态
             self.state.reset()
             self.state.is_running = True
-            # 根据部署模式设置总步数：轻量模式7步，全量模式6步
-            self.state.total_steps = 7 if config.deployment_mode == "light" else 6
+            # 根据部署模式设置总步数：轻量模式5步，全量模式4步
+            self.state.total_steps = 5 if config.deployment_mode == "light" else 4
 
             # 执行部署步骤
             success = await self._execute_deployment_steps(config, progress_callback)
@@ -383,8 +420,8 @@ class DeploymentService:
 
         # 定义基础部署步骤
         steps = [
-            self._check_environment,
             self._setup_deploy_mode,
+            self._check_environment,
             self._run_env_check_script,
             self._run_install_dependency_script,
             self._generate_config_files,
@@ -453,6 +490,12 @@ class DeploymentService:
             return False
         self.state.add_log("✓ 检测到 openEuler 操作系统")
 
+        # 检查 openEuler & Python 版本是否支持指定的部署模式
+        python_check_ok, python_msg = self.check_python_version_for_deployment(config.deployment_mode)
+        if not python_check_ok:
+            self.state.add_log(f"✗ 错误: {python_msg}")
+            return False
+
         # 检查安装器资源
         if not self.resource_manager.check_installer_available():
             self.state.add_log("✗ 错误: openeuler-intelligence-installer 包未安装或资源缺失")
@@ -474,8 +517,8 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """设置部署模式"""
-        self.state.current_step = 2
-        self.state.current_step_name = "设置部署模式"
+        self.state.current_step = 0
+        self.state.current_step_name = "初始化部署配置"
         self.state.add_log("正在设置部署模式...")
 
         if progress_callback:
@@ -523,8 +566,8 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """运行环境检查脚本"""
-        self.state.current_step = 3
-        self.state.current_step_name = "环境检查"
+        self.state.current_step = 1
+        self.state.current_step_name = "检查系统环境"
         self.state.add_log("正在执行系统环境检查...")
 
         if progress_callback:
@@ -544,7 +587,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """运行依赖安装脚本"""
-        self.state.current_step = 4
+        self.state.current_step = 2
         self.state.current_step_name = "安装依赖组件"
         self.state.add_log("正在安装 openEuler Intelligence 依赖组件...")
 
@@ -567,7 +610,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """运行配置初始化脚本"""
-        self.state.current_step = 6
+        self.state.current_step = 4
         self.state.current_step_name = "初始化配置和服务"
         self.state.add_log("正在初始化配置和启动服务...")
 
@@ -657,7 +700,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """生成配置文件"""
-        self.state.current_step = 5
+        self.state.current_step = 3
         self.state.current_step_name = "更新配置文件"
         self.state.add_log("正在更新配置文件...")
 
@@ -899,7 +942,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """运行 Agent 初始化脚本"""
-        self.state.current_step = 7
+        self.state.current_step = 5
         self.state.current_step_name = "初始化 Agent 服务"
         self.state.add_log("正在检查 openEuler Intelligence 后端服务状态...")
 

@@ -102,9 +102,10 @@ check_url_accessibility() {
   fi
 
   local all_success=true
-  local timeout_seconds=15  # 设置超时时间
-  local temp_file=$(mktemp) # 创建临时文件
-  local failed_urls=()      # 存储失败的URL
+  local timeout_seconds=15 # 设置超时时间
+  local failed_urls=()     # 存储失败的URL
+  local temp_file          # 创建临时文件
+  temp_file=$(mktemp)
 
   echo -e "${COLOR_INFO}开始检测URL可达性...${COLOR_RESET}"
   echo -e "${COLOR_INFO}超时时间: ${timeout_seconds}秒${COLOR_RESET}"
@@ -185,10 +186,26 @@ function check_version {
   echo -e "${COLOR_INFO}[Info] 当前操作系统版本为：$current_version_id LTS-$sp${COLOR_RESET}"
   for version_id in "${supported_versions[@]}"; do
     if [[ "$current_version_id" == "$version_id" ]]; then
-      if [[ "$sp" == "SP2" ]]; then
-        echo -e "${COLOR_SUCCESS}[Success] 操作系统满足兼容性要求${COLOR_RESET}"
-        return 0
-      fi
+      case "$current_version_id" in
+      "22.03")
+        if [[ "$sp" == "SP4" ]]; then
+          echo -e "${COLOR_SUCCESS}[Success] 操作系统满足兼容性要求${COLOR_RESET}"
+          return 0
+        fi
+        ;;
+      "24.03")
+        if [[ "$sp" == "SP2" || "$sp" == "SP3" ]]; then
+          echo -e "${COLOR_SUCCESS}[Success] 操作系统满足兼容性要求${COLOR_RESET}"
+          return 0
+        fi
+        ;;
+      "25.03" | "25.09")
+        if [[ -z "$sp" ]]; then
+          echo -e "${COLOR_SUCCESS}[Success] 操作系统满足兼容性要求${COLOR_RESET}"
+          return 0
+        fi
+        ;;
+      esac
     fi
   done
 
@@ -197,15 +214,18 @@ function check_version {
 }
 
 function check_os_version {
-  local id=$(grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
-  local version=$(grep -E "^VERSION_ID=" /etc/os-release | cut -d '"' -f 2)
-  local sp=$(grep -E "^VERSION=" /etc/os-release | grep -oP 'SP\d+')
+  local id
+  local version
+  local sp
+  id=$(grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+  version=$(grep -E "^VERSION_ID=" /etc/os-release | cut -d '"' -f 2)
+  sp=$(grep -E "^VERSION=" /etc/os-release | grep -oP 'SP\d+')
 
   echo -e "${COLOR_INFO}[Info] 当前发行版为：$id${COLOR_RESET}"
 
   case $id in
   "openEuler")
-    local supported_versions=("24.03")
+    local supported_versions=("22.03" "24.03" "25.03" "25.09")
     check_version "$version" "${supported_versions[@]}" "$sp"
     ;;
   "hce")
@@ -221,7 +241,8 @@ function check_os_version {
 }
 
 function check_hostname {
-  local current_hostname=$(cat /etc/hostname)
+  local current_hostname
+  current_hostname=$(cat /etc/hostname)
   if [[ -z "$current_hostname" ]]; then
     echo -e "${COLOR_WARNING}[Warning] 未设置主机名，自动设置为localhost${COLOR_RESET}"
     set_hostname "localhost"
@@ -292,13 +313,15 @@ check_all_packages() {
   local PACKAGES=("$@")
 
   local timeout_seconds=30
-  local start_time=$(date +%s)
+  local start_time
+  start_time=$(date +%s)
 
   echo -e "${COLOR_INFO}--------------------------------${COLOR_RESET}"
 
   for pkg in "${PACKAGES[@]}"; do
     # 检查是否超时
-    local current_time=$(date +%s)
+    local current_time
+    current_time=$(date +%s)
     local elapsed=$((current_time - start_time))
 
     if [ $elapsed -ge $timeout_seconds ]; then
@@ -389,7 +412,8 @@ function check_dns {
 
 function check_ram {
   local RAM_THRESHOLD=1024
-  local current_mem=$(free -m | awk '/Mem/{print $2}')
+  local current_mem
+  current_mem=$(free -m | awk '/Mem/{print $2}')
 
   echo -e "${COLOR_INFO}[Info] 当前内存：$current_mem MB${COLOR_RESET}"
   if ((current_mem < RAM_THRESHOLD)); then
@@ -404,7 +428,8 @@ check_disk_space() {
   local DIR="$1"
   local THRESHOLD="$2"
 
-  local USAGE=$(df --output=pcent "$DIR" | tail -n 1 | sed 's/%//g' | tr -d ' ')
+  local USAGE
+  USAGE=$(df --output=pcent "$DIR" | tail -n 1 | sed 's/%//g' | tr -d ' ')
 
   if [ "$USAGE" -ge "$THRESHOLD" ]; then
     echo -e "${COLOR_WARNING}[Warning] $DIR 的磁盘使用率已达到 ${USAGE}%，超过阈值 ${THRESHOLD}%${COLOR_RESET}"
@@ -465,7 +490,7 @@ setup_firewall() {
   echo -e "${COLOR_INFO}[Info]防火墙已运行，开放端口${COLOR_RESET}"
   for port in "${PORTS[@]}"; do
     echo -e "${COLOR_INFO}[Info]开放端口 $port/tcp...${COLOR_RESET}"
-    firewall-cmd --permanent --add-port=${port}/tcp || {
+    firewall-cmd --permanent --add-port="${port}"/tcp || {
       echo -e "${COLOR_ERROR}[Error]开放端口 $port 失败！${COLOR_RESET}"
       return 1
     }
@@ -488,8 +513,10 @@ read_install_mode() {
   fi
 
   # 从文件读取配置（格式：key=value）
-  local web_install=$(grep "web_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
-  local rag_install=$(grep "rag_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
+  local web_install
+  local rag_install
+  web_install=$(grep "web_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
+  rag_install=$(grep "rag_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
 
   # 验证读取结果
   if [ -z "$web_install" ] || [ -z "$rag_install" ]; then
