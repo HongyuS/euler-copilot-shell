@@ -186,10 +186,26 @@ function check_version {
   echo -e "${COLOR_INFO}[Info] 当前操作系统版本为：$current_version_id LTS-$sp${COLOR_RESET}"
   for version_id in "${supported_versions[@]}"; do
     if [[ "$current_version_id" == "$version_id" ]]; then
-      if [[ "$sp" == "SP2" ]]; then
-        echo -e "${COLOR_SUCCESS}[Success] 操作系统满足兼容性要求${COLOR_RESET}"
-        return 0
-      fi
+      case "$current_version_id" in
+      "22.03")
+        if [[ "$sp" == "SP4" ]]; then
+          echo -e "${COLOR_SUCCESS}[Success] 操作系统满足兼容性要求${COLOR_RESET}"
+          return 0
+        fi
+        ;;
+      "24.03")
+        if [[ "$sp" == "SP2" || "$sp" == "SP3" ]]; then
+          echo -e "${COLOR_SUCCESS}[Success] 操作系统满足兼容性要求${COLOR_RESET}"
+          return 0
+        fi
+        ;;
+      "25.03" | "25.09")
+        if [[ -z "$sp" ]]; then
+          echo -e "${COLOR_SUCCESS}[Success] 操作系统满足兼容性要求${COLOR_RESET}"
+          return 0
+        fi
+        ;;
+      esac
     fi
   done
 
@@ -209,7 +225,7 @@ function check_os_version {
 
   case $id in
   "openEuler")
-    local supported_versions=("24.03")
+    local supported_versions=("22.03" "24.03" "25.03" "25.09")
     check_version "$version" "${supported_versions[@]}" "$sp"
     ;;
   "hce")
