@@ -279,8 +279,8 @@ class DeploymentService:
             # 重置状态
             self.state.reset()
             self.state.is_running = True
-            # 根据部署模式设置总步数：轻量模式7步，全量模式6步
-            self.state.total_steps = 7 if config.deployment_mode == "light" else 6
+            # 根据部署模式设置总步数：轻量模式5步，全量模式4步
+            self.state.total_steps = 5 if config.deployment_mode == "light" else 4
 
             # 执行部署步骤
             success = await self._execute_deployment_steps(config, progress_callback)
@@ -383,8 +383,8 @@ class DeploymentService:
 
         # 定义基础部署步骤
         steps = [
-            self._check_environment,
             self._setup_deploy_mode,
+            self._check_environment,
             self._run_env_check_script,
             self._run_install_dependency_script,
             self._generate_config_files,
@@ -474,8 +474,8 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """设置部署模式"""
-        self.state.current_step = 2
-        self.state.current_step_name = "设置部署模式"
+        self.state.current_step = 0
+        self.state.current_step_name = "初始化部署配置"
         self.state.add_log("正在设置部署模式...")
 
         if progress_callback:
@@ -523,8 +523,8 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """运行环境检查脚本"""
-        self.state.current_step = 3
-        self.state.current_step_name = "环境检查"
+        self.state.current_step = 1
+        self.state.current_step_name = "检查系统环境"
         self.state.add_log("正在执行系统环境检查...")
 
         if progress_callback:
@@ -544,7 +544,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """运行依赖安装脚本"""
-        self.state.current_step = 4
+        self.state.current_step = 2
         self.state.current_step_name = "安装依赖组件"
         self.state.add_log("正在安装 openEuler Intelligence 依赖组件...")
 
@@ -567,7 +567,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """运行配置初始化脚本"""
-        self.state.current_step = 6
+        self.state.current_step = 4
         self.state.current_step_name = "初始化配置和服务"
         self.state.add_log("正在初始化配置和启动服务...")
 
@@ -657,7 +657,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """生成配置文件"""
-        self.state.current_step = 5
+        self.state.current_step = 3
         self.state.current_step_name = "更新配置文件"
         self.state.add_log("正在更新配置文件...")
 
@@ -899,7 +899,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """运行 Agent 初始化脚本"""
-        self.state.current_step = 7
+        self.state.current_step = 5
         self.state.current_step_name = "初始化 Agent 服务"
         self.state.add_log("正在检查 openEuler Intelligence 后端服务状态...")
 
