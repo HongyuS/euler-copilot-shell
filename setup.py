@@ -8,7 +8,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="oi-cli",
-    version="1.0.0",
+    version="0.10.0",
     description="智能 Shell 命令行工具",
     author="openEuler",
     author_email="contact@openeuler.org",
