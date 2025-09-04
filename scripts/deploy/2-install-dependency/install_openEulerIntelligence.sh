@@ -56,28 +56,28 @@ install_minio() {
     return 1
   fi
   ! is_x86_architecture || {
-  local minio_url="https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20250524170830.0.0-1.x86_64.rpm"
-  local minio_src="../5-resource/rpm/minio-20250524170830.0.0-1.x86_64.rpm"
-  local minio_file="/opt/minio/minio-20250524170830.0.0-1.x86_64.rpm"
+    local minio_url="https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20250524170830.0.0-1.x86_64.rpm"
+    local minio_src="../5-resource/rpm/minio-20250524170830.0.0-1.x86_64.rpm"
+    local minio_file="/opt/minio/minio-20250524170830.0.0-1.x86_64.rpm"
 
-  if [ -f "$minio_src" ]; then
-    cp -r "$minio_src" "$minio_file"
-    sleep 1
-  fi
-  if [ ! -f "$minio_file" ]; then
-    echo -e "${COLOR_INFO}[Info] 正在下载MinIO软件包...${COLOR_RESET}"
-    if ! wget "$minio_url" --no-check-certificate -O "$minio_file"; then
-      echo -e "${COLOR_ERROR}[Error] MinIO下载失败${COLOR_RESET}"
-      return 1
+    if [ -f "$minio_src" ]; then
+      cp -r "$minio_src" "$minio_file"
+      sleep 1
     fi
-  fi
+    if [ ! -f "$minio_file" ]; then
+      echo -e "${COLOR_INFO}[Info] 正在下载MinIO软件包...${COLOR_RESET}"
+      if ! wget "$minio_url" --no-check-certificate -O "$minio_file"; then
+        echo -e "${COLOR_ERROR}[Error] MinIO下载失败${COLOR_RESET}"
+        return 1
+      fi
+    fi
 
-  dnf install -y $minio_file || {
-    echo -e "${COLOR_ERROR}[Error] MinIO安装失败${COLOR_RESET}"
-    return 1
-  }
-  echo -e "${COLOR_SUCCESS}[Success] MinIO安装成功...${COLOR_RESET}"
-  return 0
+    dnf install -y $minio_file || {
+      echo -e "${COLOR_ERROR}[Error] MinIO安装失败${COLOR_RESET}"
+      return 1
+    }
+    echo -e "${COLOR_SUCCESS}[Success] MinIO安装成功...${COLOR_RESET}"
+    return 0
   }
   echo -e "${COLOR_INFO}[Info] 下载MinIO二进制文件（aarch64）...${COLOR_RESET}"
   local minio_url="https://dl.min.io/server/minio/release/linux-arm64/minio"
@@ -114,7 +114,8 @@ smart_install() {
     # 本地安装模式（仅在本地仓库可用时尝试）
     if [[ "$use_local" == true ]]; then
       # 检查本地是否存在包（支持模糊匹配）
-      local local_pkg=$(find "$LOCAL_REPO_DIR" -name "${pkg}-*.rpm" | head -1)
+      local local_pkg
+      local_pkg=$(find "$LOCAL_REPO_DIR" -name "${pkg}-*.rpm" | head -1)
 
       if [[ -n "$local_pkg" ]]; then
         if dnf --disablerepo='*' --enablerepo=local-rpms install -y "$pkg"; then
@@ -146,7 +147,7 @@ install_and_verify() {
   local pkgs=("$@")
   # 检查并安装每个包
   for pkg in "${pkgs[@]}"; do
-    smart_install $pkg
+    smart_install "$pkg"
     sleep 1
   done
   # 检查安装结果
@@ -480,8 +481,10 @@ check_pip_rag() {
 
   # 检查每个包是否需要安装
   for pkg in "${!REQUIRED_PACKAGES[@]}"; do
-    local required_ver="${REQUIRED_PACKAGES[$pkg]}"
-    local installed_ver=$(pip show "$pkg" 2>/dev/null | grep '^Version:' | awk '{print $2}')
+    local required_ver
+    local installed_ver
+    required_ver="${REQUIRED_PACKAGES[$pkg]}"
+    installed_ver=$(pip show "$pkg" 2>/dev/null | grep '^Version:' | awk '{print $2}')
 
     if [[ -z "$installed_ver" ]]; then
       echo -e "${COLOR_WARNING}[Warning] 未安装包: $pkg${COLOR_RESET}"
@@ -530,8 +533,10 @@ check_pip() {
 
   # 检查每个包是否需要安装
   for pkg in "${!REQUIRED_PACKAGES[@]}"; do
-    local required_ver="${REQUIRED_PACKAGES[$pkg]}"
-    local installed_ver=$(pip show "$pkg" 2>/dev/null | grep '^Version:' | awk '{print $2}')
+    local required_ver
+    local installed_ver
+    required_ver="${REQUIRED_PACKAGES[$pkg]}"
+    installed_ver=$(pip show "$pkg" 2>/dev/null | grep '^Version:' | awk '{print $2}')
 
     if [[ -z "$installed_ver" ]]; then
       echo -e "${COLOR_WARNING}[Warning] 未安装包: $pkg${COLOR_RESET}"
@@ -634,8 +639,10 @@ read_install_mode() {
   fi
 
   # 从文件读取配置（格式：key=value）
-  local web_install=$(grep "web_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
-  local rag_install=$(grep "rag_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
+  local web_install
+  local rag_install
+  web_install=$(grep "web_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
+  rag_install=$(grep "rag_install=" "$INSTALL_MODE_FILE" | cut -d'=' -f2)
 
   # 验证读取结果
   if [ -z "$web_install" ] || [ -z "$rag_install" ]; then
@@ -677,7 +684,8 @@ install_components() {
 main() {
   echo -e "${COLOR_INFO}[Info] === 开始服务安装===${COLOR_RESET}"
   # 获取脚本所在的绝对路径
-  declare SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  local SCRIPT_DIR
+  SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
   # 切换到脚本所在目录
   cd "$SCRIPT_DIR" || return 1
   #查看当前脚本执行的模式
