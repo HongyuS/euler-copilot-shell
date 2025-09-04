@@ -3,15 +3,14 @@
 %global debug_package %{nil}
 
 Name:           euler-copilot-shell
-Version:        1.0.0
-Release:        1%{?dist}
+Version:        0.10.0
+Release:        3%{?dist}
 Summary:        openEuler Intelligence 智能命令行工具集
 License:        MulanPSL-2.0
 URL:            https://gitee.com/openeuler/euler-copilot-shell
 Source0:        %{name}-%{version}.tar.gz
 
-# 支持x86_64和aarch64双架构
-ExclusiveArch:  x86_64 aarch64
+ExclusiveArch:  x86_64 aarch64 riscv64 loongarch64
 
 BuildRequires:  python3-devel
 BuildRequires:  python3-virtualenv
@@ -99,10 +98,13 @@ ln -sf /usr/lib/openeuler-intelligence/scripts/deploy %{buildroot}%{_bindir}/ope
 %{_bindir}/openeuler-intelligence-installer
 
 %changelog
-* Thu Aug 28 2025 openEuler <contact@openeuler.org> - 1.0.0-1
+* Thu Sep 04 2025 openEuler <contact@openeuler.org> - 0.10.0-3
+- 部署功能新增支持全量部署（含 RAG、Web）
+- 允许构建 riscv64 loongarch64 版本
+
+* Thu Aug 28 2025 openEuler <contact@openeuler.org> - 0.10.0-2
 - 新增 openEuler Intelligence 部署功能 TUI
 - 新增选择默认 Agent 功能
-- 版本号升级至 1.0.0
 
 * Wed Aug 13 2025 openEuler <contact@openeuler.org> - 0.10.0-1
 - 重构为子包形式：openeuler-intelligence-cli 和 openeuler-intelligence-installer
