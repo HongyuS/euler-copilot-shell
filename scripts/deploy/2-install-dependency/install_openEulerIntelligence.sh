@@ -526,49 +526,13 @@ check_pip_framework() {
   # 根据 Python 版本选择包列表
   declare -A REQUIRED_PACKAGES
   if [[ "$python_version" =~ ^3\.(11|[2-9][0-9])$ ]]; then
-    # Python 3.11 或更新版本，使用当前列表
+    # Python 3.11 或更新版本，检查并安装 DNF 源中缺失的 pip 依赖
     REQUIRED_PACKAGES=(
       ["pymongo"]=""
-      ["requests"]=""
       ["pydantic"]=""
-      ["aiohttp"]=""
     )
   elif [[ "$python_version" =~ ^3\.(9|10)$ ]]; then
-    # Python 3.9 或 3.10，使用完整列表
-    REQUIRED_PACKAGES=(
-      ["requests"]=""
-      ["aiohttp"]=""
-      ["aiofiles"]="24.1.0"
-      ["asyncer"]="0.0.8"
-      ["asyncpg"]="0.30.0"
-      ["cryptography"]="44.0.2"
-      ["fastapi"]="0.115.12"
-      ["httpx"]="0.28.1"
-      ["httpx-sse"]="0.4.0"
-      ["jinja2"]="3.1.6"
-      ["jionlp"]="1.5.20"
-      ["jsonschema"]="4.23.0"
-      ["lancedb"]="0.21.2"
-      ["minio"]="7.2.15"
-      ["ollama"]="0.5.1"
-      ["openai"]="1.91.0"
-      ["pandas"]="2.2.3"
-      ["pgvector"]="0.4.1"
-      ["pillow"]="10.3.0"
-      ["pydantic"]="2.11.7"
-      ["pymongo"]="4.12.1"
-      ["python-jsonpath"]="1.3.0"
-      ["python-magic"]="0.4.27"
-      ["python-multipart"]="0.0.20"
-      ["pytz"]="2025.2"
-      ["pyyaml"]="6.0.2"
-      ["rich"]="13.9.4"
-      ["sqids"]="0.5.1"
-      ["sqlalchemy"]="2.0.41"
-      ["tiktoken"]="0.9.0"
-      ["toml"]="0.10.2"
-      ["uvicorn"]="0.34.0"
-    )
+    # Python 3.9 或 3.10，RPM 包安装过程已处理 pip 依赖
     # 对于 Python 3.9，单独安装 MCP 的 wheel 包
     local wheel_path="../5-resource/pip/mcp-1.6.0-py3-none-any.whl"
     if [ -f "$wheel_path" ]; then
@@ -579,13 +543,8 @@ check_pip_framework() {
       echo -e "${COLOR_WARNING}[Warning] Wheel 文件不存在: $wheel_path${COLOR_RESET}"
     fi
   else
-    echo -e "${COLOR_WARNING}[Warning] 不支持的 Python 版本: $python_version，使用默认列表${COLOR_RESET}"
-    REQUIRED_PACKAGES=(
-      ["pymongo"]=""
-      ["requests"]=""
-      ["pydantic"]=""
-      ["aiohttp"]=""
-    )
+    echo -e "${COLOR_WARNING}[Warning] 不支持的 Python 版本: $python_version${COLOR_RESET}"
+    return 1
   fi
 
   local need_install=0
