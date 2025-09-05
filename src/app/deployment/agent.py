@@ -1156,30 +1156,61 @@ class AgentManager:
             f"[magenta]验证 SSE Endpoint: {config.name} -> {url}[/magenta]",
             callback,
         )
-        try:
-            async with httpx.AsyncClient(timeout=self.api_client.timeout) as client:
-                response = await client.get(
-                    url,
-                    headers={"Accept": "text/event-stream"},
-                )
-                if response.status_code != HTTP_OK:
-                    self._report_progress(
-                        state,
-                        f"  [red]{config.name} URL 响应码非 200: {response.status_code}[/red]",
-                        callback,
+
+        # 重试配置
+        max_attempts = 36  # 3分钟 / 5秒 = 36次
+        retry_interval = 5  # 5秒重试间隔
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self.api_client.timeout) as client:
+                    response = await client.get(
+                        url,
+                        headers={"Accept": "text/event-stream"},
                     )
-                    return False
-                content_type = response.headers.get("content-type", "")
-                if "text/event-stream" not in content_type:
-                    self._report_progress(
-                        state,
-                        f"  [red]{config.name} Content-Type 非 SSE: {content_type}[/red]",
-                        callback,
-                    )
-                    return False
-                self._report_progress(state, f"  [green]{config.name} SSE Endpoint 验证通过[/green]", callback)
-                return True
-        except Exception as e:
-            self._report_progress(state, f"  [red]{config.name} SSE 验证失败:[/red] {e}", callback)
-            logger.exception("验证 SSE Endpoint 失败: %s", url)
-            return False
+
+                    if response.status_code != HTTP_OK:
+                        logger.debug(
+                            "SSE Endpoint 响应码非 200: %s, 状态码: %d, 尝试: %d/%d",
+                            url, response.status_code, attempt, max_attempts,
+                        )
+                    else:
+                        content_type = response.headers.get("content-type", "")
+                        if "text/event-stream" not in content_type:
+                            self._report_progress(
+                                state,
+                                f"  [yellow]{config.name} Content-Type 非 SSE: {content_type}[/yellow]",
+                                callback,
+                            )
+                            logger.debug(
+                                "SSE Endpoint Content-Type 非 SSE: %s, Content-Type: %s, 尝试: %d/%d",
+                                url, content_type, attempt, max_attempts,
+                            )
+                        else:
+                            # 验证成功
+                            self._report_progress(
+                                state,
+                                f"  [green]{config.name} SSE Endpoint 验证通过[/green]",
+                                callback,
+                            )
+                            logger.info("SSE Endpoint 验证成功: %s (尝试 %d 次)", url, attempt)
+                            return True
+
+            except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                logger.debug("SSE Endpoint 连接失败: %s, 错误: %s, 尝试: %d/%d", url, e, attempt, max_attempts)
+
+            # 如果还有重试机会，等待后继续
+            if attempt < max_attempts:
+                await asyncio.sleep(retry_interval)
+
+        # 所有尝试都失败了
+        self._report_progress(
+            state,
+            f"  [red]{config.name} SSE Endpoint 验证失败: 3分钟内无法连接[/red]",
+            callback,
+        )
+        logger.error(
+            "SSE Endpoint 验证最终失败: %s (尝试了 %d 次，耗时 %d 秒)",
+            url, max_attempts, max_attempts * retry_interval,
+        )
+        return False
