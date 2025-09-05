@@ -27,7 +27,7 @@ from log.manager import get_logger
 from .models import AgentInitStatus, DeploymentState
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
 logger = get_logger(__name__)
 
@@ -400,44 +400,57 @@ class AgentManager:
         self._report_progress(state, "[bold blue]开始初始化智能体...[/bold blue]", progress_callback)
 
         try:
-            # 1. 运行脚本拉起 MCP Server 进程
-            if not await self._start_mcp_servers(state, progress_callback):
-                return AgentInitStatus.FAILED
-
-            # 2. 验证 MCP Server 服务状态
-            if not await self._verify_mcp_services(state, progress_callback):
-                return AgentInitStatus.FAILED
-
-            # 3. 加载 MCP 配置并注册服务
-            mcp_service_mapping = await self._register_all_mcp_services(state, progress_callback)
-            if not mcp_service_mapping:
-                return AgentInitStatus.FAILED
-
-            # 4. 读取应用配置并创建智能体
-            default_app_id = await self._create_agents_from_config(
-                mcp_service_mapping,
-                state,
-                progress_callback,
-            )
-
-            if default_app_id:
-                self._report_progress(
-                    state,
-                    f"[bold green]智能体初始化完成! 默认 App ID: {default_app_id}[/bold green]",
-                    progress_callback,
-                )
-                logger.info("智能体初始化成功完成，默认 App ID: %s", default_app_id)
-                return AgentInitStatus.SUCCESS
+            # 执行所有初始化步骤
+            return await self._execute_initialization_steps(state, progress_callback)
 
         except Exception:
             error_msg = "智能体初始化失败"
             self._report_progress(state, f"[red]{error_msg}[/red]", progress_callback)
             logger.exception(error_msg)
             return AgentInitStatus.FAILED
-        else:
-            # 如果没有创建任何智能体，显示警告并返回成功状态
-            self._report_progress(state, "[yellow]未能创建任何智能体[/yellow]", progress_callback)
+
+    async def _execute_initialization_steps(
+        self,
+        state: DeploymentState,
+        progress_callback: Callable[[DeploymentState], None] | None,
+    ) -> AgentInitStatus:
+        """执行所有初始化步骤"""
+        # 1. 安装 systemd 服务文件
+        if not await self._install_service_files(state, progress_callback):
+            return AgentInitStatus.FAILED
+
+        # 2. 运行脚本拉起 MCP Server 进程
+        if not await self._start_mcp_servers(state, progress_callback):
+            return AgentInitStatus.FAILED
+
+        # 3. 验证 MCP Server 服务状态
+        if not await self._verify_mcp_services(state, progress_callback):
+            return AgentInitStatus.FAILED
+
+        # 4. 加载 MCP 配置并注册服务
+        mcp_service_mapping = await self._register_all_mcp_services(state, progress_callback)
+        if not mcp_service_mapping:
+            return AgentInitStatus.FAILED
+
+        # 5. 读取应用配置并创建智能体
+        default_app_id = await self._create_agents_from_config(
+            mcp_service_mapping,
+            state,
+            progress_callback,
+        )
+
+        if default_app_id:
+            self._report_progress(
+                state,
+                f"[bold green]智能体初始化完成! 默认 App ID: {default_app_id}[/bold green]",
+                progress_callback,
+            )
+            logger.info("智能体初始化成功完成，默认 App ID: %s", default_app_id)
             return AgentInitStatus.SUCCESS
+
+        # 如果没有创建任何智能体，显示警告并返回成功状态
+        self._report_progress(state, "[yellow]未能创建任何智能体[/yellow]", progress_callback)
+        return AgentInitStatus.SUCCESS
 
     def _report_progress(
         self,
@@ -449,6 +462,216 @@ class AgentManager:
         state.add_log(message)
         if callback:
             callback(state)
+
+    def _get_service_files(
+        self,
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+        operation_name: str,
+    ) -> list[Path] | None:
+        """
+        获取服务文件列表的通用方法
+
+        Returns:
+            list[Path]: 服务文件列表，如果应该跳过操作则返回 None
+
+        """
+        if not self.service_dir or not self.service_dir.exists():
+            self._report_progress(
+                state,
+                f"[yellow]服务配置目录不存在: {self.service_dir}，跳过{operation_name}[/yellow]",
+                callback,
+            )
+            logger.warning("服务配置目录不存在: %s", self.service_dir)
+            return None
+
+        # 获取所有 .service 文件
+        service_files = list(self.service_dir.glob("*.service"))
+        if not service_files:
+            self._report_progress(
+                state,
+                f"[yellow]未找到服务配置文件，跳过{operation_name}[/yellow]",
+                callback,
+            )
+            return None
+
+        return service_files
+
+    async def _process_service_files(
+        self,
+        service_files: list[Path],
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+        processor_func: Callable[
+            [Path, DeploymentState, Callable[[DeploymentState], None] | None],
+            Awaitable[tuple[bool, str]],
+        ],
+    ) -> tuple[bool, list[str], list[str]]:
+        """
+        处理服务文件的通用框架
+
+        Args:
+            service_files: 要处理的服务文件列表
+            state: 部署状态
+            callback: 进度回调函数
+            processor_func: 处理单个文件的函数，返回 (成功标志, 文件名)
+
+        Returns:
+            tuple[bool, list[str], list[str]]: (总体是否成功, 成功的文件列表, 失败的文件列表)
+
+        """
+        success_files = []
+        failed_files = []
+
+        for service_file in service_files:
+            try:
+                success, file_identifier = await processor_func(service_file, state, callback)
+                if success:
+                    success_files.append(file_identifier)
+                else:
+                    failed_files.append(file_identifier)
+            except Exception:
+                file_identifier = service_file.stem
+                self._report_progress(
+                    state,
+                    f"    [red]处理 {file_identifier} 时发生异常[/red]",
+                    callback,
+                )
+                logger.exception("处理服务文件时发生异常: %s", service_file)
+                failed_files.append(file_identifier)
+
+        return len(failed_files) == 0, success_files, failed_files
+
+    async def _install_service_files(
+        self,
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """安装 systemd 服务文件"""
+        self._report_progress(state, "[cyan]安装 systemd 服务文件...[/cyan]", callback)
+
+        # 获取服务文件列表
+        service_files = self._get_service_files(state, callback, "服务文件安装")
+        if service_files is None:
+            return True
+
+        # 处理所有服务文件
+        overall_success, installed_files, failed_files = await self._process_service_files(
+            service_files, state, callback, self._install_single_service_file,
+        )
+
+        # 如果有成功安装的文件，重新加载 systemd 配置
+        if installed_files:
+            if not await self._reload_systemd_daemon(state, callback):
+                return False
+
+            self._report_progress(
+                state,
+                f"[green]成功安装 {len(installed_files)} 个服务文件[/green]",
+                callback,
+            )
+
+        return True
+
+    async def _install_single_service_file(
+        self,
+        service_file: Path,
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+    ) -> tuple[bool, str]:
+        """安装单个服务文件"""
+        service_name = service_file.name
+        systemd_dir = Path("/etc/systemd/system")
+        target_path = systemd_dir / service_name
+
+        self._report_progress(
+            state,
+            f"  [blue]复制服务文件: {service_name}[/blue]",
+            callback,
+        )
+
+        try:
+            # 复制服务文件到 systemd 目录
+            cmd = f"sudo cp {service_file} {target_path}"
+            process = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            stdout, stderr = await process.communicate()
+
+        except Exception:
+            self._report_progress(
+                state,
+                f"    [red]复制 {service_name} 时发生异常[/red]",
+                callback,
+            )
+            logger.exception("复制服务文件时发生异常: %s", service_file)
+            return False, service_name
+        else:
+            if process.returncode == 0:
+                self._report_progress(
+                    state,
+                    f"    [green]{service_name} 复制成功[/green]",
+                    callback,
+                )
+                logger.info("服务文件复制成功: %s -> %s", service_file, target_path)
+                return True, service_name
+
+            error_output = stderr.decode("utf-8") if stderr else ""
+            self._report_progress(
+                state,
+                f"    [red]{service_name} 复制失败: {error_output}[/red]",
+                callback,
+            )
+            logger.error("服务文件复制失败: %s, 错误: %s", service_file, error_output)
+            return False, service_name
+
+    async def _reload_systemd_daemon(
+        self,
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """重新加载 systemd 配置"""
+        self._report_progress(state, "[cyan]重新加载 systemd 配置...[/cyan]", callback)
+
+        try:
+            cmd = "sudo systemctl daemon-reload"
+            process = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            stdout, stderr = await process.communicate()
+
+        except Exception:
+            self._report_progress(
+                state,
+                "[red]重新加载 systemd 配置时发生异常[/red]",
+                callback,
+            )
+            logger.exception("重新加载 systemd 配置时发生异常")
+            return False
+        else:
+            if process.returncode == 0:
+                self._report_progress(
+                    state,
+                    "[green]systemd 配置重新加载成功[/green]",
+                    callback,
+                )
+                logger.info("systemd 配置重新加载成功")
+                return True
+
+            error_output = stderr.decode("utf-8") if stderr else ""
+            self._report_progress(
+                state,
+                f"[red]systemd 配置重新加载失败: {error_output}[/red]",
+                callback,
+            )
+            logger.error("systemd 配置重新加载失败: %s", error_output)
+            return False
 
     async def _start_mcp_servers(
         self,
@@ -513,71 +736,15 @@ class AgentManager:
         """验证 MCP Server 服务状态"""
         self._report_progress(state, "[cyan]验证 MCP Server 服务状态...[/cyan]", callback)
 
-        if not self.service_dir or not self.service_dir.exists():
-            self._report_progress(
-                state,
-                f"[yellow]服务配置目录不存在: {self.service_dir}，跳过服务验证[/yellow]",
-                callback,
-            )
-            logger.warning("服务配置目录不存在: %s", self.service_dir)
-            return True  # 不强制要求服务验证
-
-        # 获取所有 .service 文件
-        service_files = list(self.service_dir.glob("*.service"))
-        if not service_files:
-            self._report_progress(
-                state,
-                "[yellow]未找到服务配置文件，跳过服务验证[/yellow]",
-                callback,
-            )
+        # 获取服务文件列表
+        service_files = self._get_service_files(state, callback, "服务验证")
+        if service_files is None:
             return True
 
-        failed_services = []
-
-        for service_file in service_files:
-            service_name = service_file.stem  # 去掉 .service 后缀
-            self._report_progress(
-                state,
-                f"  [magenta]检查服务状态: {service_name}[/magenta]",
-                callback,
-            )
-
-            try:
-                # 检查服务状态
-                cmd = f"systemctl is-active {service_name}"
-                process = await asyncio.create_subprocess_shell(
-                    cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-
-                stdout, _ = await process.communicate()
-                status = stdout.decode("utf-8").strip() if stdout else ""
-
-                if status == "active":
-                    self._report_progress(
-                        state,
-                        f"    [green]{service_name} 状态正常[/green]",
-                        callback,
-                    )
-                    logger.info("服务状态正常: %s", service_name)
-                else:
-                    self._report_progress(
-                        state,
-                        f"    [red]{service_name} 状态异常: {status}[/red]",
-                        callback,
-                    )
-                    logger.warning("服务状态异常: %s -> %s", service_name, status)
-                    failed_services.append(service_name)
-
-            except Exception:
-                self._report_progress(
-                    state,
-                    f"    [red]检查 {service_name} 状态失败[/red]",
-                    callback,
-                )
-                logger.exception("检查服务状态失败: %s", service_name)
-                failed_services.append(service_name)
+        # 处理所有服务文件
+        overall_success, active_services, failed_services = await self._process_service_files(
+            service_files, state, callback, self._verify_single_service,
+        )
 
         if failed_services:
             self._report_progress(
@@ -589,6 +756,58 @@ class AgentManager:
 
         self._report_progress(state, "[green]MCP Server 服务验证完成[/green]", callback)
         return True  # 即使有服务异常也继续执行
+
+    async def _verify_single_service(
+        self,
+        service_file: Path,
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+    ) -> tuple[bool, str]:
+        """验证单个服务状态"""
+        service_name = service_file.stem  # 去掉 .service 后缀
+        self._report_progress(
+            state,
+            f"  [magenta]检查服务状态: {service_name}[/magenta]",
+            callback,
+        )
+
+        try:
+            # 检查服务状态
+            cmd = f"systemctl is-active {service_name}"
+            process = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            stdout, _ = await process.communicate()
+            status = stdout.decode("utf-8").strip() if stdout else ""
+
+        except Exception:
+            self._report_progress(
+                state,
+                f"    [red]检查 {service_name} 状态失败[/red]",
+                callback,
+            )
+            logger.exception("检查服务状态失败: %s", service_name)
+            return False, service_name
+        else:
+            if status == "active":
+                self._report_progress(
+                    state,
+                    f"    [green]{service_name} 状态正常[/green]",
+                    callback,
+                )
+                logger.info("服务状态正常: %s", service_name)
+                return True, service_name
+
+            self._report_progress(
+                state,
+                f"    [red]{service_name} 状态异常: {status}[/red]",
+                callback,
+            )
+            logger.warning("服务状态异常: %s -> %s", service_name, status)
+            return False, service_name
 
     async def _register_all_mcp_services(
         self,
