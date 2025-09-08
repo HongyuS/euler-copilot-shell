@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -557,7 +558,10 @@ class AgentManager:
 
         # 处理所有服务文件
         overall_success, installed_files, failed_files = await self._process_service_files(
-            service_files, state, callback, self._install_single_service_file,
+            service_files,
+            state,
+            callback,
+            self._install_single_service_file,
         )
 
         # 如果有成功安装的文件，重新加载 systemd 配置
@@ -690,6 +694,16 @@ class AgentManager:
             logger.error("MCP 启动脚本不存在: %s", self.run_script_path)
             return False
 
+        # 1. 先检查并清理可能存在的旧进程
+        if not await self._cleanup_old_mcp_processes(state, callback):
+            # 清理失败不会阻止继续执行，只是记录警告
+            self._report_progress(
+                state,
+                "[yellow]清理旧进程时遇到问题，但继续执行启动脚本[/yellow]",
+                callback,
+            )
+
+        # 2. 执行启动脚本
         try:
             # 执行 run.sh 脚本
             cmd = f"bash {self.run_script_path}"
@@ -728,6 +742,52 @@ class AgentManager:
             logger.error("MCP Server 启动脚本执行失败: %s, 输出: %s", cmd, output)
             return False
 
+    async def _cleanup_old_mcp_processes(
+        self,
+        state: DeploymentState,
+        callback: Callable[[DeploymentState], None] | None,
+    ) -> bool:
+        """检查并清理可能存在的旧 MCP 进程"""
+        # 静默获取服务文件列表
+        if not self.service_dir or not self.service_dir.exists():
+            return True
+
+        service_files = list(self.service_dir.glob("*.service"))
+        if not service_files:
+            return True
+
+        # 静默清理服务
+        for service_file in service_files:
+            service_name = service_file.stem  # 去掉 .service 后缀
+            await self._stop_service(service_name)
+
+        return True
+
+    async def _stop_service(self, service_name: str) -> None:
+        """静默停止服务"""
+        try:
+            # 检查服务状态
+            status_cmd = f"systemctl is-active {service_name}"
+            status_process = await asyncio.create_subprocess_shell(
+                status_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, _ = await status_process.communicate()
+            status = stdout.decode("utf-8").strip() if stdout else ""
+
+            # 如果服务正在运行，静默停止它
+            if status == "active":
+                stop_cmd = f"sudo systemctl stop {service_name}"
+                await asyncio.create_subprocess_shell(
+                    stop_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+        except (OSError, subprocess.SubprocessError):
+            # 静默忽略任何错误
+            logger.debug("静默停止服务时发生异常: %s", service_name)
+
     async def _verify_mcp_services(
         self,
         state: DeploymentState,
@@ -743,7 +803,10 @@ class AgentManager:
 
         # 处理所有服务文件
         overall_success, active_services, failed_services = await self._process_service_files(
-            service_files, state, callback, self._verify_single_service,
+            service_files,
+            state,
+            callback,
+            self._verify_single_service,
         )
 
         if failed_services:
@@ -1172,7 +1235,10 @@ class AgentManager:
                     if response.status_code != HTTP_OK:
                         logger.debug(
                             "SSE Endpoint 响应码非 200: %s, 状态码: %d, 尝试: %d/%d",
-                            url, response.status_code, attempt, max_attempts,
+                            url,
+                            response.status_code,
+                            attempt,
+                            max_attempts,
                         )
                     else:
                         content_type = response.headers.get("content-type", "")
@@ -1184,7 +1250,10 @@ class AgentManager:
                             )
                             logger.debug(
                                 "SSE Endpoint Content-Type 非 SSE: %s, Content-Type: %s, 尝试: %d/%d",
-                                url, content_type, attempt, max_attempts,
+                                url,
+                                content_type,
+                                attempt,
+                                max_attempts,
                             )
                         else:
                             # 验证成功
@@ -1211,6 +1280,8 @@ class AgentManager:
         )
         logger.error(
             "SSE Endpoint 验证最终失败: %s (尝试了 %d 次，耗时 %d 秒)",
-            url, max_attempts, max_attempts * retry_interval,
+            url,
+            max_attempts,
+            max_attempts * retry_interval,
         )
         return False
