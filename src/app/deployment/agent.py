@@ -139,7 +139,7 @@ class ApiClient:
     def __init__(self, server_ip: str, server_port: int) -> None:
         """初始化 API 客户端"""
         self.base_url = f"http://{server_ip}:{server_port}"
-        self.timeout = 60.0  # httpx 使用浮点数作为超时
+        self.timeout = 10.0
 
     async def register_mcp_service(self, config: McpConfig) -> str:
         """注册 MCP 服务"""
@@ -812,39 +812,62 @@ class AgentManager:
         if failed_services:
             self._report_progress(
                 state,
-                f"[yellow]部分服务状态异常: {', '.join(failed_services)}，但继续执行[/yellow]",
+                f"[red]关键服务状态异常: {', '.join(failed_services)}，停止初始化[/red]",
                 callback,
             )
-            logger.warning("部分服务状态异常，但继续执行: %s", failed_services)
+            logger.error("关键服务状态异常，停止初始化: %s", failed_services)
+            return False
 
         self._report_progress(state, "[green]MCP Server 服务验证完成[/green]", callback)
-        return True  # 即使有服务异常也继续执行
+        return True
 
     async def _verify_single_service(
         self,
         service_file: Path,
         state: DeploymentState,
         callback: Callable[[DeploymentState], None] | None,
+        retry_count: int = 0,
     ) -> tuple[bool, str]:
         """验证单个服务状态"""
+        await asyncio.sleep(2)
+
         service_name = service_file.stem  # 去掉 .service 后缀
-        self._report_progress(
-            state,
-            f"  [magenta]检查服务状态: {service_name}[/magenta]",
-            callback,
-        )
+
+        # 限制递归次数，最多重试6次（30秒）
+        max_retries = 6
+        if retry_count > max_retries:
+            self._report_progress(
+                state,
+                f"    [red]{service_name} 启动超时 (30秒)[/red]",
+                callback,
+            )
+            logger.error("服务启动超时: %s", service_name)
+            return False, service_name
+
+        if retry_count == 0:
+            self._report_progress(
+                state,
+                f"  [magenta]检查服务状态: {service_name}[/magenta]",
+                callback,
+            )
+        else:
+            self._report_progress(
+                state,
+                f"    [dim]{service_name} 重新检查状态... (第 {retry_count} 次)[/dim]",
+                callback,
+            )
 
         try:
-            # 检查服务状态
-            cmd = f"systemctl is-active {service_name}"
+            # 使用 systemctl status 获取详细状态信息
+            cmd = f"systemctl status {service_name}"
             process = await asyncio.create_subprocess_shell(
                 cmd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, _ = await process.communicate()
-            status = stdout.decode("utf-8").strip() if stdout else ""
+            stdout, stderr = await process.communicate()
+            output = stdout.decode("utf-8") if stdout else ""
 
         except Exception:
             self._report_progress(
@@ -855,21 +878,48 @@ class AgentManager:
             logger.exception("检查服务状态失败: %s", service_name)
             return False, service_name
         else:
-            if status == "active":
+            # systemctl status 返回码: 0=active, 1=dead, 2=unknown, 3=not-found, 4=permission-denied
+            if process.returncode == 0 and "active (running)" in output.lower():
+                # 服务正常运行
                 self._report_progress(
                     state,
-                    f"    [green]{service_name} 状态正常[/green]",
+                    f"    [green]{service_name} 状态正常 (active running)[/green]",
                     callback,
                 )
                 logger.info("服务状态正常: %s", service_name)
                 return True, service_name
 
+            # 分析输出内容，检查是否有失败信息
+            if "failed" in output.lower() or "code=exited" in output.lower():
+                self._report_progress(
+                    state,
+                    f"    [red]{service_name} 服务启动失败[/red]",
+                    callback,
+                )
+                logger.error("服务启动失败: %s, 详细信息: %s", service_name, output.strip())
+                return False, service_name
+
+            # 检查是否真的在启动中（activating 状态）
+            if "activating" in output.lower() and "start" in output.lower():
+                if retry_count == 0:
+                    self._report_progress(
+                        state,
+                        f"    [yellow]{service_name} 正在启动中，等待启动完成...[/yellow]",
+                        callback,
+                    )
+                    logger.info("服务正在启动中，等待启动完成: %s", service_name)
+
+                # 等待3秒后递归调用自己
+                await asyncio.sleep(3)
+                return await self._verify_single_service(service_file, state, callback, retry_count + 1)
+
+            # 其他状态都认为是异常
             self._report_progress(
                 state,
-                f"    [red]{service_name} 状态异常: {status}[/red]",
+                f"    [red]{service_name} 状态异常 (返回码: {process.returncode})[/red]",
                 callback,
             )
-            logger.warning("服务状态异常: %s -> %s", service_name, status)
+            logger.warning("服务状态异常: %s, 返回码: %d, 输出: %s", service_name, process.returncode, output.strip())
             return False, service_name
 
     async def _register_all_mcp_services(
@@ -1221,49 +1271,33 @@ class AgentManager:
         )
 
         # 重试配置
-        max_attempts = 36  # 3分钟 / 5秒 = 36次
+        max_attempts = 6  # 30秒 / 5秒 = 6次
         retry_interval = 5  # 5秒重试间隔
 
         for attempt in range(1, max_attempts + 1):
             try:
-                async with httpx.AsyncClient(timeout=self.api_client.timeout) as client:
-                    response = await client.get(
-                        url,
-                        headers={"Accept": "text/event-stream"},
-                    )
-
-                    if response.status_code != HTTP_OK:
-                        logger.debug(
-                            "SSE Endpoint 响应码非 200: %s, 状态码: %d, 尝试: %d/%d",
-                            url,
-                            response.status_code,
-                            attempt,
-                            max_attempts,
+                # 使用流式请求，只读取响应头，避免 SSE 连接一直保持开放
+                async with (
+                    httpx.AsyncClient(timeout=self.api_client.timeout) as client,
+                    client.stream("GET", url, headers={"Accept": "text/event-stream"}) as response,
+                ):
+                    if response.status_code == HTTP_OK:
+                        # 验证成功
+                        self._report_progress(
+                            state,
+                            f"  [green]{config.name} SSE Endpoint 验证通过[/green]",
+                            callback,
                         )
-                    else:
-                        content_type = response.headers.get("content-type", "")
-                        if "text/event-stream" not in content_type:
-                            self._report_progress(
-                                state,
-                                f"  [yellow]{config.name} Content-Type 非 SSE: {content_type}[/yellow]",
-                                callback,
-                            )
-                            logger.debug(
-                                "SSE Endpoint Content-Type 非 SSE: %s, Content-Type: %s, 尝试: %d/%d",
-                                url,
-                                content_type,
-                                attempt,
-                                max_attempts,
-                            )
-                        else:
-                            # 验证成功
-                            self._report_progress(
-                                state,
-                                f"  [green]{config.name} SSE Endpoint 验证通过[/green]",
-                                callback,
-                            )
-                            logger.info("SSE Endpoint 验证成功: %s (尝试 %d 次)", url, attempt)
-                            return True
+                        logger.info("SSE Endpoint 验证成功: %s (尝试 %d 次)", url, attempt)
+                        return True
+
+                    logger.debug(
+                        "SSE Endpoint 响应码非 200: %s, 状态码: %d, 尝试: %d/%d",
+                        url,
+                        response.status_code,
+                        attempt,
+                        max_attempts,
+                    )
 
             except (httpx.RequestError, httpx.HTTPStatusError) as e:
                 logger.debug("SSE Endpoint 连接失败: %s, 错误: %s, 尝试: %d/%d", url, e, attempt, max_attempts)
