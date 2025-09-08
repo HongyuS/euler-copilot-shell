@@ -53,7 +53,7 @@ class MCPConfirmWidget(Container):
 
         risk_icon, risk_text = risk_info
 
-        with Vertical():
+        with Vertical(classes="mcp-content"):
             # 紧凑的工具确认信息显示
             yield Static(
                 f"🔧 {step_name} {risk_icon} {risk_text}",
@@ -162,7 +162,7 @@ class MCPParameterWidget(Container):
         message = content.get("message", "需要补充参数")
         params = content.get("params", {})
 
-        with Vertical():
+        with Vertical(classes="mcp-content"):
             # 紧凑的参数输入标题
             yield Static("📝 参数输入", classes="param-header", markup=False)
             yield Static(f"🔧 {step_name}", classes="param-tool", markup=False)
