@@ -525,6 +525,9 @@ install_mongodb() {
 }
 
 check_pip_rag() {
+  local need_install=0
+  local install_list=()
+
   # 定义需要检查的包和版本
   declare -A REQUIRED_PACKAGES=(
     ["sqlalchemy"]="2.0.23"
@@ -532,9 +535,6 @@ check_pip_rag() {
     ["paddleocr"]="2.9.1"
     ["tiktoken"]=""
   )
-
-  local need_install=0
-  local install_list=()
 
   echo -e "${COLOR_INFO}[Info] 检查Python依赖包...${COLOR_RESET}"
 
@@ -578,6 +578,9 @@ check_pip_rag() {
 }
 
 check_pip_framework() {
+  local need_install=0
+  local install_list=()
+
   # 获取 Python 版本
   local python_version
   python_version=$(python3 --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
@@ -605,9 +608,6 @@ check_pip_framework() {
     echo -e "${COLOR_WARNING}[Warning] 不支持的 Python 版本: $python_version${COLOR_RESET}"
     return 1
   fi
-
-  local need_install=0
-  local install_list=()
 
   echo -e "${COLOR_INFO}[Info] 检查Python依赖包...${COLOR_RESET}"
 
