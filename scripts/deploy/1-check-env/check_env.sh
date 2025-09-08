@@ -9,20 +9,50 @@ INSTALL_MODE_FILE="/etc/euler_Intelligence_install_mode"
 # 全局模式标记
 OFFLINE_MODE=false
 
-is_x86_architecture() {
-  # 获取系统架构信息（使用 uname -m 或 arch 命令）
-  local arch
-  arch=$(uname -m) # 多数系统支持，返回架构名称（如 x86_64、i686、aarch64 等）
-  # 备选：arch 命令，输出与 uname -m 类似
-  # arch=$(arch)
+# 检查系统版本并返回兼容的 el 版本
+get_el_version() {
+  # 首先检查是否为 openEuler 系统
+  if [ -f "/etc/openEuler-release" ]; then
+    local openeuler_version
+    openeuler_version=$(grep -oP 'openEuler release \K[0-9]+\.[0-9]+' /etc/openEuler-release)
 
-  # x86 架构的常见标识：i386、i686（32位），x86_64（64位）
-  if [[ $arch == i386 || $arch == i686 || $arch == x86_64 ]]; then
-    return 0 # 是 x86 架构，返回 0（成功）
+    if [ -n "$openeuler_version" ]; then
+      # 将版本号转换为可比较的数字格式（如 22.03 -> 2203）
+      local major minor
+      major=$(echo "$openeuler_version" | cut -d'.' -f1)
+      minor=$(echo "$openeuler_version" | cut -d'.' -f2)
+      local version_num=$((major * 100 + minor))
+
+      # openEuler 22.03 及之前使用 el8，24.03 及之后使用 el9
+      if [ $version_num -le 2203 ]; then
+        echo "8"
+        return 0
+      else
+        echo "9"
+        return 0
+      fi
+    fi
+  fi
+
+  # 如果不是标准的 openEuler 或无法获取版本，则检查内核版本
+  echo -e "${COLOR_WARNING}[Warning] 非标准 openEuler 系统，基于内核版本判断 el 版本${COLOR_RESET}" >&2
+  local kernel_version
+  kernel_version=$(uname -r | cut -d'.' -f1,2)
+
+  # 将版本号转换为可比较的数字格式
+  local major minor
+  major=$(echo "$kernel_version" | cut -d'.' -f1)
+  minor=$(echo "$kernel_version" | cut -d'.' -f2)
+  local version_num=$((major * 100 + minor))
+
+  # 内核版本 < 5.14 使用 el8，>= 5.14 使用 el9
+  if [ $version_num -lt 514 ]; then
+    echo "8"
   else
-    return 1 # 非 x86 架构，返回 1（失败）
+    echo "9"
   fi
 }
+
 # 安装wget工具
 install_wget() {
   echo -e "${COLOR_INFO}[INFO] 正在尝试安装wget...${COLOR_RESET}"
@@ -52,15 +82,31 @@ install_wget() {
 }
 
 # 基础URL列表（无论RAG是否启用都需要检测）
-base_urls_x86=(
-  "https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.x86_64.rpm"
-  "https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/x86_64/RPMS/mongodb-org-server-7.0.21-1.el9.x86_64.rpm"
-)
+get_mongodb_urls() {
+  local el_version arch
+  el_version=$(get_el_version)
+  arch=$(uname -m)
 
-base_urls_arm=(
-  "https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/aarch64/RPMS/mongodb-org-server-7.0.21-1.el9.aarch64.rpm"
-  "https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.aarch64.rpm"
-)
+  # 根据架构映射到对应的包架构名称
+  case "$arch" in
+  x86_64 | i386 | i686)
+    local pkg_arch="x86_64"
+    ;;
+  aarch64 | arm64)
+    local pkg_arch="aarch64"
+    ;;
+  *)
+    echo -e "${COLOR_ERROR}[Error] 不支持的架构: $arch${COLOR_RESET}"
+    echo -e "${COLOR_ERROR}[Error] 仅支持 x86_64、aarch64 架构${COLOR_RESET}"
+    return 1
+    ;;
+  esac
+
+  base_urls=(
+    "https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.${pkg_arch}.rpm"
+    "https://repo.mongodb.org/yum/redhat/${el_version}/mongodb-org/7.0/${pkg_arch}/RPMS/mongodb-org-server-7.0.21-1.el${el_version}.${pkg_arch}.rpm"
+  )
+}
 
 # RAG专用URL列表（仅当RAG启用时检测）
 rag_urls=(
@@ -87,11 +133,10 @@ check_url_accessibility() {
 
   # 根据架构和RAG状态组合最终需要检测的URL列表
   local detect_urls=()
-  if is_x86_architecture; then
-    detect_urls+=("${base_urls_x86[@]}")
-  else
-    detect_urls+=("${base_urls_arm[@]}")
-  fi
+
+  # 初始化 MongoDB URLs
+  get_mongodb_urls
+  detect_urls+=("${base_urls[@]}")
 
   # 如果启用RAG，添加RAG专用URL
   if [ "$RAG_INSTALL" = "y" ]; then
