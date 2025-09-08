@@ -181,8 +181,8 @@ function check_user {
 
 function check_version {
   local current_version_id="$1"
-  local supported_versions=("${@:2}")
-  local sp="$3"
+  local sp="$2"
+  local supported_versions=("${@:3}")
   echo -e "${COLOR_INFO}[Info] 当前操作系统版本为：$current_version_id LTS-$sp${COLOR_RESET}"
   for version_id in "${supported_versions[@]}"; do
     if [[ "$current_version_id" == "$version_id" ]]; then
@@ -226,7 +226,7 @@ function check_os_version {
   case $id in
   "openEuler")
     local supported_versions=("22.03" "24.03" "25.03" "25.09")
-    check_version "$version" "${supported_versions[@]}" "$sp"
+    check_version "$version" "$sp" "${supported_versions[@]}"
     ;;
   "hce")
     echo -e "${COLOR_INFO}[Info] 检测到 HCE 发行版，跳过版本检查${COLOR_RESET}"
