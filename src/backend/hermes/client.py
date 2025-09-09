@@ -49,6 +49,9 @@ class HermesChatClient(LLMClientBase):
         # 当前选择的智能体ID
         self._current_agent_id: str = ""
 
+        # 当前正在运行的任务ID（用于停止请求）
+        self._current_task_id: str = ""
+
         # MCP 事件处理器（可选）
         self._mcp_handler: MCPEventHandler | None = None
 
@@ -298,34 +301,32 @@ class HermesChatClient(LLMClientBase):
         """处理流式响应事件"""
         has_content = False
         event_count = 0
-        has_error_message = False  # 标记是否已经产生错误消息
+        has_error_message = False
 
         self.logger.info("开始处理流式响应事件")
 
         try:
             async for line in response.aiter_lines():
-                stripped_line = line.strip()
-                if not stripped_line:
-                    continue
-
-                self.logger.debug("收到 SSE 行: %s", stripped_line)
-                event = HermesStreamEvent.from_line(stripped_line)
+                event = self._parse_stream_line(line)
                 if event is None:
-                    self.logger.warning("无法解析 SSE 事件")
                     continue
 
                 event_count += 1
                 self.logger.info("解析到事件 #%d - 类型: %s", event_count, event.event_type)
 
+                # 处理任务ID
+                self._handle_task_id(event)
+
                 # 处理特殊事件类型
                 should_break, break_message = self.stream_processor.handle_special_events(event)
                 if should_break:
+                    self._cleanup_task_id("回答结束")
                     if break_message:
-                        has_error_message = True  # 标记已产生错误消息
+                        has_error_message = True
                         yield break_message
                     break
 
-                # 处理各种事件内容
+                # 处理事件内容
                 content_yielded = False
                 async for content in self._handle_event_content(event):
                     has_content = True
@@ -339,11 +340,37 @@ class HermesChatClient(LLMClientBase):
 
         except Exception:
             self.logger.exception("处理流式响应事件时出错")
+            self._cleanup_task_id("发生异常")
             raise
 
         # 只有在没有内容且没有错误消息的情况下才显示无内容消息
         if not has_content and not has_error_message:
             yield self.stream_processor.get_no_content_message(event_count)
+
+    def _parse_stream_line(self, line: str) -> HermesStreamEvent | None:
+        """解析单行流式响应"""
+        stripped_line = line.strip()
+        if not stripped_line:
+            return None
+
+        self.logger.debug("收到 SSE 行: %s", stripped_line)
+        event = HermesStreamEvent.from_line(stripped_line)
+        if event is None:
+            self.logger.warning("无法解析 SSE 事件")
+        return event
+
+    def _handle_task_id(self, event: HermesStreamEvent) -> None:
+        """处理事件中的任务ID"""
+        task_id = event.get_task_id()
+        if task_id and not self._current_task_id:
+            self._current_task_id = task_id
+            self.logger.debug("设置当前任务ID: %s", task_id)
+
+    def _cleanup_task_id(self, context: str) -> None:
+        """清理任务ID"""
+        if self._current_task_id:
+            self.logger.debug("%s清理任务ID: %s", context, self._current_task_id)
+            self._current_task_id = ""
 
     async def _handle_event_content(self, event: HermesStreamEvent) -> AsyncGenerator[str, None]:
         """处理单个事件的内容"""
@@ -372,7 +399,9 @@ class HermesChatClient(LLMClientBase):
     async def _stop(self) -> None:
         """停止当前会话"""
         if self._conversation_manager is not None:
-            await self._conversation_manager.stop_conversation()
+            await self._conversation_manager.stop_conversation(self._current_task_id)
+            # 停止后清理任务ID
+            self._cleanup_task_id("手动停止")
 
     async def __aenter__(self) -> Self:
         """异步上下文管理器入口"""
