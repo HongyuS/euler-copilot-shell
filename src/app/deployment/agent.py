@@ -388,16 +388,20 @@ class AgentManager:
 
     async def initialize_agents(
         self,
+        state: DeploymentState,
         progress_callback: Callable[[DeploymentState], None] | None = None,
     ) -> AgentInitStatus:
         """
         初始化智能体
 
+        Args:
+            state: 主部署流程的状态对象
+            progress_callback: 进度回调函数
+
         Returns:
             AgentInitStatus: 初始化状态 (SUCCESS/SKIPPED/FAILED)
 
         """
-        state = DeploymentState()
         self._report_progress(state, "[bold blue]开始初始化智能体...[/bold blue]", progress_callback)
 
         try:

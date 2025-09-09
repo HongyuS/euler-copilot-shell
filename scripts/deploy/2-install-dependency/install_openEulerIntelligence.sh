@@ -12,6 +12,51 @@ install_success=true
 missing_pkgs=()
 LOCAL_REPO_DIR="/var/cache/rpms"
 LOCAL_REPO_FILE="/etc/yum.repos.d/local.repo"
+
+# 检查系统版本并返回兼容的 el 版本
+get_el_version() {
+  # 首先检查是否为 openEuler 系统
+  if [ -f "/etc/openEuler-release" ]; then
+    local openeuler_version
+    openeuler_version=$(grep -oP 'openEuler release \K[0-9]+\.[0-9]+' /etc/openEuler-release)
+
+    if [ -n "$openeuler_version" ]; then
+      # 将版本号转换为可比较的数字格式（如 22.03 -> 2203）
+      local major minor
+      major=$(echo "$openeuler_version" | cut -d'.' -f1)
+      minor=$(echo "$openeuler_version" | cut -d'.' -f2)
+      local version_num=$((major * 100 + minor))
+
+      # openEuler 22.03 及之前使用 el8，24.03 及之后使用 el9
+      if [ $version_num -le 2203 ]; then
+        echo "8"
+        return 0
+      else
+        echo "9"
+        return 0
+      fi
+    fi
+  fi
+
+  # 如果不是标准的 openEuler 或无法获取版本，则检查内核版本
+  echo -e "${COLOR_WARNING}[Warning] 非标准 openEuler 系统，基于内核版本判断 el 版本${COLOR_RESET}" >&2
+  local kernel_version
+  kernel_version=$(uname -r | cut -d'.' -f1,2)
+
+  # 将版本号转换为可比较的数字格式
+  local major minor
+  major=$(echo "$kernel_version" | cut -d'.' -f1)
+  minor=$(echo "$kernel_version" | cut -d'.' -f2)
+  local version_num=$((major * 100 + minor))
+
+  # 内核版本 < 5.14 使用 el8，>= 5.14 使用 el9
+  if [ $version_num -lt 514 ]; then
+    echo "8"
+  else
+    echo "9"
+  fi
+}
+
 # 初始化本地仓库
 init_local_repo() {
   [ "$(id -u)" -ne 0 ] && {
@@ -51,11 +96,17 @@ EOF
 install_minio() {
   echo -e "${COLOR_INFO}[Info] 开始安装MinIO...${COLOR_RESET}"
   local minio_dir="/opt/minio"
+  local arch
+  arch=$(uname -m)
+
   if ! mkdir -p "$minio_dir"; then
     echo -e "${COLOR_ERROR}[Error] 创建目录失败: $minio_dir${COLOR_RESET}"
     return 1
   fi
-  ! is_x86_architecture || {
+
+  # 根据架构选择不同的安装方式
+  case "$arch" in
+  x86_64 | i386 | i686)
     local minio_url="https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20250524170830.0.0-1.x86_64.rpm"
     local minio_src="../5-resource/rpm/minio-20250524170830.0.0-1.x86_64.rpm"
     local minio_file="/opt/minio/minio-20250524170830.0.0-1.x86_64.rpm"
@@ -78,23 +129,31 @@ install_minio() {
     }
     echo -e "${COLOR_SUCCESS}[Success] MinIO安装成功...${COLOR_RESET}"
     return 0
-  }
-  echo -e "${COLOR_INFO}[Info] 下载MinIO二进制文件（aarch64）...${COLOR_RESET}"
-  local minio_url="https://dl.min.io/server/minio/release/linux-arm64/minio"
-  local temp_dir=$minio_dir
-  local minio_path="../5-resource/rpm/minio"
+    ;;
+  aarch64 | arm64)
+    echo -e "${COLOR_INFO}[Info] 下载MinIO二进制文件（aarch64）...${COLOR_RESET}"
+    local minio_url="https://dl.min.io/server/minio/release/linux-arm64/minio"
+    local temp_dir=$minio_dir
+    local minio_path="../5-resource/rpm/minio"
 
-  # 检查文件是否已存在
-  if [ -f "$minio_path" ]; then
-    cp -r $minio_path $temp_dir
-    echo -e "${COLOR_INFO}[Info] MinIO二进制文件已存在，跳过下载${COLOR_RESET}"
-  else
-    if ! wget -q --show-progress "$minio_url" -O "$temp_dir/minio" --no-check-certificate; then
-      echo -e "${COLOR_ERROR}[Error] 下载MinIO失败，请检查网络连接${COLOR_RESET}"
-      rm -rf "$temp_dir"
-      return 1
+    # 检查文件是否已存在
+    if [ -f "$minio_path" ]; then
+      cp -r $minio_path $temp_dir
+      echo -e "${COLOR_INFO}[Info] MinIO二进制文件已存在，跳过下载${COLOR_RESET}"
+    else
+      if ! wget -q --show-progress "$minio_url" -O "$temp_dir/minio" --no-check-certificate; then
+        echo -e "${COLOR_ERROR}[Error] 下载MinIO失败，请检查网络连接${COLOR_RESET}"
+        rm -rf "$temp_dir"
+        return 1
+      fi
     fi
-  fi
+    ;;
+  *)
+    echo -e "${COLOR_ERROR}[Error] 不支持的架构: $arch${COLOR_RESET}"
+    echo -e "${COLOR_ERROR}[Error] 仅支持 x86_64、aarch64 架构${COLOR_RESET}"
+    return 1
+    ;;
+  esac
 }
 # 智能安装函数
 smart_install() {
@@ -333,37 +392,37 @@ install_zhparser() {
   echo -e "${COLOR_SUCCESS}[Success] zhparser安装成功${COLOR_RESET}"
   return 0
 }
-is_x86_architecture() {
-  # 获取系统架构信息（使用 uname -m 或 arch 命令）
-  local arch
-  arch=$(uname -m) # 多数系统支持，返回架构名称（如 x86_64、i686、aarch64 等）
-  # 备选：arch 命令，输出与 uname -m 类似
-  # arch=$(arch)
-
-  # x86 架构的常见标识：i386、i686（32位），x86_64（64位）
-  if [[ $arch == i386 || $arch == i686 || $arch == x86_64 ]]; then
-    return 0 # 是 x86 架构，返回 0（成功）
-  else
-    return 1 # 非 x86 架构，返回 1（失败）
-  fi
-}
 
 # 安装配置mongodb
 install_mongodb() {
-  local mongodb_server_url="https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/x86_64/RPMS/mongodb-org-server-7.0.21-1.el9.x86_64.rpm"
-  local mongodb_mongosh_url="https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.x86_64.rpm"
-  local mongodb_server_arm_url="https://repo.mongodb.org/yum/redhat/9/mongodb-org/7.0/aarch64/RPMS/mongodb-org-server-7.0.21-1.el9.aarch64.rpm"
-  local mongodb_mongosh_arm_url="https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.aarch64.rpm"
+  local el_version arch
+  el_version=$(get_el_version)
+  arch=$(uname -m)
 
-  is_x86_architecture || {
-    mongodb_server_url=$mongodb_server_arm_url
-    mongodb_mongosh_url=$mongodb_mongosh_arm_url
-  }
+  # 根据架构映射到对应的包架构名称
+  local pkg_arch mongodb_server_url mongodb_mongosh_url
+  case "$arch" in
+  x86_64 | i386 | i686)
+    pkg_arch="x86_64"
+    ;;
+  aarch64 | arm64)
+    pkg_arch="aarch64"
+    ;;
+  *)
+    echo -e "${COLOR_ERROR}[Error] 不支持的架构: $arch${COLOR_RESET}"
+    echo -e "${COLOR_ERROR}[Error] 仅支持 x86_64、aarch64 架构${COLOR_RESET}"
+    return 1
+    ;;
+  esac
+
+  mongodb_server_url="https://repo.mongodb.org/yum/redhat/${el_version}/mongodb-org/7.0/${pkg_arch}/RPMS/mongodb-org-server-7.0.21-1.el${el_version}.${pkg_arch}.rpm"
+  mongodb_mongosh_url="https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.${pkg_arch}.rpm"
+
   local mongodb_dir="/opt/mongodb"
-  local mongodb_server="/opt/mongodb/mongodb-org-server-7.0.21-1.el9.x86_64.rpm"
-  local mongodb_server_src="../5-resource/rpm/mongodb-org-server-7.0.21-1.el9.x86_64.rpm"
-  local mongodb_mongosh="/opt/mongodb/mongodb-mongosh-2.5.2.x86_64.rpm"
-  local mongodb_mongosh_src="../5-resource/rpm/mongodb-mongosh-2.5.2.x86_64.rpm"
+  local mongodb_server="/opt/mongodb/mongodb-org-server-7.0.21-1.el${el_version}.${pkg_arch}.rpm"
+  local mongodb_server_src="../5-resource/rpm/mongodb-org-server-7.0.21-1.el${el_version}.${pkg_arch}.rpm"
+  local mongodb_mongosh="/opt/mongodb/mongodb-mongosh-2.5.2.${pkg_arch}.rpm"
+  local mongodb_mongosh_src="../5-resource/rpm/mongodb-mongosh-2.5.2.${pkg_arch}.rpm"
   echo -e "${COLOR_INFO}[Info] 开始安装MongoDB...${COLOR_RESET}"
   if rpm -q mongod &>/dev/null; then
     echo -e "${COLOR_WARNING}[Warning] MongoDB 已安装，当前版本: $(rpm -q mongod)${COLOR_RESET}"
@@ -398,7 +457,7 @@ install_mongodb() {
       return 1
     fi
   fi
-  dnf install -y $mongodb_server || {
+  dnf install -y "$mongodb_server" || {
     echo -e "${COLOR_ERROR}[Error] MongoDB server安装失败${COLOR_RESET}"
     return 1
   }
@@ -466,6 +525,9 @@ install_mongodb() {
 }
 
 check_pip_rag() {
+  local need_install=0
+  local install_list=()
+
   # 定义需要检查的包和版本
   declare -A REQUIRED_PACKAGES=(
     ["sqlalchemy"]="2.0.23"
@@ -473,9 +535,6 @@ check_pip_rag() {
     ["paddleocr"]="2.9.1"
     ["tiktoken"]=""
   )
-
-  local need_install=0
-  local install_list=()
 
   echo -e "${COLOR_INFO}[Info] 检查Python依赖包...${COLOR_RESET}"
 
@@ -519,6 +578,9 @@ check_pip_rag() {
 }
 
 check_pip_framework() {
+  local need_install=0
+  local install_list=()
+
   # 获取 Python 版本
   local python_version
   python_version=$(python3 --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
@@ -546,9 +608,6 @@ check_pip_framework() {
     echo -e "${COLOR_WARNING}[Warning] 不支持的 Python 版本: $python_version${COLOR_RESET}"
     return 1
   fi
-
-  local need_install=0
-  local install_list=()
 
   echo -e "${COLOR_INFO}[Info] 检查Python依赖包...${COLOR_RESET}"
 

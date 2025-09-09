@@ -4,7 +4,7 @@
 
 Name:           euler-copilot-shell
 Version:        0.10.0
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        openEuler Intelligence 智能命令行工具集
 License:        MulanPSL-2.0
 URL:            https://gitee.com/openeuler/euler-copilot-shell
@@ -49,17 +49,16 @@ openEuler Intelligence 部署安装工具包，包含部署脚本和相关资源
 python3 -m venv %{_builddir}/venv
 source %{_builddir}/venv/bin/activate
 
-# 升级pip和setuptools
+# 升级 pip 和 setuptools
 pip install --upgrade pip setuptools wheel
 
 # 安装项目依赖
 pip install -r requirements.txt
 
-# 安装PyInstaller
+# 安装 PyInstaller
 pip install pyinstaller
 
 # 使用虚拟环境中的 PyInstaller 创建单一可执行文件
-# 使用专用的 .spec 文件解决 Textual 动态导入问题
 pyinstaller --noconfirm \
             --distpath dist \
             oi-cli.spec
@@ -100,6 +99,10 @@ ln -sf /usr/lib/openeuler-intelligence/scripts/deploy %{buildroot}%{_bindir}/ope
 %{_bindir}/openeuler-intelligence-installer
 
 %changelog
+* Tue Sep 09 2025 openEuler <contact@openeuler.org> - 0.10.0-4
+- 优化安装脚本：添加内核版本检查和架构支持，优化 MongoDB 和 MinIO 安装逻辑
+- 优化 MCP 交互相关 TUI 样式
+
 * Thu Sep 04 2025 openEuler <contact@openeuler.org> - 0.10.0-3
 - 部署功能新增支持全量部署（含 RAG、Web）
 - 允许构建 riscv64 loongarch64 版本
@@ -112,3 +115,27 @@ ln -sf /usr/lib/openeuler-intelligence/scripts/deploy %{buildroot}%{_bindir}/ope
 - 重构为子包形式：openeuler-intelligence-cli 和 openeuler-intelligence-installer
 - openeuler-intelligence-cli 替换原 euler-copilot-shell 包
 - 新增 openeuler-intelligence-installer 子包，包含部署安装脚本
+
+* Thu Jun 26 2025 Wenlong Zhang <zhangwenlong@loongson.cn> - 0.9.2-12
+- enable loongarch64 build
+
+* Fri Jun 20 2025 misaka00251 <liuxin@iscas.ac.cn> - 0.9.2-11
+- Enable riscv64 build
+
+* Tue May 20 2025 Hongyu Shi <shywzt@iCloud.com> - 0.9.2-10
+- Fix OpenAI backend issue
+
+* Mon Apr 07 2025 Hongyu Shi <shywzt@iCloud.com> - 0.9.2-9
+- Fix OpenAI backend issue
+
+* Wed Mar 12 2025 Hongyu Shi <shywzt@iCloud.com> - 0.9.2-8
+- Set default backend to openai
+
+* Mon Mar 10 2025 Hongyu Shi <shywzt@iCloud.com> - 0.9.2-7
+- Update build 7
+
+* Fri Feb 28 2025 Hongyu Shi <shywzt@iCloud.com> - 0.9.2-6
+- Update build 6
+
+* Mon Feb 24 2025 Hongyu Shi <shywzt@iCloud.com> - 0.9.2-5
+- Add euler-copilot-shell
