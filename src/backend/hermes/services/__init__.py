@@ -1,0 +1,15 @@
+"""Hermes 服务模块"""
+
+from .agent import HermesAgentManager
+from .conversation import HermesConversationManager
+from .http import HermesHttpManager
+from .model import HermesModelManager
+from .user import HermesUserManager
+
+__all__ = [
+    "HermesAgentManager",
+    "HermesConversationManager",
+    "HermesHttpManager",
+    "HermesModelManager",
+    "HermesUserManager",
+]
