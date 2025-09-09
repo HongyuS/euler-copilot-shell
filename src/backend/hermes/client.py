@@ -15,10 +15,13 @@ from log.manager import get_logger, log_exception
 from .constants import HTTP_OK
 from .exceptions import HermesAPIError
 from .models import HermesApp, HermesChatRequest, HermesFeatures
-from .services.agent import HermesAgentManager
-from .services.conversation import HermesConversationManager
-from .services.http import HermesHttpManager
-from .services.model import HermesModelManager
+from .services import (
+    HermesAgentManager,
+    HermesConversationManager,
+    HermesHttpManager,
+    HermesModelManager,
+    HermesUserManager,
+)
 from .stream import HermesStreamEvent, HermesStreamProcessor
 
 if TYPE_CHECKING:
@@ -41,6 +44,7 @@ class HermesChatClient(LLMClientBase):
         self.http_manager = HermesHttpManager(base_url, auth_token)
 
         # 延迟初始化的管理器
+        self._user_manager: HermesUserManager | None = None
         self._model_manager: HermesModelManager | None = None
         self._agent_manager: HermesAgentManager | None = None
         self._conversation_manager: HermesConversationManager | None = None
@@ -56,6 +60,13 @@ class HermesChatClient(LLMClientBase):
         self._mcp_handler: MCPEventHandler | None = None
 
         self.logger.info("Hermes 客户端初始化成功 - URL: %s", base_url)
+
+    @property
+    def user_manager(self) -> HermesUserManager:
+        """获取用户管理器（延迟初始化）"""
+        if self._user_manager is None:
+            self._user_manager = HermesUserManager(self.http_manager)
+        return self._user_manager
 
     @property
     def model_manager(self) -> HermesModelManager:
@@ -234,6 +245,46 @@ class HermesChatClient(LLMClientBase):
             duration = time.time() - start_time
             log_exception(self.logger, "MCP 响应请求失败", e)
             raise
+
+    async def get_auto_execute_status(self) -> bool:
+        """
+        获取用户自动执行状态
+
+        这是一个便捷方法，从用户信息中提取自动执行状态。
+        默认情况下返回 False。
+
+        Returns:
+            bool: 自动执行状态，默认为 False
+
+        """
+        user_info = await self.user_manager.get_user_info()
+        if user_info is None:
+            self.logger.warning("无法获取用户信息，自动执行状态默认为 False")
+            return False
+
+        auto_execute = user_info.get("auto_execute", False)
+        self.logger.debug("当前自动执行状态: %s", auto_execute)
+        return auto_execute
+
+    async def enable_auto_execute(self) -> None:
+        """
+        启用自动执行
+
+        Returns:
+            bool: 更新是否成功
+
+        """
+        await self.user_manager.update_auto_execute(auto_execute=True)
+
+    async def disable_auto_execute(self) -> None:
+        """
+        禁用自动执行
+
+        Returns:
+            bool: 更新是否成功
+
+        """
+        await self.user_manager.update_auto_execute(auto_execute=False)
 
     async def close(self) -> None:
         """关闭 HTTP 客户端"""
