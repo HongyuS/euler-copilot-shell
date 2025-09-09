@@ -965,7 +965,7 @@ class DeploymentService:
 
         # 初始化 Agent 和 MCP 服务
         agent_manager = AgentManager(server_ip=server_ip, server_port=server_port)
-        init_status = await agent_manager.initialize_agents(progress_callback)
+        init_status = await agent_manager.initialize_agents(self.state, progress_callback)
 
         if init_status == AgentInitStatus.SUCCESS:
             self.state.add_log("✓ Agent 初始化完成")
