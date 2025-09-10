@@ -96,16 +96,18 @@ SettingsScreen {
 }
 
 /* 设置值样式 */
-.settings-value {
+.settings-input {
     width: 80%;
     content-align: left middle;
 }
 
 /* 设置按钮样式 */
 .settings-button {
+    content-align: left middle;
     color: #4963b1;
     border: solid #4963b1;
     width: 40%;
+    margin-left: 1;
 }
 
 #save-btn, #cancel-btn {
