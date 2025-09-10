@@ -10,6 +10,7 @@ from textual.containers import Container, Horizontal
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
+from app.dialogs import ExitDialog
 from backend.hermes import HermesChatClient
 from backend.openai import OpenAIClient
 from config import Backend, ConfigManager
@@ -409,6 +410,10 @@ class SettingsScreen(ModalScreen):
             self.background_tasks.clear()
             # ESC 键退出设置页面，等效于取消
             self.app.pop_screen()
+        if event.key == "ctrl+q":
+            self.app.push_screen(ExitDialog())
+            event.prevent_default()
+            event.stop()
 
     def _schedule_validation(self) -> None:
         """调度验证任务，带防抖机制"""
