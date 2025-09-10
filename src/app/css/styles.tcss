@@ -180,6 +180,7 @@ AgentSelectionDialog {
 /* 智能体选择对话框样式 */
 #agent-dialog {
     align: center middle;
+    min-height: 17;
 }
 
 /* 智能体对话框标题样式 */
