@@ -414,7 +414,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """执行所有部署步骤"""
-        # 检查并停止旧的 framework 服务
+        # 检查并停止旧的 oi-runtime 服务
         if not await self._check_and_stop_old_service(progress_callback):
             return False
 
@@ -843,8 +843,8 @@ class DeploymentService:
         server_port: int,
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
-        """检查 framework 服务健康状态"""
-        # 1. 检查 systemctl framework 服务状态
+        """检查 oi-runtime 服务健康状态"""
+        # 1. 检查 systemctl oi-runtime 服务状态
         if not await self._check_systemctl_service_status(progress_callback):
             return False
 
@@ -855,12 +855,12 @@ class DeploymentService:
         self,
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
-        """检查 systemctl framework 服务状态，每2秒检查一次，5次后超时"""
+        """检查 systemctl oi-runtime 服务状态，每2秒检查一次，5次后超时"""
         max_attempts = 5
         check_interval = 2.0  # 2秒
 
         for attempt in range(1, max_attempts + 1):
-            self.state.add_log(f"检查 framework 服务状态 ({attempt}/{max_attempts})...")
+            self.state.add_log(f"检查 oi-runtime 服务状态 ({attempt}/{max_attempts})...")
 
             if progress_callback:
                 progress_callback(self.state)
@@ -870,7 +870,7 @@ class DeploymentService:
                 process = await asyncio.create_subprocess_exec(
                     "systemctl",
                     "is-active",
-                    "framework",
+                    "oi-runtime",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
@@ -902,7 +902,7 @@ class DeploymentService:
         server_port: int,
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
-        """检查 framework API 健康状态，每10秒检查一次，5分钟后超时"""
+        """检查 oi-runtime API 健康状态，每10秒检查一次，5分钟后超时"""
         max_attempts = 30
         check_interval = 10.0  # 10秒
         api_url = f"http://{server_ip}:{server_port}/api/user"
@@ -1055,7 +1055,7 @@ class DeploymentService:
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """
-        检查并停止旧的 framework 和 rag 服务
+        检查并停止旧的 oi-runtime 和 oi-rag 服务
 
         Args:
             progress_callback: 进度回调函数
@@ -1067,7 +1067,7 @@ class DeploymentService:
         if progress_callback:
             progress_callback(self.state)
 
-        services_to_check = ["framework", "rag"]
+        services_to_check = ["oi-runtime", "oi-rag"]
 
         for service_name in services_to_check:
             try:

@@ -45,8 +45,8 @@ show_sub_model_menu() {
   echo "=============================="
   echo "       手动分步部署菜单         "
   echo "=============================="
-  echo "1) 轻量部署 # 仅部署framework框架服务"
-  echo "2) 全量部署 # 带有web界面和rag知识库"
+  echo "1) 轻量部署 # 仅部署 oi-runtime 服务"
+  echo "2) 全量部署 # 带有 Web 界面和知识库"
   echo "3) 返回主菜单"
   echo "=============================="
   echo -n "请输入选项编号（1-3）: "
@@ -58,8 +58,8 @@ show_restart_menu() {
   echo "=============================="
   echo "可重启的服务列表："
   echo "1) authhub"
-  echo "2) framework"
-  echo "3) rag"
+  echo "2) oi-runtime"
+  echo "3) oi-rag"
   echo "4) mysql"
   echo "5) redis"
   echo "6) postgresql"
@@ -349,8 +349,8 @@ while true; do
       read -r restart_choice
       case $restart_choice in
       1) service="authhub" ;;
-      2) service="framework" ;;
-      3) service="rag" ;;
+      2) service="oi-runtime" ;;
+      3) service="oi-rag" ;;
       4) service="mysqld" ;;
       5) service="redis" ;;
       6) service="postgresql" ;;

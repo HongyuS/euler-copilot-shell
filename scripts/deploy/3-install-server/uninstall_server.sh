@@ -50,13 +50,13 @@ uninstall_tika() {
   fi
 }
 is_x86_architecture() {
-    local arch
-    arch=$(uname -m)
-    if [[ $arch == i386 || $arch == i686 || $arch == x86_64 ]]; then
-        return 0  # 是 x86 架构，返回 0（成功）
-    else
-        return 1  # 非 x86 架构，返回 1（失败）
-    fi
+  local arch
+  arch=$(uname -m)
+  if [[ $arch == i386 || $arch == i686 || $arch == x86_64 ]]; then
+    return 0 # 是 x86 架构，返回 0（成功）
+  else
+    return 1 # 非 x86 架构，返回 1（失败）
+  fi
 }
 uninstall_server() {
   uninstall_tika
@@ -78,8 +78,8 @@ uninstall_server() {
         flag=1
       elif [[ "$pkg" = "euler-copilot-web" || "$pkg" = "euler-copilot-witchaind-web" || "$pkg" = "euler-copilot-rag" ]]; then
         : # 什么都不做
-      elif [ "$pkg" = "minio"  ];then
-        if is_x86_architecture;then
+      elif [ "$pkg" = "minio" ]; then
+        if is_x86_architecture; then
           dnf remove -y "$pkg" >/dev/null 2>&1
         else
           systemctl stop minio >/dev/null 2>&1
@@ -94,7 +94,7 @@ uninstall_server() {
 
         fi
       elif [ "$pkg" = "euler-copilot-framework" ]; then
-        systemctl stop framework
+        systemctl stop oi-runtime
       else
         systemctl stop $pkg
       fi
@@ -125,8 +125,8 @@ uninstall_server() {
   rm -rf /etc/euler-copilot-rag
   rm -rf /etc/euler_Intelligence_install_mode
   rm -rf /etc/nginx/conf.d/authhub.nginx.conf.bak
-  rm -rf /etc/systemd/system/framework.service
-  rm -rf /etc/systemd/system/multi-user.target.wants/framework.service
+  rm -rf /etc/systemd/system/oi-runtime.service
+  rm -rf /etc/systemd/system/multi-user.target.wants/oi-runtime.service
 
   # 清理系统配置
   systemctl daemon-reload

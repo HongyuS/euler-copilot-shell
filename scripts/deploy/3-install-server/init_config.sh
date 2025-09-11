@@ -547,8 +547,8 @@ install_rag() {
   # 配置文件处理
   local env_file="../5-resource/env"
   local env_target="/etc/euler-copilot-rag/data_chain/env"
-  local service_file="../5-resource/rag.service"
-  local service_target="/etc/systemd/system/rag.service"
+  local service_file="../5-resource/oi-rag.service"
+  local service_target="/etc/systemd/system/oi-rag.service"
 
   # 复制配置文件（验证文件存在性）
   if [[ -f "$env_file" ]]; then
@@ -575,22 +575,22 @@ install_rag() {
   fi
 
   # 启动服务
-  echo -e "${COLOR_INFO}[Info] 设置并启动 rag 服务...${COLOR_RESET}"
+  echo -e "${COLOR_INFO}[Info] 设置并启动 oi-rag 服务...${COLOR_RESET}"
   systemctl daemon-reload
-  systemctl enable --now rag || {
-    echo -e "${COLOR_ERROR}[Error] rag 服务启动失败！${COLOR_RESET}"
-    systemctl status rag --no-pager
+  systemctl enable --now oi-rag || {
+    echo -e "${COLOR_ERROR}[Error] oi-rag 服务启动失败！${COLOR_RESET}"
+    systemctl status oi-rag --no-pager
     return 1
   }
 
   # 验证服务状态
-  echo -e "${COLOR_INFO}[Info] 验证 rag 服务状态...${COLOR_RESET}"
-  if systemctl is-active --quiet rag; then
-    echo -e "${COLOR_SUCCESS}[Success] rag 服务运行正常${COLOR_RESET}"
-    systemctl status rag --no-pager | grep -E "Active:|Loaded:"
+  echo -e "${COLOR_INFO}[Info] 验证 oi-rag 服务状态...${COLOR_RESET}"
+  if systemctl is-active --quiet oi-rag; then
+    echo -e "${COLOR_SUCCESS}[Success] oi-rag 服务运行正常${COLOR_RESET}"
+    systemctl status oi-rag --no-pager | grep -E "Active:|Loaded:"
   else
-    echo -e "${COLOR_ERROR}[Error] rag 服务未运行！${COLOR_RESET}"
-    journalctl -u rag --no-pager -n 20
+    echo -e "${COLOR_ERROR}[Error] oi-rag 服务未运行！${COLOR_RESET}"
+    journalctl -u oi-rag --no-pager -n 20
     return 1
   fi
 
@@ -728,8 +728,8 @@ install_framework() {
   # 5. 配置文件处理
   local framework_file="../5-resource/config.toml"
   local framework_target="/etc/euler-copilot-framework/config.toml"
-  local framework_service_file="../5-resource/framework.service"
-  local framework_service_target="/etc/systemd/system/framework.service"
+  local framework_service_file="../5-resource/oi-runtime.service"
+  local framework_service_target="/etc/systemd/system/oi-runtime.service"
 
   # 检查源文件是否存在
   for file in "$framework_file" "$framework_service_file"; do
@@ -830,23 +830,23 @@ EOF
   }
 
   # 8. 启动服务
-  echo -e "${COLOR_INFO}[Info] 启动 framework 服务...${COLOR_RESET}"
+  echo -e "${COLOR_INFO}[Info] 启动 oi-runtime 服务...${COLOR_RESET}"
   systemctl daemon-reload || {
     echo -e "${COLOR_ERROR}[Error] systemd 配置重载失败${COLOR_RESET}"
     return 1
   }
 
-  if ! systemctl enable --now framework; then
-    echo -e "${COLOR_ERROR}[Error] 无法启动 framework 服务${COLOR_RESET}"
-    systemctl status framework --no-pager
+  if ! systemctl enable --now oi-runtime; then
+    echo -e "${COLOR_ERROR}[Error] 无法启动 oi-runtime 服务${COLOR_RESET}"
+    systemctl status oi-runtime --no-pager
     return 1
   fi
 
   # 9. 验证服务状态
   echo -e "${COLOR_INFO}[Info] 检查服务状态...${COLOR_RESET}"
-  if ! systemctl is-active --quiet framework; then
-    echo -e "${COLOR_ERROR}[Error] framework 服务未运行${COLOR_RESET}"
-    journalctl -u framework --no-pager -n 20
+  if ! systemctl is-active --quiet oi-runtime; then
+    echo -e "${COLOR_ERROR}[Error] oi-runtime 服务未运行${COLOR_RESET}"
+    journalctl -u oi-runtime --no-pager -n 20
     return 1
   fi
 
