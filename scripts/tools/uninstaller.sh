@@ -87,7 +87,7 @@ uninstall_full() {
 
 echo "Stopping services..."
 # For each expected service, first check if the unit file exists, then stop if running and disable it.
-for svc in framework rag tika authhub; do
+for svc in oi-runtime oi-rag tika authhub; do
     unit="${svc}.service"
     # Check if the service unit exists on the system
     if systemctl list-unit-files --type=service | awk '{print $1}' | grep -Fxq "$unit"; then
