@@ -4,7 +4,7 @@
 
 Name:           euler-copilot-shell
 Version:        0.10.1
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        openEuler Intelligence 智能命令行工具集
 License:        MulanPSL-2.0
 URL:            https://gitee.com/openeuler/euler-copilot-shell
@@ -98,7 +98,42 @@ ln -sf /usr/lib/openeuler-intelligence/scripts/deploy %{buildroot}%{_bindir}/oi-
 /usr/lib/openeuler-intelligence
 %{_bindir}/oi-manager
 
+%postun -n openeuler-intelligence-cli
+if [ $1 -eq 0 ]; then
+# 卸载时清理用户缓存和配置文件
+for home in /root /home/*; do
+    cache_dir="$home/.cache/openEuler Intelligence/logs"
+    if [ -d "$cache_dir" ]; then
+        rm -rf "$cache_dir"
+    fi
+    config_dir="$home/.config/eulerintelli"
+    if [ -d "$config_dir" ]; then
+        rm -rf "$config_dir"
+    fi
+done
+rm -f /etc/openEuler-Intelligence/smart-shell-template.json
+elif [ $1 -ge 1 ]; then
+# 升级时清理日志
+for home in /root /home/*; do
+    cache_dir="$home/.cache/openEuler Intelligence/logs"
+    if [ -d "$cache_dir" ]; then
+        rm -rf "$cache_dir"
+    fi
+done
+fi
+
+%postun -n openeuler-intelligence-installer
+if [ $1 -eq 0 ]; then
+# 卸载时清理安装器相关文件
+rm -f /etc/euler_Intelligence_install*
+rm -f /usr/lib/openeuler-intelligence/scripts/5-resource/config.*
+rm -f /usr/lib/openeuler-intelligence/scripts/5-resource/env.*
+fi
+
 %changelog
+* Thu Sep 11 2025 openEuler <contact@openeuler.org> - 0.10.1-2
+- 卸载时清理用户缓存和配置文件
+
 * Wed Sep 10 2025 openEuler <contact@openeuler.org> - 0.10.1-1
 - 支持切换 MCP 自动执行模式
 - 简化安装器命令为 oi-manager
