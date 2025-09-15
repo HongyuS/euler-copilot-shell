@@ -1,7 +1,15 @@
-"""命令处理器"""
+"""
+命令处理器
 
+功能说明:
+1. 异步流式执行系统命令: 逐行输出 STDOUT。
+2. 结束后输出总结状态(退出码，成功/失败)。
+3. 失败时自动向 LLM 请求分析建议并继续流式输出建议。
+"""
+
+import asyncio
+import logging
 import shutil
-import subprocess
 from collections.abc import AsyncGenerator
 
 from backend.base import LLMClientBase
@@ -19,30 +27,6 @@ def is_command_safe(command: str) -> bool:
     检查命令是否安全，若包含黑名单中的子串则返回 False。
     """
     return all(dangerous not in command for dangerous in BLACKLIST)
-
-
-def execute_command(command: str) -> tuple[bool, str]:
-    """
-    执行命令并返回结果
-
-    尝试执行命令：
-    返回 (True, 命令标准输出) 或 (False, 错误信息)。
-    """
-    try:
-        result = subprocess.run(  # noqa: S602
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=1800,
-            check=False,
-        )
-        success = result.returncode == 0
-        output = result.stdout if success else result.stderr
-    except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError) as e:
-        return False, str(e)
-    else:
-        return success, output
 
 
 async def process_command(command: str, llm_client: LLMClientBase) -> AsyncGenerator[tuple[str, bool], None]:
@@ -66,31 +50,87 @@ async def process_command(command: str, llm_client: LLMClientBase) -> AsyncGener
         return
 
     prog = tokens[0]
-    if shutil.which(prog) is not None:
-        logger.info("检测到系统命令: %s", prog)
-        # 检查命令安全性
-        if not is_command_safe(command):
-            logger.warning("命令被安全检查阻止: %s", command)
-            yield ("检测到不安全命令，已阻止执行。", True)  # 作为LLM输出处理
-            return
-
-        logger.info("执行系统命令: %s", command)
-        success, output = execute_command(command)
-        if success:
-            logger.debug("命令执行成功，输出长度: %d", len(output))
-            yield (output, False)  # 系统命令输出，使用纯文本
-        else:
-            # 执行失败，将错误信息反馈给大模型
-            logger.info("命令执行失败，向 LLM 请求建议")
-            query = f"命令 '{command}' 执行失败，错误信息如下：\n{output}\n请帮忙分析原因并提供解决建议。"
-            async for suggestion in llm_client.get_llm_response(query):
-                # 检查是否为 MCP 状态消息，如果是则使用特殊的处理方式
-                is_mcp_message_flag = is_mcp_message(suggestion)
-                yield (suggestion, not is_mcp_message_flag)  # MCP消息不作为LLM输出处理
-    else:
-        # 不是已安装的命令，直接询问大模型
+    if shutil.which(prog) is None:
+        # 非系统命令 -> 直接走 LLM
         logger.debug("向 LLM 发送问题: %s", command)
         async for suggestion in llm_client.get_llm_response(command):
-            # 检查是否为 MCP 状态消息，如果是则使用特殊的处理方式
             is_mcp_message_flag = is_mcp_message(suggestion)
-            yield (suggestion, not is_mcp_message_flag)  # MCP消息不作为LLM输出处理
+            yield (suggestion, not is_mcp_message_flag)
+        return
+
+    logger.info("检测到系统命令: %s", prog)
+    if not is_command_safe(command):
+        logger.warning("命令被安全检查阻止: %s", command)
+        yield ("检测到不安全命令，已阻止执行。", True)
+        return
+
+    # 流式执行
+    async for item in _stream_system_command(command, llm_client, logger):
+        yield item
+
+
+async def _stream_system_command(
+    command: str,
+    llm_client: LLMClientBase,
+    logger: logging.Logger,
+) -> AsyncGenerator[tuple[str, bool], None]:
+    """
+    流式执行系统命令。
+
+    逐行产出 STDOUT (is_llm_output=False)。结束后追加一条状态行: 成功 / 失败。
+    若失败随后继续产出 LLM 建议 (is_llm_output=True，除非是 MCP 消息)。
+    """
+    logger.info("(流式) 执行系统命令: %s", command)
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except OSError as exc:
+        logger.exception("创建子进程失败")
+        status = f"[命令启动失败] {exc}"
+        yield (status, False)
+        query = f"无法启动命令 '{command}'，错误：{exc}\n请分析可能原因并给出解决建议。"
+        async for suggestion in llm_client.get_llm_response(query):
+            is_mcp_message_flag = is_mcp_message(suggestion)
+            yield (suggestion, not is_mcp_message_flag)
+        return
+
+    assert proc.stdout is not None  # 类型提示
+    while True:
+        line = await proc.stdout.readline()
+        if not line:
+            break
+        # CR -> LF 规范化
+        text = line.decode(errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+        yield (text, False)
+
+    returncode = await proc.wait()
+    success = returncode == 0
+
+    if success:
+        yield (f"\n[命令完成] 退出码: {returncode}", False)
+        return
+
+    # 失败: 读取 stderr
+    stderr_text = ""
+    if proc.stderr is not None:
+        try:
+            stderr_bytes = await proc.stderr.read()
+            stderr_text = stderr_bytes.decode(errors="replace")
+        except (OSError, asyncio.CancelledError) as exc:  # pragma: no cover
+            stderr_text = f"读取 stderr 失败: {exc}"
+
+    yield (f"[命令失败] 退出码: {returncode}", False)
+
+    # 追加 LLM 分析
+    logger.info("命令执行失败(returncode=%s)，向 LLM 请求建议", returncode)
+    query = (
+        f"命令 '{command}' 以非零状态 {returncode} 退出。\n"
+        f"标准错误输出如下：\n{stderr_text}\n"
+        "请分析原因并提供解决建议。"
+    )
+    async for suggestion in llm_client.get_llm_response(query):
+        is_mcp_message_flag = is_mcp_message(suggestion)
+        yield (suggestion, not is_mcp_message_flag)
