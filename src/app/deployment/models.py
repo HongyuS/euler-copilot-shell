@@ -13,7 +13,7 @@ from enum import Enum
 from tool.validators import APIValidator
 
 # 常量定义
-MAX_TEMPERATURE = 2.0
+MAX_TEMPERATURE = 10.0
 MIN_TEMPERATURE = 0.0
 
 
@@ -106,21 +106,21 @@ class DeploymentConfig:
         验证 LLM API 连接性和功能
 
         单独验证 LLM 配置的有效性，包括模型可用性和 function_call 支持。
-        当 LLM 的3个核心字段（endpoint、api_key、model）填完后调用。
+        当 LLM 的端点填写后调用，API Key 和模型名称允许为空。
 
         Returns:
             tuple[bool, str, dict]: (是否验证成功, 消息, 验证详细信息)
 
         """
-        # 检查必要字段是否完整
-        if not (self.llm.endpoint.strip() and self.llm.api_key.strip() and self.llm.model.strip()):
-            return False, "LLM 基础配置不完整", {}
+        # 检查必要字段是否完整（只要求端点）
+        if not self.llm.endpoint.strip():
+            return False, "LLM API 端点不能为空", {}
 
         validator = APIValidator()
         llm_valid, llm_msg, llm_info = await validator.validate_llm_config(
             self.llm.endpoint,
-            self.llm.api_key,
-            self.llm.model,
+            self.llm.api_key,  # 允许为空
+            self.llm.model,  # 允许为空
             self.llm.request_timeout,
         )
 
@@ -131,21 +131,21 @@ class DeploymentConfig:
         验证 Embedding API 连接性和功能
 
         单独验证 Embedding 配置的有效性。
-        当 Embedding 的3个核心字段（endpoint、api_key、model）填完后调用。
+        当 Embedding 的端点填写后调用，API Key 和模型名称允许为空。
 
         Returns:
             tuple[bool, str, dict]: (是否验证成功, 消息, 验证详细信息)
 
         """
-        # 检查必要字段是否完整
-        if not (self.embedding.endpoint.strip() and self.embedding.api_key.strip() and self.embedding.model.strip()):
-            return False, "Embedding 基础配置不完整", {}
+        # 检查必要字段是否完整（只要求端点）
+        if not self.embedding.endpoint.strip():
+            return False, "Embedding API 端点不能为空", {}
 
         validator = APIValidator()
         embed_valid, embed_msg, embed_info = await validator.validate_embedding_config(
             self.embedding.endpoint,
-            self.embedding.api_key,
-            self.embedding.model,
+            self.embedding.api_key,  # 允许为空
+            self.embedding.model,  # 允许为空
             self.llm.request_timeout,  # 使用相同的超时设置
         )
 
@@ -163,10 +163,6 @@ class DeploymentConfig:
         errors = []
         if not self.llm.endpoint.strip():
             errors.append("LLM API 端点不能为空")
-        if not self.llm.api_key.strip():
-            errors.append("LLM API 密钥不能为空")
-        if not self.llm.model.strip():
-            errors.append("LLM 模型名称不能为空")
         return errors
 
     def _validate_embedding_fields(self) -> list[str]:
@@ -184,29 +180,12 @@ class DeploymentConfig:
 
         # 轻量部署模式下，Embedding 配置是可选的
         if self.deployment_mode == "light":
-            # 如果用户填了任何 Embedding 字段，则所有字段都必须完整
-            if has_embedding_config:
-                if not self.embedding.endpoint.strip():
-                    errors.append(
-                        "Embedding API 端点不能为空（轻量部署模式下，如果填写 Embedding 配置，所有字段都必须完整）",
-                    )
-                if not self.embedding.api_key.strip():
-                    errors.append(
-                        "Embedding API 密钥不能为空（轻量部署模式下，如果填写 Embedding 配置，所有字段都必须完整）",
-                    )
-                if not self.embedding.model.strip():
-                    errors.append(
-                        "Embedding 模型名称不能为空（轻量部署模式下，如果填写 Embedding 配置，所有字段都必须完整）",
-                    )
-            # 如果没有填写，则跳过验证
-        else:
-            # 全量部署模式下，Embedding 配置是必需的
-            if not self.embedding.endpoint.strip():
+            # 如果用户填了任何 Embedding 字段，则端点必须填写，API Key 和模型名称允许为空
+            if has_embedding_config and not self.embedding.endpoint.strip():
                 errors.append("Embedding API 端点不能为空")
-            if not self.embedding.api_key.strip():
-                errors.append("Embedding API 密钥不能为空")
-            if not self.embedding.model.strip():
-                errors.append("Embedding 模型名称不能为空")
+        elif not self.embedding.endpoint.strip():
+            # 全量部署模式下，Embedding 配置是必需的，但只要求端点必填
+            errors.append("Embedding API 端点不能为空")
 
         return errors
 
