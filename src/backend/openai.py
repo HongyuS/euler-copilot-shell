@@ -5,7 +5,7 @@ import time
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, OpenAIError
 
 from backend.base import LLMClientBase
 from log.manager import get_logger, log_api_request, log_exception
@@ -102,7 +102,7 @@ class OpenAIClient(LLMClientBase):
         except asyncio.CancelledError:
             # 重新抛出取消异常
             raise
-        except Exception as e:
+        except OpenAIError as e:
             # 如果请求失败，移除刚添加的用户消息
             if (
                 self._conversation_history
@@ -163,6 +163,7 @@ class OpenAIClient(LLMClientBase):
         获取当前 LLM 服务中可用的模型，返回名称列表
 
         调用 LLM 服务的模型列表接口，并解析返回结果提取模型名称。
+        如果服务不支持模型列表接口，返回空列表。
         """
         start_time = time.time()
         self.logger.info("开始请求 OpenAI 模型列表 API")
@@ -180,10 +181,9 @@ class OpenAIClient(LLMClientBase):
                 duration,
                 model_count=len(models),
             )
-        except Exception as e:
+        except OpenAIError as e:
             duration = time.time() - start_time
             log_exception(self.logger, "OpenAI 模型列表 API 请求失败", e)
-            # 记录失败的API请求
             log_api_request(
                 self.logger,
                 "GET",
@@ -192,7 +192,7 @@ class OpenAIClient(LLMClientBase):
                 duration,
                 error=str(e),
             )
-            raise
+            return []
         else:
             self.logger.info("获取到 %d 个可用模型", len(models))
             return models
@@ -202,6 +202,6 @@ class OpenAIClient(LLMClientBase):
         try:
             await self.client.close()
             self.logger.info("OpenAI 客户端已关闭")
-        except Exception as e:
+        except OpenAIError as e:
             log_exception(self.logger, "关闭 OpenAI 客户端失败", e)
             raise
