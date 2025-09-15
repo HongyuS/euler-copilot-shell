@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from textual import on
 from textual.containers import Container, Horizontal
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
@@ -34,7 +35,6 @@ class SettingsScreen(ModalScreen):
         self.config_manager = config_manager
         self.llm_client = llm_client
         self.backend = self.config_manager.get_backend()
-        self.models: list[str] = []
         self.selected_model = self.config_manager.get_model()
         # 添加保存任务的集合
         self.background_tasks: set[asyncio.Task] = set()
@@ -88,6 +88,7 @@ class SettingsScreen(ModalScreen):
                         else self.config_manager.get_eulerintelli_key(),
                         classes="settings-input",
                         id="api-key",
+                        placeholder="API 访问密钥，可选",
                     ),
                     classes="settings-option",
                 ),
@@ -96,7 +97,12 @@ class SettingsScreen(ModalScreen):
                     [
                         Horizontal(
                             Label("模型:", classes="settings-label"),
-                            Button(f"{self.selected_model}", id="model-btn", classes="settings-button"),
+                            Input(
+                                value=self.selected_model,
+                                classes="settings-input",
+                                id="model-input",
+                                placeholder="模型名称，可选",
+                            ),
                             id="model-section",
                             classes="settings-option",
                         ),
@@ -132,12 +138,7 @@ class SettingsScreen(ModalScreen):
 
     def on_mount(self) -> None:
         """组件挂载时加载可用模型"""
-        if self.backend == Backend.OPENAI:
-            task = asyncio.create_task(self.load_models())
-            # 保存任务引用
-            self.background_tasks.add(task)
-            task.add_done_callback(self.background_tasks.discard)
-        else:  # EULERINTELLI
+        if self.backend == Backend.EULERINTELLI:
             task = asyncio.create_task(self.load_mcp_status())
             # 保存任务引用
             self.background_tasks.add(task)
@@ -148,33 +149,6 @@ class SettingsScreen(ModalScreen):
 
         # 确保操作按钮始终可见
         self._ensure_buttons_visible()
-
-    async def load_models(self) -> None:
-        """异步加载当前选中后端的可用模型列表"""
-        try:
-            # 如果是 EULERINTELLI 后端，直接返回（不需要模型选择）
-            if self.backend == Backend.EULERINTELLI:
-                return
-
-            # 使用当前选中的客户端获取模型列表
-            self.models = await self.llm_client.get_available_models()
-
-            # 过滤掉嵌入模型，只保留语言模型
-            self.models = [
-                model
-                for model in self.models
-                if not any(keyword in model.lower() for keyword in ["text-embedding-", "embedding", "embed", "bge"])
-            ]
-
-            if self.models and self.selected_model not in self.models:
-                self.selected_model = self.models[0]
-
-            # 更新模型按钮文本
-            model_btn = self.query_one("#model-btn", Button)
-            model_btn.label = self.selected_model
-        except (OSError, ValueError, RuntimeError):
-            model_btn = self.query_one("#model-btn", Button)
-            model_btn.label = "暂无可用模型"
 
     async def load_mcp_status(self) -> None:
         """异步加载 MCP 工具授权状态"""
@@ -203,15 +177,19 @@ class SettingsScreen(ModalScreen):
             mcp_btn.label = "手动确认"
             mcp_btn.disabled = True
 
-    @on(Input.Changed, "#base-url, #api-key")
+    @on(Input.Changed, "#base-url, #api-key, #model-input")
     def on_config_changed(self) -> None:
-        """当 Base URL 或 API Key 改变时更新客户端并验证配置"""
+        """当 Base URL、API Key 或模型改变时更新客户端并验证配置"""
         if self.backend == Backend.OPENAI:
+            # 获取当前模型输入值
+            try:
+                model_input = self.query_one("#model-input", Input)
+                self.selected_model = model_input.value
+            except NoMatches:
+                # 如果模型输入框不存在，跳过
+                pass
+
             self._update_llm_client()
-            # 重新加载模型列表
-            task = asyncio.create_task(self.load_models())
-            self.background_tasks.add(task)
-            task.add_done_callback(self.background_tasks.discard)
         else:  # EULERINTELLI
             self._update_llm_client()
             # 重新加载 MCP 状态
@@ -255,22 +233,21 @@ class SettingsScreen(ModalScreen):
                 spacer = self.query_one("#spacer")
                 model_section = Horizontal(
                     Label("模型:", classes="settings-label"),
-                    Button(self.selected_model, id="model-btn", classes="settings-button"),
+                    Input(
+                        value=self.selected_model,
+                        classes="settings-input",
+                        id="model-input",
+                        placeholder="模型名称，可选",
+                    ),
                     id="model-section",
                     classes="settings-option",
                 )
 
-                # 在spacer前面添加model_section
+                # 在 spacer 前面添加 model_section
                 if spacer:
                     container.mount(model_section, before=spacer)
                 else:
                     container.mount(model_section)
-
-                # 重新加载模型
-                task = asyncio.create_task(self.load_models())
-                # 保存任务引用
-                self.background_tasks.add(task)
-                task.add_done_callback(self.background_tasks.discard)
         else:
             base_url.value = self.config_manager.get_eulerintelli_url()
             api_key.value = self.config_manager.get_eulerintelli_key()
@@ -317,34 +294,6 @@ class SettingsScreen(ModalScreen):
         # 切换后端后重新验证配置
         self._schedule_validation()
 
-    @on(Button.Pressed, "#model-btn")
-    def toggle_model(self) -> None:
-        """循环切换模型"""
-        if not self.models:
-            return
-
-        try:
-            # 如果当前选择的模型在列表中，则找到它的索引
-            if self.selected_model in self.models:
-                idx = self.models.index(self.selected_model)
-                idx = (idx + 1) % len(self.models)
-            else:
-                # 如果不在列表中，则从第一个模型开始
-                idx = 0
-            self.selected_model = self.models[idx]
-
-            # 更新按钮文本
-            model_btn = self.query_one("#model-btn", Button)
-            model_btn.label = self.selected_model
-
-            # 模型改变时重新验证配置
-            self._schedule_validation()
-        except (IndexError, ValueError):
-            # 处理任何可能的异常
-            self.selected_model = self.models[0] if self.models else "默认模型"
-            model_btn = self.query_one("#model-btn", Button)
-            model_btn.label = self.selected_model
-
     @on(Button.Pressed, "#mcp-btn")
     def toggle_mcp_authorization(self) -> None:
         """切换 MCP 工具授权模式"""
@@ -375,6 +324,14 @@ class SettingsScreen(ModalScreen):
         api_key = self.query_one("#api-key", Input).value
 
         if self.backend == Backend.OPENAI:
+            # 获取模型输入值
+            try:
+                model_input = self.query_one("#model-input", Input)
+                self.selected_model = model_input.value.strip()
+            except NoMatches:
+                # 如果模型输入框不存在，保持当前选择的模型
+                pass
+
             self.config_manager.set_base_url(base_url)
             self.config_manager.set_api_key(api_key)
             self.config_manager.set_model(self.selected_model)
@@ -466,16 +423,19 @@ class SettingsScreen(ModalScreen):
 
         try:
             if self.backend == Backend.OPENAI:
-                # 检查是否有有效的模型选择
-                if not self.selected_model or not self.models:
-                    # 如果没有模型，跳过验证，不更改验证状态
-                    return
+                # 获取模型输入值（可以为空）
+                try:
+                    model_input = self.query_one("#model-input", Input)
+                    model = model_input.value.strip()
+                except NoMatches:
+                    # 如果模型输入框不存在，使用当前选择的模型
+                    model = self.selected_model
 
-                # 验证 OpenAI 配置
+                # 验证 OpenAI 配置（模型和 API Key 都可以为空）
                 valid, message, _ = await self.validator.validate_llm_config(
                     endpoint=base_url,
                     api_key=api_key,
-                    model=self.selected_model,
+                    model=model,
                     timeout=10,
                 )
                 self.is_validated = valid
@@ -507,9 +467,16 @@ class SettingsScreen(ModalScreen):
         api_key_input = self.query_one("#api-key", Input)
 
         if self.backend == Backend.OPENAI:
+            # 获取模型输入值，如果输入框不存在则使用当前选择的模型
+            try:
+                model_input = self.query_one("#model-input", Input)
+                model = model_input.value.strip()
+            except NoMatches:
+                model = self.selected_model
+
             self.llm_client = OpenAIClient(
                 base_url=base_url_input.value,
-                model=self.selected_model,
+                model=model,
                 api_key=api_key_input.value,
             )
         else:  # EULERINTELLI

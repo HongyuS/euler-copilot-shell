@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
-
-from typing_extensions import Self
+from typing import TYPE_CHECKING, Self
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -26,6 +24,14 @@ class LLMClientBase(ABC):
         Yields:
             str: 流式响应的文本内容
 
+        """
+
+    @abstractmethod
+    async def interrupt(self) -> None:
+        """
+        中断当前正在进行的请求
+
+        子类应该实现具体的中断逻辑，例如取消 HTTP 请求、停止流式响应等。
         """
 
     @abstractmethod

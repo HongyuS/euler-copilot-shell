@@ -51,38 +51,16 @@ class APIValidator:
         try:
             client = AsyncOpenAI(api_key=api_key, base_url=endpoint, timeout=timeout)
 
-            # 1. 验证模型是否存在
-            models_valid, models_msg, available_models = await self._check_model_availability(
-                client,
-                model,
-            )
-            if not models_valid:
-                await client.close()
-                return False, models_msg, {"available_models": available_models}
-
-            # 2. 验证基本对话功能
+            # 测试基本对话功能
             chat_valid, chat_msg = await self._test_basic_chat(client, model)
             if not chat_valid:
                 await client.close()
-                return False, chat_msg, {"available_models": available_models}
+                return False, chat_msg, {}
 
-            # 3. 验证 function_call 支持
+            # 测试 function_call 支持
             func_valid, func_msg, func_info = await self._test_function_call(client, model)
 
             await client.close()
-
-            if chat_valid:
-                success_msg = "LLM 配置验证成功 - 模型"
-                if func_valid:
-                    success_msg += "支持 function_call"
-                else:
-                    success_msg += f"不支持 function_call: {func_msg}"
-
-                return True, success_msg, {
-                    "available_models": available_models,
-                    "supports_function_call": func_valid,
-                    "function_call_info": func_info,
-                }
 
         except TimeoutError:
             return False, f"连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}", {}
@@ -90,8 +68,17 @@ class APIValidator:
             error_msg = f"LLM 配置验证失败: {e!s}"
             self.logger.exception(error_msg)
             return False, error_msg, {}
+        else:
+            success_msg = "LLM 配置验证成功"
+            if func_valid:
+                success_msg += " - 支持 function_call"
+            else:
+                success_msg += f" - 不支持 function_call: {func_msg}"
 
-        return False, "未知错误", {}
+            return True, success_msg, {
+                "supports_function_call": func_valid,
+                "function_call_info": func_info,
+            }
 
     async def validate_embedding_config(
         self,
@@ -140,31 +127,6 @@ class APIValidator:
                 }
 
             return False, "Embedding 响应为空", {}
-
-    async def _check_model_availability(
-        self,
-        client: AsyncOpenAI,
-        target_model: str,
-    ) -> tuple[bool, str, list[str]]:
-        """检查模型是否可用"""
-        try:
-            models_response = await client.models.list()
-            available_models = [model.id for model in models_response.data]
-
-            if target_model in available_models:
-                return True, f"模型 {target_model} 可用", available_models
-
-            return (
-                False,
-                (
-                    f"模型 {target_model} 不可用。可用模型: "
-                    f"{', '.join(available_models[:MAX_MODEL_DISPLAY])}"
-                    f"{'...' if len(available_models) > MAX_MODEL_DISPLAY else ''}"
-                ),
-                available_models,
-            )
-        except (AuthenticationError, APIError, OpenAIError) as e:
-            return False, f"获取模型列表失败: {e!s}", []
 
     async def _test_basic_chat(
         self,
