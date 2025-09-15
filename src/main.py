@@ -16,6 +16,7 @@ from log.manager import (
     get_logger,
     setup_logging,
 )
+from tool.llm_config import llm_config_main
 from tool.oi_backend_init import oi_backend_init
 from tool.oi_select_agent import select_agent
 
@@ -32,6 +33,11 @@ def parse_args() -> argparse.Namespace:
         "--agent",
         action="store_true",
         help="选择默认智能体",
+    )
+    parser.add_argument(
+        "--llm-config",
+        action="store_true",
+        help="更改 openEuler Intelligence 大模型设置（需要有效的本地后端服务）",
     )
     parser.add_argument(
         "--logs",
@@ -104,6 +110,10 @@ def main() -> None:
 
     if args.agent:
         asyncio.run(select_agent())
+        return
+
+    if args.llm_config:
+        llm_config_main()
         return
 
     # 初始化配置和日志系统
