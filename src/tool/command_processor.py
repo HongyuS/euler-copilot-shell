@@ -53,9 +53,13 @@ async def process_command(command: str, llm_client: LLMClientBase) -> AsyncGener
     if shutil.which(prog) is None:
         # 非系统命令 -> 直接走 LLM
         logger.debug("向 LLM 发送问题: %s", command)
-        async for suggestion in llm_client.get_llm_response(command):
-            is_mcp_message_flag = is_mcp_message(suggestion)
-            yield (suggestion, not is_mcp_message_flag)
+        try:
+            async for suggestion in llm_client.get_llm_response(command):
+                is_mcp_message_flag = is_mcp_message(suggestion)
+                yield (suggestion, not is_mcp_message_flag)
+        except asyncio.CancelledError:
+            logger.info("LLM 响应被用户中断")
+            raise
         return
 
     logger.info("检测到系统命令: %s", prog)
@@ -65,8 +69,12 @@ async def process_command(command: str, llm_client: LLMClientBase) -> AsyncGener
         return
 
     # 流式执行
-    async for item in _stream_system_command(command, llm_client, logger):
-        yield item
+    try:
+        async for item in _stream_system_command(command, llm_client, logger):
+            yield item
+    except asyncio.CancelledError:
+        logger.info("命令执行被用户中断")
+        raise
 
 
 async def _stream_system_command(
@@ -79,25 +87,61 @@ async def _stream_system_command(
 
     逐行产出 STDOUT (is_llm_output=False)。结束后追加一条状态行: 成功 / 失败。
     若失败随后继续产出 LLM 建议 (is_llm_output=True，除非是 MCP 消息)。
+    支持中断处理，会正确终止子进程。
     """
     logger.info("(流式) 执行系统命令: %s", command)
+
+    # 创建子进程
+    proc = await _create_subprocess(command, logger)
+    if proc is None:
+        async for item in _handle_subprocess_creation_error(command, llm_client):
+            yield item
+        return
+
+    # 执行命令并处理输出
     try:
-        proc = await asyncio.create_subprocess_shell(
+        async for item in _execute_and_stream_output(proc, command, llm_client, logger):
+            yield item
+    except asyncio.CancelledError:
+        await _handle_process_interruption(proc, logger)
+        raise
+
+
+async def _create_subprocess(command: str, logger: logging.Logger) -> asyncio.subprocess.Process | None:
+    """创建子进程，返回 None 表示创建失败"""
+    try:
+        return await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-    except OSError as exc:
+    except OSError:
         logger.exception("创建子进程失败")
-        status = f"[命令启动失败] {exc}"
-        yield (status, False)
-        query = f"无法启动命令 '{command}'，错误：{exc}\n请分析可能原因并给出解决建议。"
-        async for suggestion in llm_client.get_llm_response(query):
-            is_mcp_message_flag = is_mcp_message(suggestion)
-            yield (suggestion, not is_mcp_message_flag)
-        return
+        return None
 
+
+async def _handle_subprocess_creation_error(
+    command: str,
+    llm_client: LLMClientBase,
+) -> AsyncGenerator[tuple[str, bool], None]:
+    """处理子进程创建失败的情况"""
+    yield ("[命令启动失败] 无法创建子进程", False)
+    query = f"无法启动命令 '{command}'，请分析可能原因并给出解决建议。"
+    async for suggestion in llm_client.get_llm_response(query):
+        is_mcp_message_flag = is_mcp_message(suggestion)
+        yield (suggestion, not is_mcp_message_flag)
+
+
+async def _execute_and_stream_output(
+    proc: asyncio.subprocess.Process,
+    command: str,
+    llm_client: LLMClientBase,
+    logger: logging.Logger,
+) -> AsyncGenerator[tuple[str, bool], None]:
+    """执行命令并流式输出结果"""
     assert proc.stdout is not None  # 类型提示
+
+    # 流式读取输出
     while True:
         line = await proc.stdout.readline()
         if not line:
@@ -106,6 +150,7 @@ async def _stream_system_command(
         text = line.decode(errors="replace").replace("\r\n", "\n").replace("\r", "\n")
         yield (text, False)
 
+    # 等待进程结束
     returncode = await proc.wait()
     success = returncode == 0
 
@@ -113,18 +158,24 @@ async def _stream_system_command(
         yield (f"\n[命令完成] 退出码: {returncode}", False)
         return
 
-    # 失败: 读取 stderr
-    stderr_text = ""
-    if proc.stderr is not None:
-        try:
-            stderr_bytes = await proc.stderr.read()
-            stderr_text = stderr_bytes.decode(errors="replace")
-        except (OSError, asyncio.CancelledError) as exc:  # pragma: no cover
-            stderr_text = f"读取 stderr 失败: {exc}"
+    # 处理命令失败的情况
+    async for item in _handle_command_failure(proc, command, returncode, llm_client, logger):
+        yield item
 
+
+async def _handle_command_failure(
+    proc: asyncio.subprocess.Process,
+    command: str,
+    returncode: int,
+    llm_client: LLMClientBase,
+    logger: logging.Logger,
+) -> AsyncGenerator[tuple[str, bool], None]:
+    """处理命令执行失败的情况"""
+    # 读取 stderr
+    stderr_text = await _read_stderr(proc)
     yield (f"[命令失败] 退出码: {returncode}", False)
 
-    # 追加 LLM 分析
+    # 获取 LLM 建议
     logger.info("命令执行失败(returncode=%s)，向 LLM 请求建议", returncode)
     query = (
         f"命令 '{command}' 以非零状态 {returncode} 退出。\n"
@@ -134,3 +185,37 @@ async def _stream_system_command(
     async for suggestion in llm_client.get_llm_response(query):
         is_mcp_message_flag = is_mcp_message(suggestion)
         yield (suggestion, not is_mcp_message_flag)
+
+
+async def _read_stderr(proc: asyncio.subprocess.Process) -> str:
+    """读取进程的标准错误输出"""
+    if proc.stderr is None:
+        return ""
+
+    try:
+        stderr_bytes = await proc.stderr.read()
+        return stderr_bytes.decode(errors="replace")
+    except (OSError, asyncio.CancelledError):
+        return "读取 stderr 失败"
+
+
+async def _handle_process_interruption(proc: asyncio.subprocess.Process, logger: logging.Logger) -> None:
+    """处理进程中断，确保正确终止子进程"""
+    logger.info("命令执行被中断，正在终止子进程")
+
+    if proc.returncode is not None:
+        return  # 进程已经结束
+
+    # 尝试正常终止进程
+    proc.terminate()
+    try:
+        await asyncio.wait_for(proc.wait(), timeout=5.0)
+        logger.info("子进程已正常终止")
+    except TimeoutError:
+        # 强制杀死进程
+        logger.warning("子进程未在5秒内终止，强制杀死")
+        proc.kill()
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=2.0)
+        except TimeoutError:
+            logger.exception("无法强制终止子进程")

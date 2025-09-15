@@ -1,5 +1,6 @@
 """OpenAI 大模型客户端"""
 
+import asyncio
 import time
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING
@@ -29,6 +30,9 @@ class OpenAIClient(LLMClientBase):
 
         # 添加历史记录管理
         self._conversation_history: list[ChatCompletionMessageParam] = []
+
+        # 用于中断的任务跟踪
+        self._current_task: asyncio.Task | None = None
 
         self.logger.info("OpenAI 客户端初始化成功 - URL: %s, Model: %s", base_url, model)
 
@@ -69,11 +73,22 @@ class OpenAIClient(LLMClientBase):
 
             # 收集助手的完整回复
             assistant_response = ""
-            async for chunk in response:
-                content = chunk.choices[0].delta.content
-                if content:
-                    assistant_response += content
-                    yield content
+            try:
+                async for chunk in response:
+                    content = chunk.choices[0].delta.content
+                    if content:
+                        assistant_response += content
+                        yield content
+            except asyncio.CancelledError:
+                self.logger.info("OpenAI 流式响应被中断")
+                # 如果被中断，移除刚添加的用户消息
+                if (
+                    self._conversation_history
+                    and len(self._conversation_history) > 0
+                    and self._conversation_history[-1].get("content") == prompt
+                ):
+                    self._conversation_history.pop()
+                raise
 
             # 将助手回复添加到历史记录
             if assistant_response:
@@ -84,6 +99,9 @@ class OpenAIClient(LLMClientBase):
                 self._conversation_history.append(assistant_message)
                 self.logger.info("对话历史记录已更新，当前消息数: %d", len(self._conversation_history))
 
+        except asyncio.CancelledError:
+            # 重新抛出取消异常
+            raise
         except Exception as e:
             # 如果请求失败，移除刚添加的用户消息
             if (
@@ -107,6 +125,29 @@ class OpenAIClient(LLMClientBase):
                 error=str(e),
             )
             raise
+        finally:
+            # 清理当前任务引用
+            self._current_task = None
+
+    async def interrupt(self) -> None:
+        """
+        中断当前正在进行的请求
+
+        取消当前正在进行的流式请求。
+        """
+        if self._current_task is not None and not self._current_task.done():
+            self.logger.info("中断 OpenAI 客户端当前请求")
+            self._current_task.cancel()
+            try:
+                await self._current_task
+            except asyncio.CancelledError:
+                self.logger.info("OpenAI 客户端请求已成功中断")
+            except (OSError, TimeoutError) as e:
+                self.logger.warning("中断 OpenAI 客户端请求时出错: %s", e)
+            finally:
+                self._current_task = None
+        else:
+            self.logger.debug("OpenAI 客户端当前无正在进行的请求")
 
     def reset_conversation(self) -> None:
         """

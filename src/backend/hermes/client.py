@@ -286,6 +286,15 @@ class HermesChatClient(LLMClientBase):
         """
         await self.user_manager.update_auto_execute(auto_execute=False)
 
+    async def interrupt(self) -> None:
+        """
+        中断当前正在进行的请求
+
+        调用后端的 stop 能力来中断当前会话。
+        """
+        self.logger.info("中断 Hermes 客户端当前请求")
+        await self._stop()
+
     async def close(self) -> None:
         """关闭 HTTP 客户端"""
         # 如果有未完成的会话，先停止它
