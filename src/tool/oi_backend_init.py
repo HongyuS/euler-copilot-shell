@@ -11,7 +11,7 @@ from config.manager import ConfigManager
 from log.manager import get_logger
 
 
-def oi_backend_init() -> None:
+def backend_init() -> None:
     """初始化后端系统 - 启动 TUI 部署助手"""
     logger = get_logger(__name__)
 

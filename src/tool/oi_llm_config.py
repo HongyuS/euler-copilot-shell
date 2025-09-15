@@ -60,21 +60,28 @@ class LLMSystemConfig:
 
         # 检查是否以管理员权限运行
         if os.geteuid() != 0:
-            errors.append("需要管理员权限才能修改系统配置文件")
+            errors.append("需要管理员权限才能修改 openEuler Intelligence 配置文件")
+            # 如果没有管理员权限，直接返回，避免后续的文件操作引发权限错误
+            return False, errors
 
-        # 检查配置文件是否存在
-        if not cls.FRAMEWORK_CONFIG_PATH.exists():
-            errors.append(f"配置文件不存在: {cls.FRAMEWORK_CONFIG_PATH}")
+        try:
+            # 检查核心配置文件是否存在（必须存在）
+            if not cls.FRAMEWORK_CONFIG_PATH.exists():
+                errors.append(f"配置文件不存在: {cls.FRAMEWORK_CONFIG_PATH}")
+                errors.append("请先运行 '(sudo) oi --init' 部署后端服务")
 
-        if not cls.RAG_ENV_PATH.exists():
-            errors.append(f"配置文件不存在: {cls.RAG_ENV_PATH}")
+            # 检查核心配置文件是否可写（必须可写）
+            if cls.FRAMEWORK_CONFIG_PATH.exists() and not os.access(cls.FRAMEWORK_CONFIG_PATH, os.W_OK):
+                errors.append(f"配置文件不可写: {cls.FRAMEWORK_CONFIG_PATH}")
 
-        # 检查配置文件是否可写
-        if cls.FRAMEWORK_CONFIG_PATH.exists() and not os.access(cls.FRAMEWORK_CONFIG_PATH, os.W_OK):
-            errors.append(f"配置文件不可写: {cls.FRAMEWORK_CONFIG_PATH}")
+            # 检查 RAG_ENV_PATH 文件是否可写（如果存在的话）
+            if cls.RAG_ENV_PATH.exists() and not os.access(cls.RAG_ENV_PATH, os.W_OK):
+                errors.append(f"配置文件不可写: {cls.RAG_ENV_PATH}")
 
-        if cls.RAG_ENV_PATH.exists() and not os.access(cls.RAG_ENV_PATH, os.W_OK):
-            errors.append(f"配置文件不可写: {cls.RAG_ENV_PATH}")
+        except PermissionError as e:
+            errors.append(f"访问配置文件时权限不足: {e}")
+        except OSError as e:
+            errors.append(f"访问配置文件时发生错误: {e}")
 
         return len(errors) == 0, errors
 
@@ -90,81 +97,26 @@ class LLMSystemConfig:
         config = cls()
 
         try:
-            # 从 config.toml 加载配置
-            if cls.FRAMEWORK_CONFIG_PATH.exists():
-                config._load_from_toml()
-
-            # 从 env 文件加载配置（优先级更高）
+            # 先从 env 文件加载配置（如果存在，作为基础配置）
             if cls.RAG_ENV_PATH.exists():
                 config._load_from_env()
 
-        except (OSError, ValueError, toml.TomlDecodeError) as e:
-            logger.warning("加载系统配置时出现警告: %s", e)
+            # 从 config.toml 加载配置（最高优先级，覆盖 env 配置）
+            if cls.FRAMEWORK_CONFIG_PATH.exists():
+                config._load_from_toml()
+            else:
+                error_msg = f"核心配置文件不存在: {cls.FRAMEWORK_CONFIG_PATH}"
+                raise FileNotFoundError(error_msg)
+
+        except PermissionError as e:
+            logger.exception("权限不足，无法访问配置文件")
+            error_msg = f"权限不足：无法访问配置文件 {e.filename if hasattr(e, 'filename') else ''}，请以管理员身份运行"
+            raise PermissionError(error_msg) from e
+        except (OSError, ValueError, toml.TomlDecodeError):
+            logger.exception("加载系统配置失败")
+            raise
 
         return config
-
-    def _load_from_toml(self) -> None:
-        """从 TOML 文件加载配置"""
-        try:
-            with self.FRAMEWORK_CONFIG_PATH.open(encoding="utf-8") as f:
-                data = toml.load(f)
-
-            # 加载 LLM 配置
-            if "llm" in data:
-                llm_data = data["llm"]
-                self.llm.endpoint = llm_data.get("endpoint", "")
-                self.llm.api_key = llm_data.get("key", "")
-                self.llm.model = llm_data.get("model", "")
-                self.llm.max_tokens = llm_data.get("max_tokens", 8192)
-                self.llm.temperature = llm_data.get("temperature", 0.7)
-                # TOML 中没有 request_timeout，使用默认值
-
-            # 加载 Embedding 配置
-            if "embedding" in data:
-                embed_data = data["embedding"]
-                self.embedding.type = embed_data.get("type", "openai")
-                self.embedding.endpoint = embed_data.get("endpoint", "")
-                self.embedding.api_key = embed_data.get("api_key", "")
-                self.embedding.model = embed_data.get("model", "")
-
-        except (OSError, toml.TomlDecodeError):
-            logger.exception("从 TOML 文件加载配置失败")
-            raise
-
-    def _load_from_env(self) -> None:
-        """从 ENV 文件加载配置（覆盖 TOML 配置）"""
-        try:
-            env_vars = {}
-            with self.RAG_ENV_PATH.open(encoding="utf-8") as f:
-                for file_line in f:
-                    stripped_line = file_line.strip()
-                    if stripped_line and not stripped_line.startswith("#") and "=" in stripped_line:
-                        key, value = stripped_line.split("=", 1)
-                        env_vars[key.strip()] = value.strip()
-
-            # 加载 LLM 配置
-            self.llm.model = env_vars.get("MODEL_NAME", self.llm.model)
-            self.llm.endpoint = env_vars.get("OPENAI_API_BASE", self.llm.endpoint)
-            self.llm.api_key = env_vars.get("OPENAI_API_KEY", self.llm.api_key)
-
-            with contextlib.suppress(ValueError):
-                self.llm.max_tokens = int(env_vars["MAX_TOKENS"])
-
-            with contextlib.suppress(ValueError):
-                self.llm.temperature = float(env_vars["TEMPERATURE"])
-
-            with contextlib.suppress(ValueError):
-                self.llm.request_timeout = int(env_vars["REQUEST_TIMEOUT"])
-
-            # 加载 Embedding 配置
-            self.embedding.type = env_vars.get("EMBEDDING_TYPE", self.embedding.type)
-            self.embedding.endpoint = env_vars.get("EMBEDDING_ENDPOINT", self.embedding.endpoint)
-            self.embedding.api_key = env_vars.get("EMBEDDING_API_KEY", self.embedding.api_key)
-            self.embedding.model = env_vars.get("EMBEDDING_MODEL_NAME", self.embedding.model)
-
-        except OSError:
-            logger.exception("从 ENV 文件加载配置失败")
-            raise
 
     def save_config(self) -> None:
         """
@@ -176,107 +128,24 @@ class LLMSystemConfig:
 
         """
         try:
-            # 保存到 config.toml
-            self._save_to_toml()
+            # 保存到 config.toml（必须存在的文件）
+            if self.FRAMEWORK_CONFIG_PATH.exists():
+                self._save_to_toml()
+            else:
+                error_msg = f"核心配置文件不存在，无法保存: {self.FRAMEWORK_CONFIG_PATH}"
+                raise FileNotFoundError(error_msg)
 
-            # 保存到 env 文件
-            self._save_to_env()
+            # 保存到 env 文件（可选，仅在文件存在时保存）
+            if self.RAG_ENV_PATH.exists():
+                self._save_to_env()
+                logger.info("已保存到 RAG 环境配置文件")
+            else:
+                logger.info("RAG 环境配置文件不存在，跳过保存")
 
             logger.info("系统配置保存成功")
 
         except (OSError, ValueError, toml.TomlDecodeError):
             logger.exception("保存系统配置失败")
-            raise
-
-    def _save_to_toml(self) -> None:
-        """保存配置到 TOML 文件"""
-        try:
-            # 读取现有配置
-            with self.FRAMEWORK_CONFIG_PATH.open(encoding="utf-8") as f:
-                data = toml.load(f)
-
-            # 更新 LLM 配置
-            if "llm" not in data:
-                data["llm"] = {}
-            data["llm"].update(
-                {
-                    "endpoint": self.llm.endpoint,
-                    "key": self.llm.api_key,
-                    "model": self.llm.model,
-                    "max_tokens": self.llm.max_tokens,
-                    "temperature": self.llm.temperature,
-                },
-            )
-
-            # 更新 Embedding 配置
-            if "embedding" not in data:
-                data["embedding"] = {}
-            data["embedding"].update(
-                {
-                    "type": self.embedding.type,
-                    "endpoint": self.embedding.endpoint,
-                    "api_key": self.embedding.api_key,
-                    "model": self.embedding.model,
-                },
-            )
-
-            # 写回文件
-            with self.FRAMEWORK_CONFIG_PATH.open("w", encoding="utf-8") as f:
-                toml.dump(data, f)
-
-        except (OSError, toml.TomlDecodeError):
-            logger.exception("保存到 TOML 文件失败")
-            raise
-
-    def _save_to_env(self) -> None:
-        """保存配置到 ENV 文件"""
-        try:
-            # 读取现有文件内容
-            lines = []
-            with self.RAG_ENV_PATH.open(encoding="utf-8") as f:
-                lines = f.readlines()
-
-            # 更新配置值
-            updated_vars = {
-                "MODEL_NAME": self.llm.model,
-                "OPENAI_API_BASE": self.llm.endpoint,
-                "OPENAI_API_KEY": self.llm.api_key,
-                "MAX_TOKENS": str(self.llm.max_tokens),
-                "TEMPERATURE": str(self.llm.temperature),
-                "REQUEST_TIMEOUT": str(self.llm.request_timeout),
-                "EMBEDDING_TYPE": self.embedding.type,
-                "EMBEDDING_ENDPOINT": self.embedding.endpoint,
-                "EMBEDDING_API_KEY": self.embedding.api_key,
-                "EMBEDDING_MODEL_NAME": self.embedding.model,
-            }
-
-            # 处理每一行
-            new_lines = []
-            updated_keys = set()
-
-            for line in lines:
-                stripped = line.strip()
-                if stripped and not stripped.startswith("#") and "=" in stripped:
-                    key = stripped.split("=", 1)[0].strip()
-                    if key in updated_vars:
-                        new_lines.append(f"{key} = {updated_vars[key]}\n")
-                        updated_keys.add(key)
-                    else:
-                        new_lines.append(line)
-                else:
-                    new_lines.append(line)
-
-            # 添加没有更新的新配置项
-            for key, value in updated_vars.items():
-                if key not in updated_keys:
-                    new_lines.append(f"{key} = {value}\n")
-
-            # 写回文件
-            with self.RAG_ENV_PATH.open("w", encoding="utf-8") as f:
-                f.writelines(new_lines)
-
-        except OSError:
-            logger.exception("保存到 ENV 文件失败")
             raise
 
     def restart_services(self) -> tuple[bool, list[str]]:
@@ -342,7 +211,7 @@ class LLMSystemConfig:
             self.llm.endpoint,
             self.llm.api_key,
             self.llm.model,
-            self.llm.request_timeout,
+            300,  # 使用默认超时时间 300 秒
         )
 
     async def validate_embedding_connectivity(self) -> tuple[bool, str, dict]:
@@ -361,8 +230,204 @@ class LLMSystemConfig:
             self.embedding.endpoint,
             self.embedding.api_key,
             self.embedding.model,
-            self.llm.request_timeout,
+            300,  # 使用默认超时时间 300 秒
         )
+
+    def _load_from_toml(self) -> None:
+        """
+        从 TOML 文件加载配置
+
+        最高优先级，覆盖其他配置
+        """
+        try:
+            with self.FRAMEWORK_CONFIG_PATH.open(encoding="utf-8") as f:
+                data = toml.load(f)
+
+            # 加载 LLM 配置
+            self._load_llm_config_from_toml(data)
+
+            # 加载 Embedding 配置
+            self._load_embedding_config_from_toml(data)
+
+        except PermissionError:
+            logger.exception("权限不足，无法读取 TOML 配置文件")
+            raise
+        except (OSError, toml.TomlDecodeError):
+            logger.exception("从 TOML 文件加载配置失败")
+            raise
+
+    def _load_llm_config_from_toml(self, data: dict) -> None:
+        """从 TOML 数据中加载 LLM 配置"""
+        # 先从 [llm] 部分加载基础配置
+        if "llm" in data:
+            llm_data = data["llm"]
+            self.llm.endpoint = llm_data.get("endpoint", "")
+            self.llm.api_key = llm_data.get("key", "")
+            self.llm.model = llm_data.get("model", "")
+            self.llm.max_tokens = llm_data.get("max_tokens", 8192)
+            self.llm.temperature = llm_data.get("temperature", 0.7)
+
+        # 如果存在 [function_call] 配置，优先使用它覆盖 [llm] 配置
+        if "function_call" in data:
+            fc_data = data["function_call"]
+            self.llm.endpoint = fc_data.get("endpoint", self.llm.endpoint)
+            self.llm.api_key = fc_data.get("key", self.llm.api_key)
+            self.llm.model = fc_data.get("model", self.llm.model)
+            self.llm.max_tokens = fc_data.get("max_tokens", self.llm.max_tokens)
+            self.llm.temperature = fc_data.get("temperature", self.llm.temperature)
+
+    def _load_embedding_config_from_toml(self, data: dict) -> None:
+        """从 TOML 数据中加载 Embedding 配置"""
+        if "embedding" not in data:
+            return
+
+        embed_data = data["embedding"]
+        self.embedding.type = embed_data.get("type", "openai")
+        self.embedding.endpoint = embed_data.get("endpoint", "")
+        self.embedding.api_key = embed_data.get("api_key", "")
+        self.embedding.model = embed_data.get("model", "")
+
+    def _load_from_env(self) -> None:
+        """
+        从 ENV 文件加载配置
+
+        作为基础配置，优先级较低
+        """
+        try:
+            env_vars = {}
+            with self.RAG_ENV_PATH.open(encoding="utf-8") as f:
+                for file_line in f:
+                    stripped_line = file_line.strip()
+                    if stripped_line and not stripped_line.startswith("#") and "=" in stripped_line:
+                        key, value = stripped_line.split("=", 1)
+                        env_vars[key.strip()] = value.strip()
+
+            # 加载 LLM 配置
+            self.llm.model = env_vars.get("MODEL_NAME", self.llm.model)
+            self.llm.endpoint = env_vars.get("OPENAI_API_BASE", self.llm.endpoint)
+            self.llm.api_key = env_vars.get("OPENAI_API_KEY", self.llm.api_key)
+
+            with contextlib.suppress(ValueError):
+                self.llm.max_tokens = int(env_vars["MAX_TOKENS"])
+
+            with contextlib.suppress(ValueError):
+                self.llm.temperature = float(env_vars["TEMPERATURE"])
+
+            # 加载 Embedding 配置
+            self.embedding.type = env_vars.get("EMBEDDING_TYPE", self.embedding.type)
+            self.embedding.endpoint = env_vars.get("EMBEDDING_ENDPOINT", self.embedding.endpoint)
+            self.embedding.api_key = env_vars.get("EMBEDDING_API_KEY", self.embedding.api_key)
+            self.embedding.model = env_vars.get("EMBEDDING_MODEL_NAME", self.embedding.model)
+
+        except PermissionError:
+            logger.exception("权限不足，无法读取 ENV 配置文件")
+            raise
+        except OSError:
+            logger.exception("从 ENV 文件加载配置失败")
+            raise
+
+    def _save_to_toml(self) -> None:
+        """保存配置到 TOML 文件"""
+        try:
+            # 读取现有配置
+            with self.FRAMEWORK_CONFIG_PATH.open(encoding="utf-8") as f:
+                data = toml.load(f)
+
+            # 更新 LLM 配置
+            if "llm" not in data:
+                data["llm"] = {}
+            data["llm"].update(
+                {
+                    "endpoint": self.llm.endpoint,
+                    "key": self.llm.api_key,
+                    "model": self.llm.model,
+                    "max_tokens": self.llm.max_tokens,
+                    "temperature": self.llm.temperature,
+                },
+            )
+
+            # 更新 function_call 配置（与 llm 配置保持同步）
+            if "function_call" not in data:
+                data["function_call"] = {}
+            data["function_call"].update(
+                {
+                    "endpoint": self.llm.endpoint,
+                    "key": self.llm.api_key,
+                    "model": self.llm.model,
+                    "max_tokens": self.llm.max_tokens,
+                    "temperature": self.llm.temperature,
+                },
+            )
+
+            # 更新 Embedding 配置
+            if "embedding" not in data:
+                data["embedding"] = {}
+            data["embedding"].update(
+                {
+                    "type": self.embedding.type,
+                    "endpoint": self.embedding.endpoint,
+                    "api_key": self.embedding.api_key,
+                    "model": self.embedding.model,
+                },
+            )
+
+            # 写回文件
+            with self.FRAMEWORK_CONFIG_PATH.open("w", encoding="utf-8") as f:
+                toml.dump(data, f)
+
+        except (OSError, toml.TomlDecodeError):
+            logger.exception("保存到 TOML 文件失败")
+            raise
+
+    def _save_to_env(self) -> None:
+        """保存配置到 ENV 文件"""
+        try:
+            # 读取现有文件内容
+            lines = []
+            with self.RAG_ENV_PATH.open(encoding="utf-8") as f:
+                lines = f.readlines()
+
+            # 更新配置值
+            updated_vars = {
+                "MODEL_NAME": self.llm.model,
+                "OPENAI_API_BASE": self.llm.endpoint,
+                "OPENAI_API_KEY": self.llm.api_key,
+                "MAX_TOKENS": str(self.llm.max_tokens),
+                "TEMPERATURE": str(self.llm.temperature),
+                "EMBEDDING_TYPE": self.embedding.type,
+                "EMBEDDING_ENDPOINT": self.embedding.endpoint,
+                "EMBEDDING_API_KEY": self.embedding.api_key,
+                "EMBEDDING_MODEL_NAME": self.embedding.model,
+            }
+
+            # 处理每一行
+            new_lines = []
+            updated_keys = set()
+
+            for line in lines:
+                stripped = line.strip()
+                if stripped and not stripped.startswith("#") and "=" in stripped:
+                    key = stripped.split("=", 1)[0].strip()
+                    if key in updated_vars:
+                        new_lines.append(f"{key} = {updated_vars[key]}\n")
+                        updated_keys.add(key)
+                    else:
+                        new_lines.append(line)
+                else:
+                    new_lines.append(line)
+
+            # 添加没有更新的新配置项
+            for key, value in updated_vars.items():
+                if key not in updated_keys:
+                    new_lines.append(f"{key} = {value}\n")
+
+            # 写回文件
+            with self.RAG_ENV_PATH.open("w", encoding="utf-8") as f:
+                f.writelines(new_lines)
+
+        except OSError:
+            logger.exception("保存到 ENV 文件失败")
+            raise
 
 
 class LLMConfigScreen(ModalScreen[bool]):
@@ -444,6 +509,7 @@ class LLMConfigScreen(ModalScreen[bool]):
         self.config = LLMSystemConfig()
         self._llm_validation_task: asyncio.Task[None] | None = None
         self._embedding_validation_task: asyncio.Task[None] | None = None
+        self._background_tasks: set[asyncio.Task] = set()
 
     def compose(self) -> ComposeResult:
         """组合界面组件"""
@@ -460,6 +526,72 @@ class LLMConfigScreen(ModalScreen[bool]):
             with Horizontal(classes="button-row"):
                 yield Button("保存配置", id="save", variant="primary")
                 yield Button("取消", id="cancel")
+
+    async def on_mount(self) -> None:
+        """界面挂载时加载当前配置"""
+        try:
+            # 加载当前系统配置
+            self.config = LLMSystemConfig.load_current_config()
+
+            # 更新界面显示的值
+            self._update_form_values()
+
+        except FileNotFoundError:
+            logger.exception("核心配置文件缺失")
+            self.notify("错误：核心配置文件不存在，请检查系统安装", severity="error")
+            # 延迟退出，让用户看到错误消息
+            task = asyncio.create_task(self._delayed_exit())
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
+        except PermissionError:
+            logger.exception("配置文件访问权限不足")
+            self.notify("错误：没有权限访问配置文件，请以管理员身份运行", severity="error")
+            # 延迟退出，让用户看到错误消息
+            task = asyncio.create_task(self._delayed_exit())
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
+        except (OSError, ValueError, AttributeError):
+            logger.exception("加载系统配置失败")
+            self.notify("加载系统配置失败，请检查系统状态", severity="error")
+            # 延迟退出，让用户看到错误消息
+            task = asyncio.create_task(self._delayed_exit())
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
+
+    @on(Button.Pressed, "#save")
+    async def on_save_button_pressed(self) -> None:
+        """处理保存按钮点击"""
+        if await self._collect_and_save_config():
+            self.dismiss(result=True)
+
+    @on(Button.Pressed, "#cancel")
+    def on_cancel_button_pressed(self) -> None:
+        """处理取消按钮点击"""
+        self.dismiss(result=False)
+
+    @on(Input.Changed, "#llm_endpoint, #llm_api_key, #llm_model, #llm_max_tokens, #llm_temperature")
+    async def on_llm_field_changed(self, event: Input.Changed) -> None:
+        """处理 LLM 字段变化，检查是否需要自动验证"""
+        # 取消之前的验证任务
+        if self._llm_validation_task and not self._llm_validation_task.done():
+            self._llm_validation_task.cancel()
+
+        # 检查是否所有核心字段都已填写
+        if self._should_validate_llm():
+            # 延迟验证，避免用户输入时频繁验证
+            self._llm_validation_task = asyncio.create_task(self._delayed_llm_validation())
+
+    @on(Input.Changed, "#embedding_endpoint, #embedding_api_key, #embedding_model")
+    async def on_embedding_field_changed(self, event: Input.Changed) -> None:
+        """处理 Embedding 字段变化，检查是否需要自动验证"""
+        # 取消之前的验证任务
+        if self._embedding_validation_task and not self._embedding_validation_task.done():
+            self._embedding_validation_task.cancel()
+
+        # 检查是否所有核心字段都已填写
+        if self._should_validate_embedding():
+            # 延迟验证，避免用户输入时频繁验证
+            self._embedding_validation_task = asyncio.create_task(self._delayed_embedding_validation())
 
     def _compose_llm_config(self) -> ComposeResult:
         """组合 LLM 配置组件"""
@@ -513,15 +645,6 @@ class LLMConfigScreen(ModalScreen[bool]):
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("请求超时(秒):", classes="form-label")
-                yield Input(
-                    value=str(self.config.llm.request_timeout),
-                    placeholder="300",
-                    id="llm_timeout",
-                    classes="form-input",
-                )
-
-            with Horizontal(classes="form-row"):
                 yield Label("验证状态:", classes="form-label")
                 yield Static("未验证", id="llm_validation_status", classes="form-input")
 
@@ -562,18 +685,10 @@ class LLMConfigScreen(ModalScreen[bool]):
                 yield Label("验证状态:", classes="form-label")
                 yield Static("未验证", id="embedding_validation_status", classes="form-input")
 
-    async def on_mount(self) -> None:
-        """界面挂载时加载当前配置"""
-        try:
-            # 加载当前系统配置
-            self.config = LLMSystemConfig.load_current_config()
-
-            # 更新界面显示的值
-            self._update_form_values()
-
-        except (OSError, ValueError, AttributeError) as e:
-            logger.exception("加载系统配置失败")
-            self.notify(f"加载系统配置失败: {e}", severity="error")
+    async def _delayed_exit(self) -> None:
+        """延迟退出，让用户有时间查看错误消息"""
+        await asyncio.sleep(3)  # 等待 3 秒让用户看到消息
+        self.dismiss(result=False)
 
     def _update_form_values(self) -> None:
         """更新表单显示的值"""
@@ -584,7 +699,6 @@ class LLMConfigScreen(ModalScreen[bool]):
             self.query_one("#llm_model", Input).value = self.config.llm.model
             self.query_one("#llm_max_tokens", Input).value = str(self.config.llm.max_tokens)
             self.query_one("#llm_temperature", Input).value = str(self.config.llm.temperature)
-            self.query_one("#llm_timeout", Input).value = str(self.config.llm.request_timeout)
 
             # 更新 Embedding 配置显示
             self.query_one("#embedding_endpoint", Input).value = self.config.embedding.endpoint
@@ -594,48 +708,12 @@ class LLMConfigScreen(ModalScreen[bool]):
         except (OSError, ValueError, AttributeError):
             logger.warning("更新表单值时出现警告")
 
-    @on(Button.Pressed, "#save")
-    async def on_save_button_pressed(self) -> None:
-        """处理保存按钮点击"""
-        if await self._collect_and_save_config():
-            self.dismiss(result=True)
-
-    @on(Button.Pressed, "#cancel")
-    def on_cancel_button_pressed(self) -> None:
-        """处理取消按钮点击"""
-        self.dismiss(result=False)
-
-    @on(Input.Changed, "#llm_endpoint, #llm_api_key, #llm_model")
-    async def on_llm_field_changed(self, event: Input.Changed) -> None:
-        """处理 LLM 字段变化，检查是否需要自动验证"""
-        # 取消之前的验证任务
-        if self._llm_validation_task and not self._llm_validation_task.done():
-            self._llm_validation_task.cancel()
-
-        # 检查是否所有核心字段都已填写
-        if self._should_validate_llm():
-            # 延迟验证，避免用户输入时频繁验证
-            self._llm_validation_task = asyncio.create_task(self._delayed_llm_validation())
-
-    @on(Input.Changed, "#embedding_endpoint, #embedding_api_key, #embedding_model")
-    async def on_embedding_field_changed(self, event: Input.Changed) -> None:
-        """处理 Embedding 字段变化，检查是否需要自动验证"""
-        # 取消之前的验证任务
-        if self._embedding_validation_task and not self._embedding_validation_task.done():
-            self._embedding_validation_task.cancel()
-
-        # 检查是否所有核心字段都已填写
-        if self._should_validate_embedding():
-            # 延迟验证，避免用户输入时频繁验证
-            self._embedding_validation_task = asyncio.create_task(self._delayed_embedding_validation())
-
     def _should_validate_llm(self) -> bool:
         """检查是否应该验证 LLM 配置"""
         try:
             endpoint = self.query_one("#llm_endpoint", Input).value.strip()
-            api_key = self.query_one("#llm_api_key", Input).value.strip()
-            model = self.query_one("#llm_model", Input).value.strip()
-            return bool(endpoint and api_key and model)
+            # 只要有端点就可以验证，API Key 和模型名称可能是可选的
+            return bool(endpoint)
         except (ValueError, AttributeError):
             return False
 
@@ -717,9 +795,27 @@ class LLMConfigScreen(ModalScreen[bool]):
             self.config.llm.endpoint = self.query_one("#llm_endpoint", Input).value.strip()
             self.config.llm.api_key = self.query_one("#llm_api_key", Input).value.strip()
             self.config.llm.model = self.query_one("#llm_model", Input).value.strip()
-            self.config.llm.max_tokens = int(self.query_one("#llm_max_tokens", Input).value or "8192")
-            self.config.llm.temperature = float(self.query_one("#llm_temperature", Input).value or "0.7")
-            self.config.llm.request_timeout = int(self.query_one("#llm_timeout", Input).value or "300")
+
+            # 处理 max_tokens，如果为空或无效则使用默认值 8192
+            max_tokens_value = self.query_one("#llm_max_tokens", Input).value.strip()
+            if max_tokens_value:
+                try:
+                    self.config.llm.max_tokens = int(max_tokens_value)
+                except ValueError:
+                    self.config.llm.max_tokens = 8192
+            else:
+                self.config.llm.max_tokens = 8192
+
+            # 处理 temperature，如果为空或无效则使用默认值 0.7
+            temperature_value = self.query_one("#llm_temperature", Input).value.strip()
+            if temperature_value:
+                try:
+                    self.config.llm.temperature = float(temperature_value)
+                except ValueError:
+                    self.config.llm.temperature = 0.7
+            else:
+                self.config.llm.temperature = 0.7
+
         except (ValueError, AttributeError):
             # 如果转换失败，使用默认值
             pass
@@ -770,6 +866,9 @@ class LLMConfigScreen(ModalScreen[bool]):
 class LLMConfigApp(App[bool]):
     """LLM 配置应用"""
 
+    CSS_PATH = str(Path(__file__).parent.parent / "app" / "css" / "styles.tcss")
+    TITLE = "openEuler Intelligence LLM 配置工具"
+
     def on_mount(self) -> None:
         """应用启动时显示配置屏幕"""
         self.push_screen(LLMConfigScreen(), self._handle_screen_result)
@@ -779,7 +878,7 @@ class LLMConfigApp(App[bool]):
         self.exit(return_code=0 if result else 1)
 
 
-def llm_config_main() -> None:
+def llm_config() -> None:
     """
     LLM 配置主函数
 
@@ -815,4 +914,4 @@ def llm_config_main() -> None:
 
 
 if __name__ == "__main__":
-    llm_config_main()
+    llm_config()
