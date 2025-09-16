@@ -115,7 +115,7 @@ class DeploymentResourceManager:
 
             # 更新 function_call 配置
             if "function_call" in toml_data:
-                toml_data["function_call"]["backend"] = "function_call"
+                toml_data["function_call"]["backend"] = config.detected_backend_type
                 toml_data["function_call"]["endpoint"] = config.llm.endpoint
                 toml_data["function_call"]["api_key"] = config.llm.api_key
                 toml_data["function_call"]["model"] = config.llm.model
