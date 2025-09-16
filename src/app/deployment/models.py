@@ -49,7 +49,7 @@ class EmbeddingConfig:
     包含嵌入模型的配置信息。
     """
 
-    type: str = "openai"
+    type: str = ""  # 可选值: "openai", "mindie"
     endpoint: str = ""
     api_key: str = ""
     model: str = ""
@@ -155,6 +155,12 @@ class DeploymentConfig:
             self.embedding.model,  # 允许为空
             self.llm.request_timeout,  # 使用相同的超时设置
         )
+
+        # 如果验证成功，保存检测到的 embedding 类型
+        if embed_valid and embed_info.get("type"):
+            detected_type = embed_info.get("type")
+            if detected_type in ("openai", "mindie"):
+                self.embedding.type = detected_type
 
         return embed_valid, embed_msg, embed_info
 

@@ -114,37 +114,29 @@ class APIValidator:
             tuple[bool, str, dict]: (是否验证成功, 错误/成功消息, 额外信息)
 
         """
-        self.logger.info("开始验证 Embedding 配置 - 端点: %s, 模型: %s", endpoint, model)
+        self.logger.info("开始验证 Embedding 配置 - 端点: %s", endpoint)
 
-        try:
-            client = AsyncOpenAI(api_key=api_key, base_url=endpoint, timeout=timeout)
+        # 首先尝试 OpenAI 格式
+        openai_success, openai_msg, openai_info = await self._validate_openai_embedding(
+            endpoint,
+            api_key,
+            model,
+            timeout,
+        )
+        if openai_success:
+            return True, openai_msg, openai_info
 
-            # 测试 embedding 功能
-            test_text = "这是一个测试文本"
-            response = await client.embeddings.create(input=test_text, model=model)
+        # 如果 OpenAI 格式失败，尝试 MindIE 格式
+        mindie_success, mindie_msg, mindie_info = await self._validate_mindie_embedding(
+            endpoint,
+            api_key,
+            timeout,
+        )
+        if mindie_success:
+            return True, mindie_msg, mindie_info
 
-            await client.close()
-        except TimeoutError:
-            return False, f"连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}", {}
-        except (AuthenticationError, APIError, OpenAIError) as e:
-            error_msg = f"Embedding 配置验证失败: {e!s}"
-            self.logger.exception(error_msg)
-            return False, error_msg, {}
-        else:
-            if response.data and len(response.data) > 0:
-                embedding = response.data[0].embedding
-                dimension = len(embedding)
-                return (
-                    True,
-                    f"Embedding 配置验证成功 - 维度: {dimension}",
-                    {
-                        "model": model,
-                        "dimension": dimension,
-                        "sample_embedding_length": len(embedding),
-                    },
-                )
-
-            return False, "Embedding 响应为空", {}
+        # 两种格式都失败
+        return False, "无法连接到 Embedding 模型服务。", {}
 
     async def _test_basic_chat(
         self,
@@ -489,6 +481,87 @@ FUNCTION_CALL: get_current_time()
 
         else:
             return False, "Ollama function_call 响应无效"
+
+    async def _validate_openai_embedding(
+        self,
+        endpoint: str,
+        api_key: str,
+        model: str,
+        timeout: int = 30,  # noqa: ASYNC109
+    ) -> tuple[bool, str, dict[str, Any]]:
+        """验证 OpenAI 格式的 embedding 配置"""
+        try:
+            client = AsyncOpenAI(api_key=api_key, base_url=endpoint, timeout=timeout)
+
+            # 测试 embedding 功能
+            test_text = "这是一个测试文本"
+            response = await client.embeddings.create(input=test_text, model=model)
+
+            await client.close()
+        except TimeoutError:
+            return False, f"连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}", {}
+        except (AuthenticationError, APIError, OpenAIError) as e:
+            error_msg = f"OpenAI Embedding 配置验证失败: {e!s}"
+            self.logger.exception(error_msg)
+            return False, error_msg, {}
+        else:
+            if response.data and len(response.data) > 0:
+                embedding = response.data[0].embedding
+                dimension = len(embedding)
+                return (
+                    True,
+                    f"OpenAI Embedding 配置验证成功 - 维度: {dimension}",
+                    {
+                        "type": "openai",
+                        "dimension": dimension,
+                        "sample_embedding_length": len(embedding),
+                    },
+                )
+
+            return False, "OpenAI Embedding 响应为空", {}
+
+    async def _validate_mindie_embedding(
+        self,
+        endpoint: str,
+        api_key: str,
+        timeout: int = 30,  # noqa: ASYNC109
+    ) -> tuple[bool, str, dict[str, Any]]:
+        """验证 MindIE (TEI) 格式的 embedding 配置"""
+        try:
+            embed_endpoint = endpoint.rstrip("/") + "/embed"
+            headers = {"Content-Type": "application/json"}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+
+            data = {"inputs": "这是一个测试文本", "normalize": True}
+
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(embed_endpoint, json=data, headers=headers)
+
+                if response.status_code == HTTP_OK:
+                    json_response = response.json()
+                    if isinstance(json_response, list) and len(json_response) > 0:
+                        embedding = json_response[0]
+                        if isinstance(embedding, list) and len(embedding) > 0:
+                            dimension = len(embedding)
+                            return (
+                                True,
+                                f"MindIE Embedding 配置验证成功 - 维度: {dimension}",
+                                {
+                                    "type": "mindie",
+                                    "dimension": dimension,
+                                    "sample_embedding_length": len(embedding),
+                                },
+                            )
+
+                return False, "MindIE Embedding 响应格式不正确", {}
+
+        except httpx.TimeoutException:
+            return False, f"连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}", {}
+        except (httpx.RequestError, httpx.HTTPStatusError) as e:
+            error_msg = f"MindIE Embedding 配置验证失败: {e!s}"
+            self.logger.exception(error_msg)
+            return False, error_msg, {}
 
 
 async def validate_oi_connection(base_url: str, access_token: str) -> tuple[bool, str]:  # noqa: PLR0911
