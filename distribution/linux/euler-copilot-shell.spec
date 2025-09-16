@@ -4,7 +4,7 @@
 
 Name:           euler-copilot-shell
 Version:        0.10.1
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        openEuler Intelligence 智能命令行工具集
 License:        MulanPSL-2.0
 URL:            https://gitee.com/openeuler/euler-copilot-shell
@@ -131,6 +131,10 @@ rm -f /usr/lib/openeuler-intelligence/scripts/5-resource/env.*
 fi
 
 %changelog
+* Tue Sep 16 2025 openEuler <contact@openeuler.org> - 0.10.1-3
+- 优化 LLM 和 Embedding 配置验证逻辑
+- 添加部署后修改 LLM 和 Embedding 配置功能
+
 * Thu Sep 11 2025 openEuler <contact@openeuler.org> - 0.10.1-2
 - 卸载时清理用户缓存和配置文件
 
