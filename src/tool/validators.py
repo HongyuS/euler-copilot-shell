@@ -26,12 +26,14 @@ class APIValidator:
         """初始化验证器"""
         self.logger = get_logger(__name__)
 
-    async def validate_llm_config(
+    async def validate_llm_config(  # noqa: PLR0913
         self,
         endpoint: str,
         api_key: str,
         model: str,
         timeout: int = 30,  # noqa: ASYNC109
+        max_tokens: int | None = None,
+        temperature: float | None = None,
     ) -> tuple[bool, str, dict[str, Any]]:
         """
         验证 LLM 配置
@@ -41,6 +43,8 @@ class APIValidator:
             api_key: API 密钥
             model: 模型名称
             timeout: 超时时间（秒）
+            max_tokens: 最大令牌数，如果为 None 则使用默认值
+            temperature: 温度参数，如果为 None 则使用默认值
 
         Returns:
             tuple[bool, str, dict]: (是否验证成功, 错误/成功消息, 额外信息)
@@ -52,13 +56,13 @@ class APIValidator:
             client = AsyncOpenAI(api_key=api_key, base_url=endpoint, timeout=timeout)
 
             # 测试基本对话功能
-            chat_valid, chat_msg = await self._test_basic_chat(client, model)
+            chat_valid, chat_msg = await self._test_basic_chat(client, model, max_tokens, temperature)
             if not chat_valid:
                 await client.close()
                 return False, chat_msg, {}
 
             # 测试 function_call 支持
-            func_valid, func_msg, func_info = await self._test_function_call(client, model)
+            func_valid, func_msg, func_info = await self._test_function_call(client, model, max_tokens, temperature)
 
             await client.close()
 
@@ -132,14 +136,23 @@ class APIValidator:
         self,
         client: AsyncOpenAI,
         model: str,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
     ) -> tuple[bool, str]:
         """测试基本对话功能"""
         try:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": "请回复'测试成功'"}],
-                max_tokens=10,
-            )
+            # 使用传入的参数或默认值
+            call_kwargs = {
+                "model": model,
+                "messages": [{"role": "user", "content": "请回复'测试成功'"}],
+                "max_tokens": max_tokens if max_tokens is not None else 10,
+            }
+
+            # 只有当 temperature 不为 None 时才添加到参数中
+            if temperature is not None:
+                call_kwargs["temperature"] = temperature
+
+            response = await client.chat.completions.create(**call_kwargs)
         except (AuthenticationError, APIError, OpenAIError) as e:
             return False, f"基本对话测试失败: {e!s}"
         else:
@@ -152,6 +165,8 @@ class APIValidator:
         self,
         client: AsyncOpenAI,
         model: str,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
     ) -> tuple[bool, str, dict[str, Any]]:
         """测试 function_call 支持"""
         try:
@@ -162,17 +177,24 @@ class APIValidator:
                 "parameters": {"type": "object", "properties": {}, "required": []},
             }
 
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": "请调用函数获取当前时间"}],
-                functions=[test_function],  # type: ignore[arg-type]
-                function_call="auto",
-                max_tokens=50,
-            )
+            # 构建请求参数
+            call_kwargs = {
+                "model": model,
+                "messages": [{"role": "user", "content": "请调用函数获取当前时间"}],
+                "functions": [test_function],  # type: ignore[arg-type]
+                "function_call": "auto",
+                "max_tokens": max_tokens if max_tokens is not None else 50,
+            }
+
+            # 只有当 temperature 不为 None 时才添加到参数中
+            if temperature is not None:
+                call_kwargs["temperature"] = temperature
+
+            response = await client.chat.completions.create(**call_kwargs)
         except (AuthenticationError, APIError, OpenAIError) as e:
             # 如果 functions 参数不支持，尝试 tools 格式
             if "functions" in str(e).lower() or "function_call" in str(e).lower():
-                return await self._test_tools_format(client, model)
+                return await self._test_tools_format(client, model, max_tokens, temperature)
             return False, f"function_call 测试失败: {e!s}", {"supports_functions": False}
         else:
             if response.choices and len(response.choices) > 0:
@@ -184,7 +206,7 @@ class APIValidator:
                     }
 
                 # 尝试 tools 格式（OpenAI API 新版本）
-                return await self._test_tools_format(client, model)
+                return await self._test_tools_format(client, model, max_tokens, temperature)
 
             return False, "function_call 响应为空", {"supports_functions": False}
 
@@ -192,6 +214,8 @@ class APIValidator:
         self,
         client: AsyncOpenAI,
         model: str,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
     ) -> tuple[bool, str, dict[str, Any]]:
         """测试新版 tools 格式的 function calling"""
         try:
@@ -204,13 +228,20 @@ class APIValidator:
                 },
             }
 
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": "请调用函数获取当前时间"}],
-                tools=[test_tool],  # type: ignore[arg-type]
-                tool_choice="auto",
-                max_tokens=50,
-            )
+            # 构建请求参数
+            call_kwargs = {
+                "model": model,
+                "messages": [{"role": "user", "content": "请调用函数获取当前时间"}],
+                "tools": [test_tool],  # type: ignore[arg-type]
+                "tool_choice": "auto",
+                "max_tokens": max_tokens if max_tokens is not None else 50,
+            }
+
+            # 只有当 temperature 不为 None 时才添加到参数中
+            if temperature is not None:
+                call_kwargs["temperature"] = temperature
+
+            response = await client.chat.completions.create(**call_kwargs)
         except (AuthenticationError, APIError, OpenAIError) as e:
             return False, f"tools 格式测试失败: {e!s}", {"supports_functions": False}
         else:
