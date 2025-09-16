@@ -1,6 +1,8 @@
 """工具模块"""
 
 from .command_processor import is_command_safe, process_command
-from .oi_backend_init import oi_backend_init
+from .oi_backend_init import backend_init
+from .oi_llm_config import llm_config
+from .oi_select_agent import select_agent
 
-__all__ = ["is_command_safe", "oi_backend_init", "process_command"]
+__all__ = ["backend_init", "is_command_safe", "llm_config", "process_command", "select_agent"]

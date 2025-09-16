@@ -16,22 +16,29 @@ from log.manager import (
     get_logger,
     setup_logging,
 )
-from tool.oi_backend_init import oi_backend_init
-from tool.oi_select_agent import select_agent
+from tool import backend_init, llm_config, select_agent
 
 
 def parse_args() -> argparse.Namespace:
     """解析命令行参数"""
-    parser = argparse.ArgumentParser(description="openEuler Intelligence")
+    parser = argparse.ArgumentParser(
+        description="openEuler Intelligence",
+        formatter_class=argparse.RawTextHelpFormatter,
+    )
     parser.add_argument(
         "--init",
         action="store_true",
-        help="初始化 openEuler Intelligence 后端",
+        help="初始化 openEuler Intelligence 后端\n * 初始化操作需要管理员权限和网络连接",
     )
     parser.add_argument(
         "--agent",
         action="store_true",
         help="选择默认智能体",
+    )
+    parser.add_argument(
+        "--llm-config",
+        action="store_true",
+        help="更改 openEuler Intelligence 大模型设置（需要有效的本地后端服务）\n * 配置编辑操作需要管理员权限",
     )
     parser.add_argument(
         "--logs",
@@ -99,11 +106,15 @@ def main() -> None:
         return
 
     if args.init:
-        oi_backend_init()
+        backend_init()
         return
 
     if args.agent:
         asyncio.run(select_agent())
+        return
+
+    if args.llm_config:
+        llm_config()
         return
 
     # 初始化配置和日志系统
