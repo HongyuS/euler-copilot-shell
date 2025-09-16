@@ -7,14 +7,20 @@
 3. 失败时自动向 LLM 请求分析建议并继续流式输出建议。
 """
 
-import asyncio
-import logging
-import shutil
-from collections.abc import AsyncGenerator
+from __future__ import annotations
 
-from backend.base import LLMClientBase
+import asyncio
+import shutil
+from typing import TYPE_CHECKING
+
 from backend.hermes.mcp_helpers import is_mcp_message
 from log.manager import get_logger
+
+if TYPE_CHECKING:
+    import logging
+    from collections.abc import AsyncGenerator
+
+    from backend.base import LLMClientBase
 
 # 定义危险命令黑名单
 BLACKLIST = ["rm", "sudo", "shutdown", "reboot", "mkfs"]
