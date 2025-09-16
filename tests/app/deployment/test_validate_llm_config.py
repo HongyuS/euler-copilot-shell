@@ -2,13 +2,19 @@
 API 配置验证功能演示
 
 简单演示如何使用新的验证功能。
-使用方法: source .venv/bin/activate && PYTHONPATH=src python tests/app/deployment/test_validate_llm_config.py
+使用方法: source .venv/bin/activate && python tests/app/deployment/test_validate_llm_config.py
 """
 
 import asyncio
 import sys
 from typing import Any
 
+# 添加 src 目录到 Python 路径
+sys.path.insert(0, "src")
+
+# 为了避免循环导入，我们需要在导入 app.deployment.models 之前
+# 先确保 tool.validators 可以被正确导入，但不触发 tool.__init__.py 中的其他导入
+import tool.validators  # noqa: F401  # 直接导入 validators，避免通过 tool.__init__.py
 from app.deployment.models import DeploymentConfig, EmbeddingConfig, LLMConfig
 
 
@@ -24,15 +30,12 @@ def _output_llm_validation_info(llm_info: dict[str, Any]) -> None:
 
     if llm_info.get("supports_function_call"):
         _output("   🔧 Function Call: ✅ 支持")
-        if "function_call_info" in llm_info:
-            format_type = llm_info["function_call_info"].get("format", "unknown")
+        # 显示检测到的类型
+        if "type" in llm_info:
+            format_type = llm_info["type"]
             _output(f"   📋 支持格式: {format_type}")
     else:
         _output("   🔧 Function Call: ❌ 不支持")
-
-    if "available_models" in llm_info:
-        models = llm_info["available_models"][:3]
-        _output(f"   📦 可用模型示例: {', '.join(models)}")
 
 
 def _output_embedding_validation_info(embed_info: dict[str, Any]) -> None:
@@ -53,7 +56,7 @@ async def main() -> None:
         llm=LLMConfig(
             endpoint="http://127.0.0.1:1234/v1",
             api_key="lm-studio",
-            model="qwen/qwen3-30b-a3b-2507",
+            model="qwen/qwen3-coder-30b",
             max_tokens=4096,
             temperature=0.7,
             request_timeout=30,
@@ -123,7 +126,7 @@ async def main() -> None:
 if __name__ == "__main__":
     _output("🚀 开始演示...")
     _output("💡 运行方法: ")
-    _output("💡 source .venv/bin/activate && PYTHONPATH=src python tests/app/deployment/test_validate_llm_config.py")
+    _output("💡 source .venv/bin/activate && python tests/app/deployment/test_validate_llm_config.py")
     _output()
 
     asyncio.run(main())
