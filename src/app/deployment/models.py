@@ -77,6 +77,9 @@ class DeploymentConfig:
     enable_web: bool = False
     enable_rag: bool = False
 
+    # 检测到的后端类型（从 API 验证中获得）
+    detected_backend_type: str = "function_call"  # 默认值
+
     def validate(self) -> tuple[bool, list[str]]:
         """
         验证配置的有效性
@@ -123,6 +126,10 @@ class DeploymentConfig:
             self.llm.model,  # 允许为空
             self.llm.request_timeout,
         )
+
+        # 如果验证成功，保存检测到的后端类型
+        if llm_valid and llm_info.get("supports_function_call", False):
+            self.detected_backend_type = llm_info.get("detected_function_call_type", "function_call")
 
         return llm_valid, llm_msg, llm_info
 

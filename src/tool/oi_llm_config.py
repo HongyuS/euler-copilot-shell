@@ -46,6 +46,7 @@ class LLMSystemConfig:
 
     llm: LLMConfig = field(default_factory=LLMConfig)
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
+    detected_function_call_type: str = field(default="function_call")
 
     @classmethod
     def check_prerequisites(cls) -> tuple[bool, list[str]]:
@@ -207,7 +208,7 @@ class LLMSystemConfig:
             return False, "LLM API 端点不能为空", {}
 
         validator = APIValidator()
-        return await validator.validate_llm_config(
+        is_valid, message, info = await validator.validate_llm_config(
             self.llm.endpoint,
             self.llm.api_key,
             self.llm.model,
@@ -215,6 +216,12 @@ class LLMSystemConfig:
             self.llm.max_tokens,  # 传递最大令牌数
             self.llm.temperature,  # 传递温度参数
         )
+
+        # 保存检测到的 function call 类型
+        if is_valid and info.get("supports_function_call", False):
+            self.detected_function_call_type = info.get("detected_function_call_type", "function_call")
+
+        return is_valid, message, info
 
     async def validate_embedding_connectivity(self) -> tuple[bool, str, dict]:
         """
@@ -353,6 +360,7 @@ class LLMSystemConfig:
                 data["function_call"] = {}
             data["function_call"].update(
                 {
+                    "backend": self.detected_function_call_type,
                     "endpoint": self.llm.endpoint,
                     "key": self.llm.api_key,
                     "model": self.llm.model,

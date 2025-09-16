@@ -90,7 +90,7 @@ class APIValidator:
                 success_msg,
                 {
                     "supports_function_call": func_valid,
-                    "type": func_type,
+                    "detected_function_call_type": func_type,
                 },
             )
 
