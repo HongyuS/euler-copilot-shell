@@ -81,9 +81,9 @@ class APIValidator:
         else:
             success_msg = "LLM 配置验证成功"
             if func_valid:
-                success_msg += f" - 支持 function_call，类型: {func_type}"
+                success_msg += f" - 支持工具调用，类型: {func_type}"
             else:
-                success_msg += f" - 不支持 function_call: {func_msg}"
+                success_msg += " - 不支持工具调用"
 
             return (
                 True,
@@ -159,8 +159,8 @@ class APIValidator:
                 call_kwargs["temperature"] = temperature
 
             response = await client.chat.completions.create(**call_kwargs)
-        except (AuthenticationError, APIError, OpenAIError) as e:
-            return False, f"基本对话测试失败: {e!s}"
+        except (AuthenticationError, APIError, OpenAIError):
+            return False, "基本对话测试失败"
         else:
             if response.choices and len(response.choices) > 0:
                 return True, "基本对话功能正常"
@@ -279,7 +279,7 @@ class APIValidator:
                 if hasattr(choice.message, "tool_calls") and choice.message.tool_calls:
                     return True, "支持 tools 格式的 function_call"
 
-            return False, "不支持 function_call 功能"
+            return False, "不支持工具调用功能"
 
     async def _test_structured_output(
         self,
