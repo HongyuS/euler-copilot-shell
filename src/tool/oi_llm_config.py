@@ -212,6 +212,8 @@ class LLMSystemConfig:
             self.llm.api_key,
             self.llm.model,
             300,  # 使用默认超时时间 300 秒
+            self.llm.max_tokens,  # 传递最大令牌数
+            self.llm.temperature,  # 传递温度参数
         )
 
     async def validate_embedding_connectivity(self) -> tuple[bool, str, dict]:
