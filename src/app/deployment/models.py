@@ -96,7 +96,7 @@ class DeploymentConfig:
         # 验证 LLM 字段
         errors.extend(self._validate_llm_fields())
 
-        # 验证 Embedding 字段（根据部署模式决定是否必须）
+        # 验证 Embedding 字段
         errors.extend(self._validate_embedding_fields())
 
         # 验证数值范围
