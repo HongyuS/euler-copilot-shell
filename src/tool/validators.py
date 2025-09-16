@@ -4,6 +4,8 @@
 提供实际 API 调用验证配置的有效性。
 """
 
+from __future__ import annotations
+
 import json
 from typing import Any
 
