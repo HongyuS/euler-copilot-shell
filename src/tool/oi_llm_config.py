@@ -235,12 +235,20 @@ class LLMSystemConfig:
             return False, "Embedding API 端点不能为空", {}
 
         validator = APIValidator()
-        return await validator.validate_embedding_config(
+        is_valid, message, info = await validator.validate_embedding_config(
             self.embedding.endpoint,
             self.embedding.api_key,
             self.embedding.model,
             300,  # 使用默认超时时间 300 秒
         )
+
+        # 如果验证成功，保存检测到的 embedding 类型
+        if is_valid and info.get("type"):
+            detected_type = info.get("type")
+            if detected_type in ("openai", "mindie"):
+                self.embedding.type = detected_type
+
+        return is_valid, message, info
 
     def _load_from_toml(self) -> None:
         """
