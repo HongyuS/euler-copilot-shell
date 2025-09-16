@@ -4,6 +4,7 @@
 提供实际 API 调用验证配置的有效性。
 """
 
+import json
 from typing import Any
 
 import httpx
@@ -61,8 +62,13 @@ class APIValidator:
                 await client.close()
                 return False, chat_msg, {}
 
-            # 测试 function_call 支持
-            func_valid, func_msg, func_info = await self._test_function_call(client, model, max_tokens, temperature)
+            # 测试 function_call 支持并检测类型
+            func_valid, func_msg, func_type = await self._detect_function_call_type(
+                client,
+                model,
+                max_tokens,
+                temperature,
+            )
 
             await client.close()
 
@@ -75,14 +81,18 @@ class APIValidator:
         else:
             success_msg = "LLM 配置验证成功"
             if func_valid:
-                success_msg += " - 支持 function_call"
+                success_msg += f" - 支持工具调用，类型: {func_type}"
             else:
-                success_msg += f" - 不支持 function_call: {func_msg}"
+                success_msg += " - 不支持工具调用"
 
-            return True, success_msg, {
-                "supports_function_call": func_valid,
-                "function_call_info": func_info,
-            }
+            return (
+                True,
+                success_msg,
+                {
+                    "supports_function_call": func_valid,
+                    "detected_function_call_type": func_type,
+                },
+            )
 
     async def validate_embedding_config(
         self,
@@ -104,33 +114,29 @@ class APIValidator:
             tuple[bool, str, dict]: (是否验证成功, 错误/成功消息, 额外信息)
 
         """
-        self.logger.info("开始验证 Embedding 配置 - 端点: %s, 模型: %s", endpoint, model)
+        self.logger.info("开始验证 Embedding 配置 - 端点: %s", endpoint)
 
-        try:
-            client = AsyncOpenAI(api_key=api_key, base_url=endpoint, timeout=timeout)
+        # 首先尝试 OpenAI 格式
+        openai_success, openai_msg, openai_info = await self._validate_openai_embedding(
+            endpoint,
+            api_key,
+            model,
+            timeout,
+        )
+        if openai_success:
+            return True, openai_msg, openai_info
 
-            # 测试 embedding 功能
-            test_text = "这是一个测试文本"
-            response = await client.embeddings.create(input=test_text, model=model)
+        # 如果 OpenAI 格式失败，尝试 MindIE 格式
+        mindie_success, mindie_msg, mindie_info = await self._validate_mindie_embedding(
+            endpoint,
+            api_key,
+            timeout,
+        )
+        if mindie_success:
+            return True, mindie_msg, mindie_info
 
-            await client.close()
-        except TimeoutError:
-            return False, f"连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}", {}
-        except (AuthenticationError, APIError, OpenAIError) as e:
-            error_msg = f"Embedding 配置验证失败: {e!s}"
-            self.logger.exception(error_msg)
-            return False, error_msg, {}
-        else:
-            if response.data and len(response.data) > 0:
-                embedding = response.data[0].embedding
-                dimension = len(embedding)
-                return True, f"Embedding 配置验证成功 - 维度: {dimension}", {
-                    "model": model,
-                    "dimension": dimension,
-                    "sample_embedding_length": len(embedding),
-                }
-
-            return False, "Embedding 响应为空", {}
+        # 两种格式都失败
+        return False, "无法连接到 Embedding 模型服务。", {}
 
     async def _test_basic_chat(
         self,
@@ -153,62 +159,85 @@ class APIValidator:
                 call_kwargs["temperature"] = temperature
 
             response = await client.chat.completions.create(**call_kwargs)
-        except (AuthenticationError, APIError, OpenAIError) as e:
-            return False, f"基本对话测试失败: {e!s}"
+        except (AuthenticationError, APIError, OpenAIError):
+            return False, "基本对话测试失败"
         else:
             if response.choices and len(response.choices) > 0:
                 return True, "基本对话功能正常"
 
             return False, "对话响应为空"
 
-    async def _test_function_call(
+    async def _detect_function_call_type(
         self,
         client: AsyncOpenAI,
         model: str,
         max_tokens: int | None = None,
         temperature: float | None = None,
-    ) -> tuple[bool, str, dict[str, Any]]:
-        """测试 function_call 支持"""
-        try:
-            # 定义一个简单的测试函数
-            test_function = {
-                "name": "get_current_time",
-                "description": "获取当前时间",
-                "parameters": {"type": "object", "properties": {}, "required": []},
-            }
+    ) -> tuple[bool, str, str]:
+        """
+        检测并测试不同类型的 function_call 支持
 
-            # 构建请求参数
-            call_kwargs = {
-                "model": model,
-                "messages": [{"role": "user", "content": "请调用函数获取当前时间"}],
-                "functions": [test_function],  # type: ignore[arg-type]
-                "function_call": "auto",
-                "max_tokens": max_tokens if max_tokens is not None else 50,
-            }
+        按照以下顺序尝试：
+        1. OpenAI 标准 function_call 格式
+        2. OpenAI tools 格式
+        3. vLLM 特有格式
+        4. Ollama 特有格式
 
-            # 只有当 temperature 不为 None 时才添加到参数中
-            if temperature is not None:
-                call_kwargs["temperature"] = temperature
+        Returns:
+            tuple[bool, str, str]: (是否支持, 详细消息, 格式类型)
 
-            response = await client.chat.completions.create(**call_kwargs)
-        except (AuthenticationError, APIError, OpenAIError) as e:
-            # 如果 functions 参数不支持，尝试 tools 格式
-            if "functions" in str(e).lower() or "function_call" in str(e).lower():
-                return await self._test_tools_format(client, model, max_tokens, temperature)
-            return False, f"function_call 测试失败: {e!s}", {"supports_functions": False}
-        else:
-            if response.choices and len(response.choices) > 0:
-                choice = response.choices[0]
-                if hasattr(choice.message, "function_call") and choice.message.function_call:
-                    return True, "支持 function_call", {
-                        "function_name": choice.message.function_call.name,
-                        "supports_functions": True,
-                    }
+        """
+        # 尝试 OpenAI tools 格式
+        tools_valid, tools_msg = await self._test_tools_format(
+            client,
+            model,
+            max_tokens,
+            temperature,
+        )
+        if tools_valid:
+            return True, tools_msg, "function_call"
 
-                # 尝试 tools 格式（OpenAI API 新版本）
-                return await self._test_tools_format(client, model, max_tokens, temperature)
+        # 尝试 structured_output 格式
+        structured_valid, structured_msg = await self._test_structured_output(
+            client,
+            model,
+            max_tokens,
+            temperature,
+        )
+        if structured_valid:
+            return True, structured_msg, "structured_output"
 
-            return False, "function_call 响应为空", {"supports_functions": False}
+        # 尝试 json_mode 格式
+        json_mode_valid, json_mode_msg = await self._test_json_mode(
+            client,
+            model,
+            max_tokens,
+            temperature,
+        )
+        if json_mode_valid:
+            return True, json_mode_msg, "json_mode"
+
+        # 尝试 vLLM 格式
+        vllm_valid, vllm_msg = await self._test_vllm_function_call(
+            client,
+            model,
+            max_tokens,
+            temperature,
+        )
+        if vllm_valid:
+            return True, vllm_msg, "vllm"
+
+        # 尝试 Ollama 格式
+        ollama_valid, ollama_msg = await self._test_ollama_function_call(
+            client,
+            model,
+            max_tokens,
+            temperature,
+        )
+        if ollama_valid:
+            return True, ollama_msg, "ollama"
+
+        return False, "不支持任何 function_call 格式", "none"
 
     async def _test_tools_format(
         self,
@@ -216,7 +245,7 @@ class APIValidator:
         model: str,
         max_tokens: int | None = None,
         temperature: float | None = None,
-    ) -> tuple[bool, str, dict[str, Any]]:
+    ) -> tuple[bool, str]:
         """测试新版 tools 格式的 function calling"""
         try:
             test_tool = {
@@ -243,24 +272,296 @@ class APIValidator:
 
             response = await client.chat.completions.create(**call_kwargs)
         except (AuthenticationError, APIError, OpenAIError) as e:
-            return False, f"tools 格式测试失败: {e!s}", {"supports_functions": False}
+            return False, f"tools 格式测试失败: {e!s}"
         else:
             if response.choices and len(response.choices) > 0:
                 choice = response.choices[0]
                 if hasattr(choice.message, "tool_calls") and choice.message.tool_calls:
-                    tool_call = choice.message.tool_calls[0]
-                    # 安全地访问 function 属性
-                    function_name = ""
-                    function_obj = getattr(tool_call, "function", None)
-                    if function_obj and hasattr(function_obj, "name"):
-                        function_name = function_obj.name
-                    return True, "支持 tools 格式的 function_call", {
-                        "function_name": function_name,
-                        "supports_functions": True,
-                        "format": "tools",
-                    }
+                    return True, "支持 tools 格式的 function_call"
 
-            return False, "不支持 function_call 功能", {"supports_functions": False}
+            return False, "不支持工具调用功能"
+
+    async def _test_structured_output(
+        self,
+        client: AsyncOpenAI,
+        model: str,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> tuple[bool, str]:
+        """测试 structured_output 格式的 JSON 输出"""
+        try:
+            test_schema = {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string"},
+                    "timestamp": {"type": "string"},
+                },
+                "required": ["status"],
+                "additionalProperties": False,
+            }
+
+            call_kwargs = {
+                "model": model,
+                "messages": [{"role": "user", "content": "请返回状态信息的JSON"}],
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "status_response",
+                        "description": "Status response in JSON format",
+                        "schema": test_schema,
+                        "strict": True,
+                    },
+                },
+                "max_tokens": max_tokens if max_tokens is not None else 50,
+            }
+
+            if temperature is not None:
+                call_kwargs["temperature"] = temperature
+
+            response = await client.chat.completions.create(**call_kwargs)
+        except (AuthenticationError, APIError, OpenAIError) as e:
+            return False, f"structured_output 格式测试失败: {e!s}"
+        else:
+            if response.choices and len(response.choices) > 0:
+                choice = response.choices[0]
+                if hasattr(choice.message, "content") and choice.message.content:
+                    try:
+                        json.loads(choice.message.content)
+                    except (json.JSONDecodeError, ValueError):
+                        return False, "structured_output 响应不是有效 JSON"
+                    else:
+                        return True, "支持 structured_output 格式"
+
+            return False, "structured_output 响应为空"
+
+    async def _test_json_mode(
+        self,
+        client: AsyncOpenAI,
+        model: str,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> tuple[bool, str]:
+        """测试 json_mode 格式的 JSON 输出"""
+        try:
+            call_kwargs = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": "你必须返回有效的JSON格式"},
+                    {"role": "user", "content": "请返回包含status字段的JSON对象"},
+                ],
+                "response_format": {"type": "json_object"},
+                "max_tokens": max_tokens if max_tokens is not None else 50,
+            }
+
+            if temperature is not None:
+                call_kwargs["temperature"] = temperature
+
+            response = await client.chat.completions.create(**call_kwargs)
+        except (AuthenticationError, APIError, OpenAIError) as e:
+            return False, f"json_mode 格式测试失败: {e!s}"
+        else:
+            if response.choices and len(response.choices) > 0:
+                choice = response.choices[0]
+                if hasattr(choice.message, "content") and choice.message.content:
+                    try:
+                        json.loads(choice.message.content)
+                    except (json.JSONDecodeError, ValueError):
+                        return False, "json_mode 响应不是有效 JSON"
+                    else:
+                        return True, "支持 json_mode 格式"
+
+            return False, "json_mode 响应为空"
+
+    async def _test_vllm_function_call(
+        self,
+        client: AsyncOpenAI,
+        model: str,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> tuple[bool, str]:
+        """测试 vLLM 特有的 guided_json 格式"""
+        try:
+            # vLLM 支持 guided_json 参数来强制 JSON 输出
+            test_schema = {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string"},
+                    "message": {"type": "string"},
+                },
+                "required": ["status"],
+            }
+
+            call_kwargs = {
+                "model": model,
+                "messages": [{"role": "user", "content": "请返回状态信息的JSON"}],
+                "max_tokens": max_tokens if max_tokens is not None else 50,
+                "extra_body": {"guided_json": test_schema},
+            }
+
+            if temperature is not None:
+                call_kwargs["temperature"] = temperature
+
+            response = await client.chat.completions.create(**call_kwargs)
+
+            if response.choices and len(response.choices) > 0:
+                choice = response.choices[0]
+                content = getattr(choice.message, "content", "")
+
+                if content:
+                    try:
+                        json.loads(content)
+                    except (json.JSONDecodeError, ValueError):
+                        # 如果不是有效 JSON，可能不支持 guided_json
+                        pass
+                    else:
+                        return True, "支持 vLLM guided_json 格式"
+
+                # 检查是否包含结构化输出的迹象
+                if content and any(keyword in content.lower() for keyword in ["json", "{", "}"]):
+                    return True, "支持 vLLM 结构化输出（部分支持）"
+
+        except (AuthenticationError, APIError, OpenAIError) as e:
+            error_str = str(e).lower()
+            if any(keyword in error_str for keyword in ["extra_body", "guided_json", "not supported"]):
+                return False, f"不支持 vLLM guided_json 格式: {e!s}"
+            raise
+
+        else:
+            return False, "vLLM guided_json 响应无效"
+
+    async def _test_ollama_function_call(
+        self,
+        client: AsyncOpenAI,
+        model: str,
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+    ) -> tuple[bool, str]:
+        """测试 Ollama 特有的 function calling 格式"""
+        try:
+            # Ollama 对 function calling 的支持可能有限
+            # 通常通过特殊的 prompt 格式来实现
+
+            # 尝试使用结构化 prompt 来测试 function calling
+            structured_prompt = """
+你是一个助手，可以调用函数。当需要调用函数时，请按以下格式回复：
+FUNCTION_CALL: get_current_time()
+
+现在请调用 get_current_time 函数获取当前时间。
+"""
+
+            call_kwargs = {
+                "model": model,
+                "messages": [{"role": "user", "content": structured_prompt}],
+                "max_tokens": max_tokens if max_tokens is not None else 100,
+            }
+
+            if temperature is not None:
+                call_kwargs["temperature"] = temperature
+
+            response = await client.chat.completions.create(**call_kwargs)
+
+            if response.choices and len(response.choices) > 0:
+                choice = response.choices[0]
+                content = getattr(choice.message, "content", "")
+
+                # 检查 Ollama 可能的函数调用响应格式
+                if content and any(
+                    keyword in content
+                    for keyword in [
+                        "FUNCTION_CALL:",
+                        "get_current_time",
+                        "function",
+                        "call",
+                    ]
+                ):
+                    return True, "支持 Ollama function_call 格式"
+
+        except (AuthenticationError, APIError, OpenAIError) as e:
+            return False, f"不支持 Ollama function_call 格式: {e!s}"
+
+        else:
+            return False, "Ollama function_call 响应无效"
+
+    async def _validate_openai_embedding(
+        self,
+        endpoint: str,
+        api_key: str,
+        model: str,
+        timeout: int = 30,  # noqa: ASYNC109
+    ) -> tuple[bool, str, dict[str, Any]]:
+        """验证 OpenAI 格式的 embedding 配置"""
+        try:
+            client = AsyncOpenAI(api_key=api_key, base_url=endpoint, timeout=timeout)
+
+            # 测试 embedding 功能
+            test_text = "这是一个测试文本"
+            response = await client.embeddings.create(input=test_text, model=model)
+
+            await client.close()
+        except TimeoutError:
+            return False, f"连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}", {}
+        except (AuthenticationError, APIError, OpenAIError) as e:
+            error_msg = f"OpenAI Embedding 配置验证失败: {e!s}"
+            self.logger.exception(error_msg)
+            return False, error_msg, {}
+        else:
+            if response.data and len(response.data) > 0:
+                embedding = response.data[0].embedding
+                dimension = len(embedding)
+                return (
+                    True,
+                    f"OpenAI Embedding 配置验证成功 - 维度: {dimension}",
+                    {
+                        "type": "openai",
+                        "dimension": dimension,
+                        "sample_embedding_length": len(embedding),
+                    },
+                )
+
+            return False, "OpenAI Embedding 响应为空", {}
+
+    async def _validate_mindie_embedding(
+        self,
+        endpoint: str,
+        api_key: str,
+        timeout: int = 30,  # noqa: ASYNC109
+    ) -> tuple[bool, str, dict[str, Any]]:
+        """验证 MindIE (TEI) 格式的 embedding 配置"""
+        try:
+            embed_endpoint = endpoint.rstrip("/") + "/embed"
+            headers = {"Content-Type": "application/json"}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+
+            data = {"inputs": "这是一个测试文本", "normalize": True}
+
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(embed_endpoint, json=data, headers=headers)
+
+                if response.status_code == HTTP_OK:
+                    json_response = response.json()
+                    if isinstance(json_response, list) and len(json_response) > 0:
+                        embedding = json_response[0]
+                        if isinstance(embedding, list) and len(embedding) > 0:
+                            dimension = len(embedding)
+                            return (
+                                True,
+                                f"MindIE Embedding 配置验证成功 - 维度: {dimension}",
+                                {
+                                    "type": "mindie",
+                                    "dimension": dimension,
+                                    "sample_embedding_length": len(embedding),
+                                },
+                            )
+
+                return False, "MindIE Embedding 响应格式不正确", {}
+
+        except httpx.TimeoutException:
+            return False, f"连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}", {}
+        except (httpx.RequestError, httpx.HTTPStatusError) as e:
+            error_msg = f"MindIE Embedding 配置验证失败: {e!s}"
+            self.logger.exception(error_msg)
+            return False, error_msg, {}
 
 
 async def validate_oi_connection(base_url: str, access_token: str) -> tuple[bool, str]:  # noqa: PLR0911

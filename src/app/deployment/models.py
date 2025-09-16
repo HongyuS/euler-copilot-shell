@@ -49,7 +49,7 @@ class EmbeddingConfig:
     包含嵌入模型的配置信息。
     """
 
-    type: str = "openai"
+    type: str = ""  # 可选值: "openai", "mindie"
     endpoint: str = ""
     api_key: str = ""
     model: str = ""
@@ -77,6 +77,9 @@ class DeploymentConfig:
     enable_web: bool = False
     enable_rag: bool = False
 
+    # 检测到的后端类型（从 API 验证中获得）
+    detected_backend_type: str = "function_call"  # 默认值
+
     def validate(self) -> tuple[bool, list[str]]:
         """
         验证配置的有效性
@@ -93,7 +96,7 @@ class DeploymentConfig:
         # 验证 LLM 字段
         errors.extend(self._validate_llm_fields())
 
-        # 验证 Embedding 字段（根据部署模式决定是否必须）
+        # 验证 Embedding 字段
         errors.extend(self._validate_embedding_fields())
 
         # 验证数值范围
@@ -124,6 +127,10 @@ class DeploymentConfig:
             self.llm.request_timeout,
         )
 
+        # 如果验证成功，保存检测到的后端类型
+        if llm_valid and llm_info.get("supports_function_call", False):
+            self.detected_backend_type = llm_info.get("detected_function_call_type", "function_call")
+
         return llm_valid, llm_msg, llm_info
 
     async def validate_embedding_connectivity(self) -> tuple[bool, str, dict]:
@@ -148,6 +155,12 @@ class DeploymentConfig:
             self.embedding.model,  # 允许为空
             self.llm.request_timeout,  # 使用相同的超时设置
         )
+
+        # 如果验证成功，保存检测到的 embedding 类型
+        if embed_valid and embed_info.get("type"):
+            detected_type = embed_info.get("type")
+            if detected_type in ("openai", "mindie"):
+                self.embedding.type = detected_type
 
         return embed_valid, embed_msg, embed_info
 

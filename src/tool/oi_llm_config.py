@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 
 import toml
@@ -26,6 +27,16 @@ from log.manager import get_logger
 from tool.validators import APIValidator
 
 logger = get_logger(__name__)
+
+
+class ValidationStatus(Enum):
+    """验证状态枚举"""
+
+    PENDING = "pending"
+    VALIDATING = "validating"
+    VALID = "valid"
+    INVALID = "invalid"
+    NOT_REQUIRED = "not_required"
 
 
 @dataclass
@@ -46,6 +57,7 @@ class LLMSystemConfig:
 
     llm: LLMConfig = field(default_factory=LLMConfig)
     embedding: EmbeddingConfig = field(default_factory=EmbeddingConfig)
+    detected_function_call_type: str = field(default="function_call")
 
     @classmethod
     def check_prerequisites(cls) -> tuple[bool, list[str]]:
@@ -207,7 +219,7 @@ class LLMSystemConfig:
             return False, "LLM API 端点不能为空", {}
 
         validator = APIValidator()
-        return await validator.validate_llm_config(
+        is_valid, message, info = await validator.validate_llm_config(
             self.llm.endpoint,
             self.llm.api_key,
             self.llm.model,
@@ -215,6 +227,12 @@ class LLMSystemConfig:
             self.llm.max_tokens,  # 传递最大令牌数
             self.llm.temperature,  # 传递温度参数
         )
+
+        # 保存检测到的 function call 类型
+        if is_valid and info.get("supports_function_call", False):
+            self.detected_function_call_type = info.get("detected_function_call_type", "function_call")
+
+        return is_valid, message, info
 
     async def validate_embedding_connectivity(self) -> tuple[bool, str, dict]:
         """
@@ -228,12 +246,20 @@ class LLMSystemConfig:
             return False, "Embedding API 端点不能为空", {}
 
         validator = APIValidator()
-        return await validator.validate_embedding_config(
+        is_valid, message, info = await validator.validate_embedding_config(
             self.embedding.endpoint,
             self.embedding.api_key,
             self.embedding.model,
             300,  # 使用默认超时时间 300 秒
         )
+
+        # 如果验证成功，保存检测到的 embedding 类型
+        if is_valid and info.get("type"):
+            detected_type = info.get("type")
+            if detected_type in ("openai", "mindie"):
+                self.embedding.type = detected_type
+
+        return is_valid, message, info
 
     def _load_from_toml(self) -> None:
         """
@@ -353,6 +379,7 @@ class LLMSystemConfig:
                 data["function_call"] = {}
             data["function_call"].update(
                 {
+                    "backend": self.detected_function_call_type,
                     "endpoint": self.llm.endpoint,
                     "key": self.llm.api_key,
                     "model": self.llm.model,
@@ -513,6 +540,10 @@ class LLMConfigScreen(ModalScreen[bool]):
         self._embedding_validation_task: asyncio.Task[None] | None = None
         self._background_tasks: set[asyncio.Task] = set()
 
+        # 验证状态跟踪
+        self.llm_validation_status: ValidationStatus = ValidationStatus.PENDING
+        self.embedding_validation_status: ValidationStatus = ValidationStatus.PENDING
+
     def compose(self) -> ComposeResult:
         """组合界面组件"""
         with Container(classes="config-container"):
@@ -537,6 +568,9 @@ class LLMConfigScreen(ModalScreen[bool]):
 
             # 更新界面显示的值
             self._update_form_values()
+
+            # 初始化验证状态和保存按钮状态
+            self._initialize_validation_status()
 
         except FileNotFoundError:
             logger.exception("核心配置文件缺失")
@@ -574,9 +608,15 @@ class LLMConfigScreen(ModalScreen[bool]):
     @on(Input.Changed, "#llm_endpoint, #llm_api_key, #llm_model, #llm_max_tokens, #llm_temperature")
     async def on_llm_field_changed(self, event: Input.Changed) -> None:
         """处理 LLM 字段变化，检查是否需要自动验证"""
+        # 重置 LLM 验证状态
+        self.llm_validation_status = ValidationStatus.PENDING
+
         # 取消之前的验证任务
         if self._llm_validation_task and not self._llm_validation_task.done():
             self._llm_validation_task.cancel()
+
+        # 更新保存按钮状态
+        self._update_save_button_state()
 
         # 检查是否所有核心字段都已填写
         if self._should_validate_llm():
@@ -586,11 +626,20 @@ class LLMConfigScreen(ModalScreen[bool]):
     @on(Input.Changed, "#embedding_endpoint, #embedding_api_key, #embedding_model")
     async def on_embedding_field_changed(self, event: Input.Changed) -> None:
         """处理 Embedding 字段变化，检查是否需要自动验证"""
+        # 重置 Embedding 验证状态
+        if self._is_embedding_required():
+            self.embedding_validation_status = ValidationStatus.PENDING
+        else:
+            self.embedding_validation_status = ValidationStatus.NOT_REQUIRED
+
         # 取消之前的验证任务
         if self._embedding_validation_task and not self._embedding_validation_task.done():
             self._embedding_validation_task.cancel()
 
-        # 检查是否所有核心字段都已填写
+        # 更新保存按钮状态
+        self._update_save_button_state()
+
+        # 检查是否需要验证 Embedding
         if self._should_validate_embedding():
             # 延迟验证，避免用户输入时频繁验证
             self._embedding_validation_task = asyncio.create_task(self._delayed_embedding_validation())
@@ -629,7 +678,7 @@ class LLMConfigScreen(ModalScreen[bool]):
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("最大令牌数:", classes="form-label")
+                yield Label("最大输出令牌数:", classes="form-label")
                 yield Input(
                     value=str(self.config.llm.max_tokens),
                     placeholder="8192",
@@ -707,25 +756,38 @@ class LLMConfigScreen(ModalScreen[bool]):
             self.query_one("#embedding_api_key", Input).value = self.config.embedding.api_key
             self.query_one("#embedding_model", Input).value = self.config.embedding.model
 
-        except (OSError, ValueError, AttributeError):
+        except (ValueError, AttributeError):
+            # 如果获取失败，记录警告并使用默认值
             logger.warning("更新表单值时出现警告")
+
+    def _initialize_validation_status(self) -> None:
+        """初始化验证状态"""
+        # 初始化 Embedding 验证状态
+        if self._is_embedding_required():
+            self.embedding_validation_status = ValidationStatus.PENDING
+        else:
+            self.embedding_validation_status = ValidationStatus.NOT_REQUIRED
+            # 如果不需要验证 Embedding，显示相应状态
+            try:
+                embedding_status = self.query_one("#embedding_validation_status", Static)
+                embedding_status.update("[dim]不需要验证[/dim]")
+            except (ValueError, AttributeError):
+                pass
+
+        # 更新保存按钮状态
+        self._update_save_button_state()
 
     def _should_validate_llm(self) -> bool:
         """检查是否应该验证 LLM 配置"""
         try:
-            endpoint = self.query_one("#llm_endpoint", Input).value.strip()
-            # 只要有端点就可以验证，API Key 和模型名称可能是可选的
-            return bool(endpoint)
+            return bool(self.query_one("#llm_endpoint", Input).value.strip())
         except (ValueError, AttributeError):
             return False
 
     def _should_validate_embedding(self) -> bool:
         """检查是否应该验证 Embedding 配置"""
         try:
-            endpoint = self.query_one("#embedding_endpoint", Input).value.strip()
-            api_key = self.query_one("#embedding_api_key", Input).value.strip()
-            model = self.query_one("#embedding_model", Input).value.strip()
-            return bool(endpoint and api_key and model)
+            return bool(self.query_one("#embedding_endpoint", Input).value.strip())
         except (ValueError, AttributeError):
             return False
 
@@ -748,8 +810,10 @@ class LLMConfigScreen(ModalScreen[bool]):
     async def _validate_llm_config(self) -> None:
         """验证 LLM 配置"""
         # 更新状态为验证中
+        self.llm_validation_status = ValidationStatus.VALIDATING
         status_widget = self.query_one("#llm_validation_status", Static)
         status_widget.update("[yellow]验证中...[/yellow]")
+        self._update_save_button_state()
 
         # 收集当前 LLM 配置
         self._collect_llm_config()
@@ -760,19 +824,27 @@ class LLMConfigScreen(ModalScreen[bool]):
 
             # 更新验证状态
             if is_valid:
+                self.llm_validation_status = ValidationStatus.VALID
                 status_widget.update(f"[green]✓ {message}[/green]")
             else:
+                self.llm_validation_status = ValidationStatus.INVALID
                 status_widget.update(f"[red]✗ {message}[/red]")
 
         except (ValueError, AttributeError, OSError) as e:
+            self.llm_validation_status = ValidationStatus.INVALID
             status_widget.update(f"[red]✗ 验证异常: {e}[/red]")
             self.notify(f"LLM 验证过程中出现异常: {e}", severity="error")
+
+        # 更新保存按钮状态
+        self._update_save_button_state()
 
     async def _validate_embedding_config(self) -> None:
         """验证 Embedding 配置"""
         # 更新状态为验证中
+        self.embedding_validation_status = ValidationStatus.VALIDATING
         status_widget = self.query_one("#embedding_validation_status", Static)
         status_widget.update("[yellow]验证中...[/yellow]")
+        self._update_save_button_state()
 
         # 收集当前 Embedding 配置
         self._collect_embedding_config()
@@ -783,13 +855,19 @@ class LLMConfigScreen(ModalScreen[bool]):
 
             # 更新验证状态
             if is_valid:
+                self.embedding_validation_status = ValidationStatus.VALID
                 status_widget.update(f"[green]✓ {message}[/green]")
             else:
+                self.embedding_validation_status = ValidationStatus.INVALID
                 status_widget.update(f"[red]✗ {message}[/red]")
 
         except (ValueError, AttributeError, OSError) as e:
+            self.embedding_validation_status = ValidationStatus.INVALID
             status_widget.update(f"[red]✗ 验证异常: {e}[/red]")
             self.notify(f"Embedding 验证过程中出现异常: {e}", severity="error")
+
+        # 更新保存按钮状态
+        self._update_save_button_state()
 
     def _collect_llm_config(self) -> None:
         """收集 LLM 配置"""
@@ -833,6 +911,51 @@ class LLMConfigScreen(ModalScreen[bool]):
             # 如果获取失败，记录警告并使用默认值
             logger.warning("获取 Embedding 配置失败，使用默认值")
 
+    def _is_embedding_required(self) -> bool:
+        """检查是否需要验证 Embedding 配置"""
+        # 如果 RAG 环境文件存在，则需要验证 Embedding
+        if self.config.RAG_ENV_PATH.exists():
+            return True
+
+        # 如果用户填写了 Embedding 配置，则需要验证
+        try:
+            endpoint = self.query_one("#embedding_endpoint", Input).value.strip()
+            api_key = self.query_one("#embedding_api_key", Input).value.strip()
+            model = self.query_one("#embedding_model", Input).value.strip()
+            return bool(endpoint or api_key or model)
+        except (ValueError, AttributeError):
+            return False
+
+    def _update_save_button_state(self) -> None:
+        """根据验证状态更新保存按钮状态"""
+        try:
+            save_button = self.query_one("#save", Button)
+
+            # 检查 LLM 验证状态
+            if self.llm_validation_status in (
+                ValidationStatus.PENDING,
+                ValidationStatus.VALIDATING,
+                ValidationStatus.INVALID,
+            ):
+                save_button.disabled = True
+                return
+
+            # 检查 Embedding 验证状态
+            if self._is_embedding_required() and self.embedding_validation_status in (
+                ValidationStatus.PENDING,
+                ValidationStatus.VALIDATING,
+                ValidationStatus.INVALID,
+            ):
+                save_button.disabled = True
+                return
+
+            # 所有必要的验证都通过，启用保存按钮
+            save_button.disabled = False
+
+        except (ValueError, AttributeError):
+            # 如果出现异常，为安全起见禁用保存按钮
+            pass
+
     async def _collect_and_save_config(self) -> bool:
         """收集用户配置并保存"""
         try:
@@ -871,13 +994,19 @@ class LLMConfigApp(App[bool]):
     CSS_PATH = str(Path(__file__).parent.parent / "app" / "css" / "styles.tcss")
     TITLE = "openEuler Intelligence LLM 配置工具"
 
+    def __init__(self) -> None:
+        """初始化应用"""
+        super().__init__()
+        self.config_result: bool | None = None
+
     def on_mount(self) -> None:
         """应用启动时显示配置屏幕"""
         self.push_screen(LLMConfigScreen(), self._handle_screen_result)
 
     def _handle_screen_result(self, result: bool | None) -> None:  # noqa: FBT001
         """处理配置屏幕结果"""
-        self.exit(return_code=0 if result else 1)
+        self.config_result = result
+        self.exit()
 
 
 def llm_config() -> None:
@@ -899,9 +1028,10 @@ def llm_config() -> None:
 
         # 启动 TUI 应用
         app = LLMConfigApp()
-        result = app.run()
+        app.run()
 
-        if result == 0:
+        # 检查应用内部存储的结果
+        if app.config_result:
             sys.stdout.write("✓ LLM 配置更新完成\n")
         else:
             sys.stdout.write("配置更新已取消\n")
