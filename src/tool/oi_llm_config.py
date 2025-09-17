@@ -299,7 +299,7 @@ class LLMSystemConfig:
         if "function_call" in data:
             fc_data = data["function_call"]
             self.llm.endpoint = fc_data.get("endpoint", self.llm.endpoint)
-            self.llm.api_key = fc_data.get("key", self.llm.api_key)
+            self.llm.api_key = fc_data.get("api_key", self.llm.api_key)
             self.llm.model = fc_data.get("model", self.llm.model)
             self.llm.max_tokens = fc_data.get("max_tokens", self.llm.max_tokens)
             self.llm.temperature = fc_data.get("temperature", self.llm.temperature)
@@ -381,7 +381,7 @@ class LLMSystemConfig:
                 {
                     "backend": self.detected_function_call_type,
                     "endpoint": self.llm.endpoint,
-                    "key": self.llm.api_key,
+                    "api_key": self.llm.api_key,
                     "model": self.llm.model,
                     "max_tokens": self.llm.max_tokens,
                     "temperature": self.llm.temperature,
