@@ -4,7 +4,7 @@
 
 Name:           euler-copilot-shell
 Version:        0.10.1
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        openEuler Intelligence 智能命令行工具集
 License:        MulanPSL-2.0
 URL:            https://gitee.com/openeuler/euler-copilot-shell
@@ -131,6 +131,10 @@ rm -f /usr/lib/openeuler-intelligence/scripts/5-resource/env.*
 fi
 
 %changelog
+* Wed Sep 17 2025 openEuler <contact@openeuler.org> - 0.10.1-4
+- 修复 Token 计算器中类型注解的兼容性问题
+- 优化部署脚本中下载资源文件的逻辑
+
 * Tue Sep 16 2025 openEuler <contact@openeuler.org> - 0.10.1-3
 - 优化 LLM 和 Embedding 配置验证逻辑
 - 添加部署后修改 LLM 和 Embedding 配置功能

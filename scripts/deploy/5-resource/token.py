@@ -1,8 +1,12 @@
 # Copyright (c) Huawei Technologies Co., Ltd. 2023-2025. All rights reserved.
 """用于计算Token消耗量"""
+
+from __future__ import annotations
+
 import logging
-from typing import Union
+
 from apps.common.singleton import SingletonMeta
+
 logger = logging.getLogger(__name__)
 
 class TokenCalculator(metaclass=SingletonMeta):
@@ -10,8 +14,9 @@ class TokenCalculator(metaclass=SingletonMeta):
 
     def __init__(self) -> None:
         """初始化Tokenizer"""
-        import tiktoken
         import os
+
+        import tiktoken
         os.environ["TIKTOKEN_CACHE_DIR"] = "/root/.cache/tiktoken/"
         self._encoder = tiktoken.get_encoding("cl100k_base")
 
@@ -27,7 +32,7 @@ class TokenCalculator(metaclass=SingletonMeta):
         return result
 
     @staticmethod
-    def get_k_tokens_words_from_content(content: str, k: Union[int, None] = None) -> str:
+    def get_k_tokens_words_from_content(content: str, k: int | None = None) -> str:
         """获取k个token的词"""
         if k is None:
             return content
