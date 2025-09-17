@@ -102,10 +102,30 @@ get_mongodb_urls() {
     ;;
   esac
 
-  base_urls=(
-    "https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.${pkg_arch}.rpm"
-    "https://repo.mongodb.org/yum/redhat/${el_version}/mongodb-org/7.0/${pkg_arch}/RPMS/mongodb-org-server-7.0.21-1.el${el_version}.${pkg_arch}.rpm"
-  )
+  # 检查本地MongoDB缓存文件是否存在
+  local mongodb_dir="/opt/mongodb"
+  local mongodb_server="$mongodb_dir/mongodb-org-server-7.0.21-1.el${el_version}.${pkg_arch}.rpm"
+  local mongodb_mongosh="$mongodb_dir/mongodb-mongosh-2.5.2.${pkg_arch}.rpm"
+
+  # 如果所有MongoDB文件都已缓存，则跳过网络检查
+  if [ -f "$mongodb_server" ] && [ -f "$mongodb_mongosh" ]; then
+    echo -e "${COLOR_INFO}[Info] MongoDB RPM文件已缓存，跳过网络连接检查${COLOR_RESET}"
+    base_urls=() # 清空URL列表
+    return 0
+  fi
+
+  # 如果缓存不完整，添加需要下载的URL到检查列表
+  base_urls=()
+  if [ ! -f "$mongodb_server" ]; then
+    base_urls+=("https://repo.mongodb.org/yum/redhat/${el_version}/mongodb-org/7.0/${pkg_arch}/RPMS/mongodb-org-server-7.0.21-1.el${el_version}.${pkg_arch}.rpm")
+  fi
+  if [ ! -f "$mongodb_mongosh" ]; then
+    base_urls+=("https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.${pkg_arch}.rpm")
+  fi
+
+  if [ ${#base_urls[@]} -gt 0 ]; then
+    echo -e "${COLOR_INFO}[Info] 需要检查 ${#base_urls[@]} 个MongoDB相关URL的网络连接${COLOR_RESET}"
+  fi
 }
 
 # RAG专用URL列表（仅当RAG启用时检测）
@@ -425,6 +445,7 @@ check_rag_pkg() {
     return 1
   fi
 }
+
 function check_network {
   echo -e "${COLOR_INFO}[Info] 检查网络连接...${COLOR_RESET}"
 
@@ -449,9 +470,9 @@ function check_dns {
     echo -e "${COLOR_WARNING}[Warning] 离线模式：请手动配置内部DNS服务器${COLOR_RESET}"
     return 0
   else
-    echo -e "${COLOR_ERROR}[Error] DNS未配置，自动设置为8.8.8.8${COLOR_RESET}"
-    set_dns "8.8.8.8"
-    return $?
+    echo -e "${COLOR_WARNING}[Warning] DNS未配置，建议手动设置DNS服务器（如8.8.8.8）${COLOR_RESET}"
+    echo -e "${COLOR_INFO}[Info] 可通过以下命令设置：echo 'nameserver 8.8.8.8' >> /etc/resolv.conf${COLOR_RESET}"
+    return 0
   fi
 }
 

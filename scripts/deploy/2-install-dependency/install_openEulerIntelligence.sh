@@ -108,14 +108,12 @@ install_minio() {
   case "$arch" in
   x86_64 | i386 | i686)
     local minio_url="https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20250524170830.0.0-1.x86_64.rpm"
-    local minio_src="../5-resource/rpm/minio-20250524170830.0.0-1.x86_64.rpm"
-    local minio_file="/opt/minio/minio-20250524170830.0.0-1.x86_64.rpm"
+    local minio_file="$minio_dir/minio-20250524170830.0.0-1.x86_64.rpm"
 
-    if [ -f "$minio_src" ]; then
-      cp -r "$minio_src" "$minio_file"
-      sleep 1
-    fi
-    if [ ! -f "$minio_file" ]; then
+    # 检查RPM文件是否已存在，不存在则下载
+    if [ -f "$minio_file" ]; then
+      echo -e "${COLOR_INFO}[Info] MinIO RPM文件已存在于缓存目录，跳过下载${COLOR_RESET}"
+    else
       echo -e "${COLOR_INFO}[Info] 正在下载MinIO软件包...${COLOR_RESET}"
       if ! wget "$minio_url" --no-check-certificate -O "$minio_file"; then
         echo -e "${COLOR_ERROR}[Error] MinIO下载失败${COLOR_RESET}"
@@ -123,30 +121,31 @@ install_minio() {
       fi
     fi
 
-    dnf install -y $minio_file || {
+    dnf install -y "$minio_file" || {
       echo -e "${COLOR_ERROR}[Error] MinIO安装失败${COLOR_RESET}"
       return 1
     }
-    echo -e "${COLOR_SUCCESS}[Success] MinIO安装成功...${COLOR_RESET}"
+    echo -e "${COLOR_SUCCESS}[Success] MinIO安装成功${COLOR_RESET}"
     return 0
     ;;
   aarch64 | arm64)
-    echo -e "${COLOR_INFO}[Info] 下载MinIO二进制文件（aarch64）...${COLOR_RESET}"
     local minio_url="https://dl.min.io/server/minio/release/linux-arm64/minio"
-    local temp_dir=$minio_dir
-    local minio_path="../5-resource/rpm/minio"
+    local minio_binary="$minio_dir/minio"
 
-    # 检查文件是否已存在
-    if [ -f "$minio_path" ]; then
-      cp -r $minio_path $temp_dir
-      echo -e "${COLOR_INFO}[Info] MinIO二进制文件已存在，跳过下载${COLOR_RESET}"
+    # 检查二进制文件是否已存在，不存在则下载
+    if [ -f "$minio_binary" ]; then
+      echo -e "${COLOR_INFO}[Info] MinIO二进制文件已存在于缓存目录，跳过下载${COLOR_RESET}"
     else
-      if ! wget -q --show-progress "$minio_url" -O "$temp_dir/minio" --no-check-certificate; then
+      echo -e "${COLOR_INFO}[Info] 正在下载MinIO二进制文件（aarch64）...${COLOR_RESET}"
+      if ! wget -q --show-progress "$minio_url" -O "$minio_binary" --no-check-certificate; then
         echo -e "${COLOR_ERROR}[Error] 下载MinIO失败，请检查网络连接${COLOR_RESET}"
-        rm -rf "$temp_dir"
         return 1
       fi
     fi
+    # 设置执行权限
+    chmod +x "$minio_binary"
+    echo -e "${COLOR_SUCCESS}[Success] MinIO二进制文件准备完成${COLOR_RESET}"
+    return 0
     ;;
   *)
     echo -e "${COLOR_ERROR}[Error] 不支持的架构: $arch${COLOR_RESET}"
@@ -289,11 +288,15 @@ install_scws() {
     echo -e "${COLOR_INFO}[Info] SCWS已安装，跳过安装过程${COLOR_RESET}"
     return 0
   fi
-  # 2. 下载SCWS安装包
-  echo -e "${COLOR_INFO} 正在下载SCWS...${COLOR_RESET}"
-  if ! wget "$scws_url" --no-check-certificate -O "$scws_tar"; then
-    echo -e "${COLOR_ERROR}[Error] SCWS下载失败${COLOR_RESET}"
-    return 1
+  # 2. 检查并下载SCWS安装包
+  if [ -f "$scws_tar" ]; then
+    echo -e "${COLOR_INFO}[Info] SCWS安装包已存在，跳过下载${COLOR_RESET}"
+  else
+    echo -e "${COLOR_INFO} 正在下载SCWS...${COLOR_RESET}"
+    if ! wget "$scws_url" --no-check-certificate -O "$scws_tar"; then
+      echo -e "${COLOR_ERROR}[Error] SCWS下载失败${COLOR_RESET}"
+      return 1
+    fi
   fi
 
   # 3. 创建目标目录
@@ -419,10 +422,8 @@ install_mongodb() {
   mongodb_mongosh_url="https://downloads.mongodb.com/compass/mongodb-mongosh-2.5.2.${pkg_arch}.rpm"
 
   local mongodb_dir="/opt/mongodb"
-  local mongodb_server="/opt/mongodb/mongodb-org-server-7.0.21-1.el${el_version}.${pkg_arch}.rpm"
-  local mongodb_server_src="../5-resource/rpm/mongodb-org-server-7.0.21-1.el${el_version}.${pkg_arch}.rpm"
-  local mongodb_mongosh="/opt/mongodb/mongodb-mongosh-2.5.2.${pkg_arch}.rpm"
-  local mongodb_mongosh_src="../5-resource/rpm/mongodb-mongosh-2.5.2.${pkg_arch}.rpm"
+  local mongodb_server="$mongodb_dir/mongodb-org-server-7.0.21-1.el${el_version}.${pkg_arch}.rpm"
+  local mongodb_mongosh="$mongodb_dir/mongodb-mongosh-2.5.2.${pkg_arch}.rpm"
   echo -e "${COLOR_INFO}[Info] 开始安装MongoDB...${COLOR_RESET}"
   if rpm -q mongod &>/dev/null; then
     echo -e "${COLOR_WARNING}[Warning] MongoDB 已安装，当前版本: $(rpm -q mongod)${COLOR_RESET}"
@@ -435,25 +436,21 @@ install_mongodb() {
     echo -e "${COLOR_ERROR}[Error] 创建目录失败: $mongodb_dir${COLOR_RESET}"
     return 1
   fi
-  if [ -f "$mongodb_server_src" ]; then
-    cp -r "$mongodb_server_src" "$mongodb_server"
-    sleep 1
-  fi
-  if [ -f "$mongodb_mongosh_src" ]; then
-    cp -r "$mongodb_mongosh_src" "$mongodb_mongosh"
-    sleep 1
-  fi
-  if [ ! -f "$mongodb_server" ]; then
+  if [ -f "$mongodb_server" ]; then
+    echo -e "${COLOR_INFO}[Info] MongoDB server软件包已存在于缓存目录，跳过下载${COLOR_RESET}"
+  else
     echo -e "${COLOR_INFO}[Info] 正在下载MongoDB server软件包...${COLOR_RESET}"
     if ! wget "$mongodb_server_url" --no-check-certificate -O "$mongodb_server"; then
-      echo -e "${COLOR_ERROR}[Error] MongoDB下载失败${COLOR_RESET}"
+      echo -e "${COLOR_ERROR}[Error] MongoDB server下载失败${COLOR_RESET}"
       return 1
     fi
   fi
-  if [ ! -f "$mongodb_mongosh" ]; then
+  if [ -f "$mongodb_mongosh" ]; then
+    echo -e "${COLOR_INFO}[Info] MongoDB mongosh软件包已存在于缓存目录，跳过下载${COLOR_RESET}"
+  else
     echo -e "${COLOR_INFO}[Info] 正在下载MongoDB mongosh软件包...${COLOR_RESET}"
     if ! wget "$mongodb_mongosh_url" --no-check-certificate -O "$mongodb_mongosh"; then
-      echo -e "${COLOR_ERROR}[Error] MongoDB下载失败${COLOR_RESET}"
+      echo -e "${COLOR_ERROR}[Error] MongoDB mongosh下载失败${COLOR_RESET}"
       return 1
     fi
   fi
@@ -462,7 +459,7 @@ install_mongodb() {
     return 1
   }
   dnf install -y $mongodb_mongosh || {
-    echo -e "${COLOR_ERROR}[Error] MongoDB sh安装失败${COLOR_RESET}"
+    echo -e "${COLOR_ERROR}[Error] MongoDB mongosh安装失败${COLOR_RESET}"
     return 1
   }
   # 3. 配置MongoDB环境
