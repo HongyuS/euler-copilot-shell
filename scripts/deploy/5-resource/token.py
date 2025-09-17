@@ -1,7 +1,7 @@
 # Copyright (c) Huawei Technologies Co., Ltd. 2023-2025. All rights reserved.
 """用于计算Token消耗量"""
 import logging
-
+from typing import Union
 from apps.common.singleton import SingletonMeta
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class TokenCalculator(metaclass=SingletonMeta):
         return result
 
     @staticmethod
-    def get_k_tokens_words_from_content(content: str, k: int | None = None) -> str:
+    def get_k_tokens_words_from_content(content: str, k: Union[int, None] = None) -> str:
         """获取k个token的词"""
         if k is None:
             return content
