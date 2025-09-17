@@ -87,7 +87,7 @@ oi --agent
 
 应用程序使用内联交互模式，不会打开模态对话框，确保流畅的用户体验。
 
-### --init 命令说明
+### `--init` 命令说明
 
 `--init` 命令用于在 openEuler 操作系统上自动安装和配置 openEuler Intelligence 后端，它将执行以下步骤：
 
@@ -108,7 +108,7 @@ oi --agent
 2. 如果需要重启或卸载 openEuler Intelligence 后端，请以管理员身份运行 `oi-manager` 并根据指引操作；
 3. `oi-manager` 的卸载功能会清空机器上 MongoDB 和 PostgreSQL 的全部数据并重置 nginx 服务，请谨慎操作。
 
-### --agent 命令说明
+### `--agent` 命令说明
 
 `--agent` 命令用于在命令行中选择和设置默认智能体，它提供了一个 TUI 界面来管理智能体配置：
 
@@ -128,6 +128,54 @@ oi --agent
 - 包含"智能问答"选项（无智能体）作为默认选择
 - 支持取消操作，不会更改现有配置
 - 自动处理网络错误和异常情况
+
+### `--llm-config` 命令说明
+
+`--llm-config` 命令用于配置已部署的 openEuler Intelligence 后端的 LLM 和 Embedding 模型参数，它提供了一个简洁的 TUI 界面来管理系统级配置：
+
+1. **系统配置管理**: 直接修改系统配置文件 `/etc/euler-copilot-framework/config.toml` 和 `/etc/euler-copilot-rag/data_chain/env`
+2. **LLM 配置**: 设置大语言模型的端点、API 密钥、模型名称、最大输出令牌数和温度参数
+3. **Embedding 配置**: 配置嵌入模型的端点、API 密钥和模型名称
+4. **实时验证**: 自动验证 API 连接性和配置有效性
+5. **服务重启**: 配置保存后自动重启相关系统服务（`oi-runtime` 和 `oi-rag`）
+
+**使用要求**:
+
+- 仅适用于已部署的 openEuler Intelligence
+- 需要管理员权限（sudo）运行
+- 需要系统配置文件存在且有写入权限
+- 需要网络连接以验证 API 配置
+
+**功能特点**:
+
+- **分标签页配置**: LLM 和 Embedding 配置分别在不同标签页中管理
+- **自动验证**: 输入配置后自动验证 API 连接性
+- **智能检测**: 自动检测 function call 类型和 embedding 类型
+- **安全保存**: 配置验证通过后才能保存
+- **服务管理**: 自动重启相关系统服务使配置生效
+
+**配置项说明**:
+
+- **LLM 配置**:
+
+  - **端点地址**: LLM API 的基础 URL
+  - **API 密钥**: 访问 LLM 服务的认证密钥
+  - **模型名称**: 要使用的具体模型名称
+  - **最大输出令牌数**: 单次请求的最多输出的令牌数（默认 8192）
+  - **温度参数**: 控制生成随机性的参数（默认 0.7）
+
+- **Embedding 配置**:
+
+  - **端点地址**: Embedding API 的基础 URL
+  - **API 密钥**: 访问 Embedding 服务的认证密钥
+  - **模型名称**: 要使用的 Embedding 模型名称
+
+**注意**:
+
+1. 此命令直接修改系统配置文件，请在生产环境使用前仔细评估；
+2. 配置保存后会自动重启 `oi-runtime` 和 `oi-rag` 服务，可能会影响正在运行的服务；
+3. 如果系统配置文件不存在或权限不足，工具会显示相应错误信息并退出；
+4. 建议在修改配置前备份原有的配置文件。
 
 ## 配置说明
 
@@ -317,10 +365,11 @@ smart-shell/
     │   ├── css/
     │   │   └── styles.tcss       # TUI 样式文件
     │   ├── deployment/           # 部署助手模块
+    │   │   ├── agent.py          # 智能体部署管理
     │   │   ├── models.py         # 部署配置模型
     │   │   ├── service.py        # 部署服务逻辑
     │   │   ├── ui.py             # 部署界面组件
-    │   │   └── validators.py     # 配置验证器
+    │   │   └── components/       # 部署组件模块
     │   └── dialogs/              # 对话框组件
     │       ├── agent.py          # 智能体选择对话框
     │       └── common.py         # 通用对话框组件
@@ -333,6 +382,7 @@ smart-shell/
     │       ├── client.py         # Hermes API 客户端
     │       ├── constants.py      # 常量定义
     │       ├── exceptions.py     # 异常类定义
+    │       ├── mcp_helpers.py    # MCP 事件辅助工具
     │       ├── models.py         # 数据模型
     │       ├── stream.py         # 流式响应处理
     │       └── services/         # 服务层组件
@@ -343,7 +393,10 @@ smart-shell/
     │   └── manager.py            # 日志管理器
     └── tool/                     # 工具模块
         ├── command_processor.py  # 命令处理器
-        └── oi_backend_init.py    # 后端初始化工具
+        ├── oi_backend_init.py    # 后端初始化工具
+        ├── oi_llm_config.py      # LLM 配置管理工具
+        ├── oi_select_agent.py    # 智能体选择工具
+        └── validators.py         # 配置验证器
 ```
 
 ## 贡献
