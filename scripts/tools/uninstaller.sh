@@ -51,7 +51,23 @@ FLUSH PRIVILEGES;
 }
 
 uninstall_full() {
-    echo "Uninstalling MongoDB and MinIO..."
+    echo "Performing full uninstall including all dependencies and services..."
+
+    # Stop additional services
+    for svc in mysqld redis postgresql; do
+        unit="${svc}.service"
+        if systemctl list-unit-files --type=service | awk '{print $1}' | grep -Fxq "$unit"; then
+            if systemctl is-active --quiet "$unit"; then
+                echo "Stopping $unit ..."
+                systemctl stop "$unit" || true
+            fi
+            systemctl disable "$unit" || true
+        fi
+    done
+
+    # Uninstall additional dependency packages
+    dnf remove -y nginx redis mysql java-17-openjdk postgresql libpq-devel || true
+
     # Uninstall MongoDB
     if rpm -q mongodb-org-server >/dev/null 2>&1; then
         echo "Stopping MongoDB..."
@@ -67,6 +83,7 @@ uninstall_full() {
     else
         echo "MongoDB not installed, skipping..."
     fi
+
     # Uninstall MinIO
     if rpm -q minio >/dev/null 2>&1; then
         echo "Removing MinIO via dnf..."
@@ -82,6 +99,15 @@ uninstall_full() {
         rm -rf /var/lib/minio
         rm -rf /usr/local/bin/minio
     fi
+
+    # Remove additional directories
+    rm -rf /opt/aops /opt/authhub /opt/minio /opt/mongodb /opt/pgvector /opt/scws* /opt/zhparser
+    rm -rf /usr/lib/euler-copilot-rag /var/log/openEulerIntelligence /etc/euler-copilot-rag
+    rm -rf /etc/nginx/conf.d/authhub.nginx.conf.bak /etc/systemd/system/oi-runtime.service /etc/systemd/system/multi-user.target.wants/oi-runtime.service
+
+    # Clean additional database data
+    rm -rf /var/lib/mysql /var/log/mysql /var/lib/pgsql
+
     echo "Full uninstall complete."
 }
 

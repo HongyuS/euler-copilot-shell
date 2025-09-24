@@ -312,6 +312,9 @@ class ApiClient:
             "name": name,
             "description": description,
             "mcpService": mcp_service_ids,
+            "permission": {
+                "visibility": "public",
+            },
         }
 
         logger.info("创建智能体: %s (包含 %d 个 MCP 服务)", name, len(mcp_service_ids))
@@ -1066,7 +1069,7 @@ class AgentManager:
                 mcp_service_ids,
             )
 
-            # 发布智能体（如果配置要求发布）
+            # 发布智能体
             if app_config.published:
                 await self.api_client.publish_agent(app_id)
 
