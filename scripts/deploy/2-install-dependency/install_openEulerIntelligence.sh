@@ -92,6 +92,21 @@ EOF
   dnf makecache
 
 }
+# 获取 wget 日志文件名
+get_wget_log_filename() {
+  local file_path=$1
+  # 创建日志目录（如果不存在）
+  mkdir -p "$HOME/.cache/openEuler Intelligence/logs"
+  # 获取开始下载的时间戳
+  local timestamp
+  timestamp=$(date +%Y%m%d_%H%M%S)
+  # 获取下载文件名
+  local filename
+  filename=$(basename "$file_path")
+  # 构造日志文件路径
+  local logfile="$HOME/.cache/openEuler Intelligence/logs/${timestamp}_${filename}.log"
+  echo "$logfile"
+}
 # 安装MinIO
 install_minio() {
   echo -e "${COLOR_INFO}[Info] 开始安装MinIO...${COLOR_RESET}"
@@ -115,7 +130,9 @@ install_minio() {
       echo -e "${COLOR_INFO}[Info] MinIO RPM文件已存在于缓存目录，跳过下载${COLOR_RESET}"
     else
       echo -e "${COLOR_INFO}[Info] 正在下载MinIO软件包...${COLOR_RESET}"
-      if ! wget "$minio_url" --no-check-certificate -O "$minio_file"; then
+      local logfile
+      logfile=$(get_wget_log_filename "$minio_file")
+      if ! wget "$minio_url" --no-check-certificate -O "$minio_file" -o "$logfile"; then
         echo -e "${COLOR_ERROR}[Error] MinIO下载失败${COLOR_RESET}"
         return 1
       fi
@@ -137,7 +154,9 @@ install_minio() {
       echo -e "${COLOR_INFO}[Info] MinIO二进制文件已存在于缓存目录，跳过下载${COLOR_RESET}"
     else
       echo -e "${COLOR_INFO}[Info] 正在下载MinIO二进制文件（aarch64）...${COLOR_RESET}"
-      if ! wget -q --show-progress "$minio_url" -O "$minio_binary" --no-check-certificate; then
+      local logfile
+      logfile=$(get_wget_log_filename "$minio_binary")
+      if ! wget -q --show-progress "$minio_url" -O "$minio_binary" --no-check-certificate -o "$logfile"; then
         echo -e "${COLOR_ERROR}[Error] 下载MinIO失败，请检查网络连接${COLOR_RESET}"
         return 1
       fi
@@ -293,7 +312,9 @@ install_scws() {
     echo -e "${COLOR_INFO}[Info] SCWS安装包已存在，跳过下载${COLOR_RESET}"
   else
     echo -e "${COLOR_INFO} 正在下载SCWS...${COLOR_RESET}"
-    if ! wget "$scws_url" --no-check-certificate -O "$scws_tar"; then
+    local logfile
+    logfile=$(get_wget_log_filename "$scws_tar")
+    if ! wget "$scws_url" --no-check-certificate -O "$scws_tar" -o "$logfile"; then
       echo -e "${COLOR_ERROR}[Error] SCWS下载失败${COLOR_RESET}"
       return 1
     fi
@@ -440,7 +461,9 @@ install_mongodb() {
     echo -e "${COLOR_INFO}[Info] MongoDB server软件包已存在于缓存目录，跳过下载${COLOR_RESET}"
   else
     echo -e "${COLOR_INFO}[Info] 正在下载MongoDB server软件包...${COLOR_RESET}"
-    if ! wget "$mongodb_server_url" --no-check-certificate -O "$mongodb_server"; then
+    local logfile
+    logfile=$(get_wget_log_filename "$mongodb_server")
+    if ! wget "$mongodb_server_url" --no-check-certificate -O "$mongodb_server" -o "$logfile"; then
       echo -e "${COLOR_ERROR}[Error] MongoDB server下载失败${COLOR_RESET}"
       return 1
     fi
@@ -449,7 +472,9 @@ install_mongodb() {
     echo -e "${COLOR_INFO}[Info] MongoDB mongosh软件包已存在于缓存目录，跳过下载${COLOR_RESET}"
   else
     echo -e "${COLOR_INFO}[Info] 正在下载MongoDB mongosh软件包...${COLOR_RESET}"
-    if ! wget "$mongodb_mongosh_url" --no-check-certificate -O "$mongodb_mongosh"; then
+    local logfile
+    logfile=$(get_wget_log_filename "$mongodb_mongosh")
+    if ! wget "$mongodb_mongosh_url" --no-check-certificate -O "$mongodb_mongosh" -o "$logfile"; then
       echo -e "${COLOR_ERROR}[Error] MongoDB mongosh下载失败${COLOR_RESET}"
       return 1
     fi
