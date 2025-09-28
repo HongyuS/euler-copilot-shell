@@ -901,3 +901,539 @@ OE-NUMAExpert 智能体通过 8 个标准化 MCP 工具，构建 “拓扑分析
 
 192.168.7.20 服务器近期内存访问延迟突然升高，怀疑是 NUMA 节点问题，帮我：1. 用 numa_diagnose_mcp 检查所有 NUMA 节点和内存状态；2. 用 numastat_mcp 看各节点跨访问占比；3. 输出问题根因和修复建议
 ~~~
+
+### 5.9 MCP 总览
+当前已集成 **30+ 核心功能模块**，能力覆盖运维全场景，具体包含七大方向：
+1. 硬件信息采集：支持 CPU 架构解析、NUMA 拓扑查询、GPU 负载监控，为底层资源分析提供数据基线；
+2. 系统资源监控：实时采集内存使用状态、CPU 负载变化、网络流量数据，动态捕捉资源瓶颈；
+3. 进程与服务管控：实现进程启停控制、信号量含义查询、后台进程稳定执行，保障服务运行可控；
+4. 文件操作管理：覆盖文件增删改查、压缩解压（tar/zip 格式）、权限与所有权配置，满足文件全生命周期需求；
+5. 性能诊断优化：**内置火焰图生成能力**（基于系统原生`perf`工具封装）、系统调用排查、CPU 缓存失效定位，无需额外部署独立性能分析工具，即可助力深度性能调优；
+6. 虚拟化与容器辅助：支持 Docker 容器 NUMA 绑定、QEMU 虚拟机管理，适配虚拟化运维场景；
+7. 网络扫描探测：可执行 IP/网段探测、端口识别，快速完成网络基础巡检。
+
+上述能力仅依赖系统原生基础工具（如`perf`），无需额外部署第三方独立运维套件，即可满足从基础运维到深度性能优化的全流程需求。
+
+在部署与迭代层面，具备两大核心优势：
+- **双模式适配**：支持本地直接调用与远程 SSH 管控，兼顾单机运维与多节点集群管理场景；
+- **高稳定性与可扩展性**：单个模块的升级、维护不影响整体运行；开源特性允许社区开发者参与功能迭代与 Bug 修复，持续丰富模块能力，适配更多新兴运维场景。
+
+#### 5.9.1 MCP_Server列表
+
+| 端口号 | 服务名称                      | 目录路径                                      | 简介                                            |
+|--------|------------------------------|-----------------------------------------------|-------------------------------------------------|
+| 12100  | [remote_info_mcp](#remote_info_mcp)              | mcp_center/servers/remote_info_mcp            | 获取端点信息                                     |
+| 12101  | [shell_generator_mcp](#shell_generator_mcp)      | mcp_center/servers/shell_generator_mcp        | 生成&执行shell命令                                |
+| 12110  | [top_mcp](#top_mcp)                              | mcp_center/servers/top_mcp                    | 获取系统负载信息                                  |
+| 12111  | [kill_mcp](#kill_mcp)                            | mcp_center/servers/kill_mcp                   | 控制进程&查看进程信号量含义                        |
+| 12112  | [nohup_mcp](#nohup_mcp)                          | mcp_center/servers/nohup_mcp                  | 后台执行进程                                      |
+| 12113  | [strace_mcp](#strace_mcp)                        | mcp_center/servers/strace_mcp                 | 跟踪进程信息，可以用于异常情况分析                  |
+| 12114  | [nvidia_mcp](#nvidia_mcp)                        | mcp_center/servers/nvidia_mcp                 | GPU负载信息查询                                   |
+| 12125  | [file_content_tool_mcp](#file_content_tool_mcp)  | mcp_center/servers/file_content_tool_mcp      | 文件内容增删改查                                  |
+| 12145  | [systrace_mcpserver_mcp](#systrace_mcpserver_mcp) | mcp_center/servers/systrace/systrace_mcpserver_mcp | 开启MCP Server服务                            |
+| 12146  | [ssystrace_openapi_mcp](#ssystrace_openapi_mcp)  | mcp_center/servers/systrace/ssystrace_openapi_mcp | 开启OpenAPI Server服务                         |
+| 12147  | [euler_copilot_tune_mcp](#euler_copilot_tune_mcp) | mcp_center/servers/euler_copilot_tune_mcp     | 调优MCP服务                                       |
+| 12202  | [lscpu_mcp](#lscpu_mcp)                          | mcp_center/servers/lscpu_mcp                  | CPU架构等静态信息收集                             |
+| 12203  | [numa_topo_mcp](#numa_topo_mcp)                  | mcp_center/servers/numa_topo_mcp              | 查询 NUMA 硬件拓扑与系统配置                       |
+| 12204  | [numa_bind_proc_mcp](#numa_bind_proc_mcp)        | mcp_center/servers/numa_bind_proc_mcp         | 启动时绑定进程到指定 NUMA 节点                     |
+| 12205  | [numa_rebind_proc_mcp](#numa_rebind_proc_mcp)    | mcp_center/servers/numa_rebind_proc_mcp       | 修改已启动进程的 NUMA 绑定                        |
+| 12206  | [numa_bind_docker_mcp](#numa_bind_docker_mcp)    | mcp_center/servers/numa_bind_docker_mcp       | 为 Docker 容器配置 NUMA 绑定                      |
+| 12208  | [numa_perf_compare_mcp](#numa_perf_compare_mcp)  | mcp_center/servers/numa_perf_compare_mcp      | 用 NUMA 绑定控制测试变量                          |
+| 12209  | [numa_diagnose_mcp](#numa_diagnose_mcp)          | mcp_center/servers/numa_diagnose_mcp          | 用 NUMA 绑定定位硬件问题                          |
+| 12210  | [numastat_mcp](#numastat_mcp)                    | mcp_center/servers/numastat_mcp               | 查看系统整体 NUMA 内存访问状态                     |
+| 12211  | [numa_cross_node_mcp](#numa_cross_node_mcp)      | mcp_center/servers/numa_cross_node_mcp        | 定位跨节点内存访问过高的进程                      |
+| 12214  | [numa_container_mcp](#numa_container_mcp)        | mcp_center/servers/numa_container_mcp         | 监控 Docker 容器的 NUMA 内存访问                  |
+| 12216  | [hotspot_trace_mcp](#hotspot_trace_mcp)          | mcp_center/servers/hotspot_trace_mcp          | 快速定位系统 / 进程的 CPU 性能瓶颈                 |
+| 12217  | [cache_miss_audit_mcp](#cache_miss_audit_mcp)    | mcp_center/servers/cache_miss_audit_mcp       | 定位 CPU 缓存失效导致的性能损耗                    |
+| 12218  | [func_timing_trace_mcp](#func_timing_trace_mcp)  | mcp_center/servers/func_timing_trace_mcp      | 精准测量函数执行时间（含调用栈）                  |
+| 12219  | [strace_syscall_mcp](#strace_syscall_mcp)        | mcp_center/servers/strace_syscall_mcp         | 排查不合理的系统调用（高频 / 耗时）               |
+| 12220  | [perf_interrupt_mcp](#perf_interrupt_mcp)        | mcp_center/servers/perf_interrupt_mcp         | 定位高频中断导致的 CPU 占用                       |
+| 12222  | [flame_graph_mcp](#flame_graph_mcp)              | mcp_center/servers/flame_graph_mcp            | 火焰图生成：可视化展示性能瓶颈                    |
+| 13100  | [free_mcp](#free_mcp)                            | mcp_center/servers/free_mcp                   | 获取系统内存整体状态                              |
+| 13101  | [vmstat_mcp](#vmstat_mcp)                        | mcp_center/servers/vmstat_mcp                 | 系统资源交互瓶颈信息采集                          |
+| 13102  | [sar_mcp](#sar_mcp)                              | mcp_center/servers/sar_mcp                    | 系统资源监控与故障诊断                            |
+| 13103  | [sync_mcp](#sync_mcp)                            | mcp_center/servers/sync_mcp                   | 内存缓冲区数据写入磁盘                            |
+| 13104  | [swapon_mcp](#swapon_mcp)                        | mcp_center/servers/swapon_mcp                 | 查看swap设备状态                                  |
+| 13105  | [swapoff_mcp](#swapoff_mcp)                      | mcp_center/servers/swapoff_mcp                | swap设备停用                                      |
+| 13106  | [fallocate_mcp](#fallocate_mcp)                  | mcp_center/servers/fallocate_mcp              | 临时创建并启用swap文件                            |
+| 13107  | [find_mcp](#find_mcp)                            | mcp_center/servers/find_mcp                   | 文件查找                                          |
+| 13108  | [touch_mcp](#touch_mcp)                          | mcp_center/servers/touch_mcp                  | 文件创建与时间校准                                |
+| 13109  | [mkdir_mcp](#mkdir_mcp)                          | mcp_center/servers/mkdir_mcp                  | 文件夹创建                                        |
+| 13110  | [rm_mcp](#rm_mcp)                                | mcp_center/servers/rm_mcp                     | 文件删除                                          |
+| 13111  | [mv_mcp](#mv_mcp)                                | mcp_center/servers/mv_mcp                     | 文件移动或重命名                                  |
+| 13112  | [ls_mcp](#ls_mcp)                                | mcp_center/servers/ls_mcp                     | 查看目录内容                                      |
+| 13113  | [head_mcp](#head_mcp)                            | mcp_center/servers/head_mcp                   | 文件开头内容查看工具                              |
+| 13114  | [tail_mcp](#tail_mcp)                            | mcp_center/servers/tail_mcp                   | 文件末尾内容查看工具                              |
+| 13115  | [cat_mcp](#cat_mcp)                              | mcp_center/servers/cat_mcp                    | 文件内容查看工具                                  |
+| 13116  | [chown_mcp](#chown_mcp)                          | mcp_center/servers/chown_mcp                  | 文件所有者修改工具                                |
+| 13117  | [chmod_mcp](#chmod_mcp)                          | mcp_center/servers/chmod_mcp                  | 文件权限修改工具                                  |
+| 13118  | [tar_mcp](#tar_mcp)                              | mcp_center/servers/tar_mcp                    | 文件压缩解压工具                                  |
+| 13119  | [zip_mcp](#zip_mcp)                              | mcp_center/servers/zip_mcp                    | 文件压缩解压工具                                  |
+| 13120  | [grep_mcp](#grep_mcp)                            | mcp_center/servers/grep_mcp                   | 文件内容搜索工具                                  |
+| 13121  | [sed_mcp](#sed_mcp)                              | mcp_center/servers/sed_mcp                    | 文本处理工具                                      |
+| 13125  | [echo_mcp](#echo_mcp)                            | mcp_center/servers/echo_mcp                   | 文本写入工具                                      |
+
+#### 5.9.2 MCP_Server详情
+本部分将针对核心MCP服务模块展开详细说明，通过“服务-工具-功能-参数-返回值”的结构化表格，清晰呈现每个MCP_Server的具体能力：包括其包含的工具列表、各工具的核心作用、调用时需传入的关键参数，以及执行后返回的结构化数据格式。旨在为运维人员提供“即查即用”的操作指南，确保能快速理解服务功能、正确配置参数、高效解析返回结果，满足日常运维、性能分析与故障排查的实际需求。
+
+
+**remote_info_mcp**
+<a id="remote_info_mcp"></a>
+| MCP_Server名称   | MCP_Tool列表          | 工具功能                                                                 | 核心输入参数                                                                 | 关键返回内容                                                                 |
+|-----------------|-----------------------|--------------------------------------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+|                 | top_collect_tool      | 获取目标设备（本地/远程）中**内存占用排名前k个**的进程信息，k支持自定义配置 | - `host`：远程主机名/IP（本地采集可不填）<br>- `k`：需获取的进程数量（默认5） | 进程列表（含`pid`进程ID、`name`进程名称、`memory`内存使用量（MB））          |
+|                 | get_process_info_tool | 查询指定PID进程的**详细运行信息**，支持本地与远程进程信息获取             | - `host`：远程主机名/IP（本地查询可不填）<br>- `pid`：需查询的进程ID（必传，且为正整数） | 进程详细字典（含`status`状态、`create_time`创建时间、`cpu_times`CPU时间、`memory_info`内存信息、`open_files`打开文件列表、`connections`网络连接等） |
+|                 | change_name_to_pid_tool | 根据进程名称反向查询对应的**PID列表**，解决“已知进程名查ID”的场景需求     | - `host`：远程主机名/IP（本地查询可不填）<br>- `name`：需查询的进程名称（必传，不能为空） | 以空格分隔的PID字符串（如“1234 5678”）                                      |
+| **remote_info_mcp** | get_cpu_info_tool     | 采集目标设备的CPU硬件与使用状态信息，包括核心数、频率、核心使用率         | - `host`：远程主机名/IP（本地采集可不填）                                    | CPU信息字典（含`physical_cores`物理核心数、`total_cores`逻辑核心数、`max_frequency`最大频率（MHz）、`cpu_usage`各核心使用率（%）等） |
+|                 | memory_anlyze_tool    | 分析目标设备的内存使用情况，计算总内存、可用内存及使用率                 | - `host`：远程主机名/IP（本地采集可不填）                                    | 内存信息字典（含`total`总内存（MB）、`available`可用内存（MB）、`used`已用内存（MB）、`percent`内存使用率（%）等） |
+|                 | get_disk_info_tool    | 采集目标设备的磁盘分区信息与容量使用状态，过滤临时文件系统（tmpfs/devtmpfs） | - `host`：远程主机名/IP（本地采集可不填）                                    | 磁盘列表（含`device`设备名、`mountpoint`挂载点、`fstype`文件系统类型、`total`总容量（GB）、`percent`磁盘使用率（%）等） |
+|                 | get_os_info_tool      | 获取目标设备的操作系统类型与版本信息，适配OpenEuler、Ubuntu、CentOS等多系统 | - `host`：远程主机名/IP（本地采集可不填）                                    | 操作系统信息字符串（如“OpenEuler 22.03 LTS”或“Ubuntu 20.04.5 LTS”）        |
+|                 | get_network_info_tool | 采集目标设备的网络接口信息，包括IP地址、MAC地址、接口启用状态             | - `host`：远程主机名/IP（本地采集可不填）                                    | 网络接口列表（含`interface`接口名、`ip_address`IP地址、`mac_address`MAC地址、`is_up`接口是否启用（布尔值）等） |
+|                 | write_report_tool     | 将系统信息分析结果写入本地报告文件，自动生成带时间戳的文件路径             | - `report`：报告内容字符串（必传，不能为空）                                 | 报告文件路径字符串（如“/reports/system_report_20240520_153000.txt”）        |
+|                 | telnet_test_tool      | 测试目标主机指定端口的Telnet连通性，验证端口开放状态                       | - `host`：远程主机名/IP（必传）<br>- `port`：端口号（1-65535，必传）        | 连通性结果（布尔值：`True`成功，`False`失败）                                |
+|                 | ping_test_tool        | 测试目标主机的ICMP Ping连通性，验证主机网络可达性                           | - `host`：远程主机名/IP（必传）                                             | 连通性结果（布尔值：`True`成功，`False`失败）                                |
+|                 | get_dns_info_tool     | 采集目标设备的DNS配置信息，包括DNS服务器列表与搜索域                       | - `host`：远程主机名/IP（本地采集可不填）                                    | DNS信息字典（含`nameservers`DNS服务器列表、`search`搜索域列表）              |
+|                 | perf_data_tool        | 采集目标设备的实时性能数据，支持“指定进程”或“全系统”性能监控               | - `host`：远程主机名/IP（本地采集可不填）<br>- `pid`：进程ID（全系统监控可不填） | 性能数据字典（含`cpu_usage`CPU使用率（%）、`memory_usage`内存使用率（%）、`io_counters`I/O统计信息） |
+
+
+---
+
+**shell_generator_mcp**
+<a id="shell_generator"></a>
+| MCP_Server名称    | MCP_Tool列表          | 工具功能                                                                 | 核心输入参数                                                                 | 关键返回内容                                                                 |
+|------------------|-----------------------|--------------------------------------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+|  **shell_generator** | cmd_generator_tool    | 1. 系统信息采集：指定`host`则通过SSH获取远程主机信息（系统发行版、运行时间、根分区/内存使用、Top5内存进程），不指定则采集本机信息；2. LLM命令生成：将系统信息与用户需求传入大语言模型，生成符合场景的Linux shell命令；3. 格式校验：提取LLM返回的YAML格式命令块，输出有效命令字符串 | - `host`（可选）：远程主机名/IP，需提前在配置文件配置主机IP、端口、用户名、密码，不提供则操作本机<br>- `goal`（必填）：用户运维需求描述（如“查询根分区使用率”“查看内存占用最高的3个进程”） | 符合场景的Linux shell命令字符串（经格式校验后的有效命令）                    |
+|  | cmd_executor_tool     | 1. 多场景命令执行：支持本地或远程主机执行shell命令；2. 远程执行：通过SSH连接远程主机（基于配置文件信息），执行命令并捕获标准输出/错误输出，执行后关闭连接；3. 本地执行：通过`subprocess`模块执行命令，返回结果；4. 错误处理：命令执行出错（权限不足、命令不存在等）时，返回具体错误信息 | - `host`（可选）：远程主机名/IP，需与配置文件信息匹配，不提供则操作本机<br>- `command`（必填）：需执行的Linux shell命令字符串（建议由`cmd_generator_tool`生成） | 1. 命令执行成功：返回命令标准输出内容；2. 命令执行失败：返回具体错误信息（如“权限不足：Permission denied”“命令不存在：command not found”） |
+
+
+---
+**top_mcp**
+<a id="top_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                                                                 | 核心输入参数                                                                 | 关键返回内容                                                                 |
+|----------------|-----------------------|--------------------------------------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| **top_mcp**    | top_collect_tool      | 获取目标设备（本地/远程）中**内存占用排名前k个**的进程信息，k支持自定义配置 | - `host`：远程主机名/IP（本地采集可不填）<br>- `k`：需获取的进程数量（默认5） | 进程列表（含`pid`进程ID、`name`进程名称、`memory`内存使用量（MB））          |
+|     | top_servers_tool      | 通过`top`命令获取指定目标（本地/远程服务器）的负载信息，涵盖CPU、内存、磁盘、网络及进程状态，为运维、性能分析和故障排查提供数据支持 | - `host`：远程主机名/IP（本地采集可不填）<br>- `dimensions`：需采集的维度（可选值：cpu、memory、disk、network）<br>- `include_processes`：是否包含进程信息（布尔值）<br>- `top_n`：需返回的进程数量（整数） | - `server_info`：服务器基本信息<br>- `metrics`：请求维度的统计结果（如CPU使用率、内存占用率）<br>- `processes`：进程列表（仅`include_processes`=True时返回）<br>- `error`：错误信息（如连接失败，无错误则为null） |
+
+
+---
+
+**kill_mcp**
+<a id="kill_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                                                                 | 核心输入参数                                                                 | 关键返回内容                                                                 |
+|----------------|-----------------------|--------------------------------------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+|                | pause_process         | 通过`kill`指令发送`SIGSTOP`信号暂停进程（支持本地/远程）                  | - `pid`：需暂停的进程PID（正整数，必填）<br>- `host`：远程主机名/IP（默认`localhost`，本地操作可不填）<br>- `port`：SSH端口（默认22，远程操作时使用）<br>- `username`：SSH用户名（默认`root`，远程操作时需指定）<br>- `password`：SSH密码（远程操作时必填） | - `success`：操作是否成功（布尔值）<br>- `message`：操作结果描述（字符串）<br>- `data`：包含操作详情的字典<br>&nbsp;&nbsp;- `host`：操作的主机名/IP<br>&nbsp;&nbsp;- `pid`：被暂停的进程PID |
+|  **kill_mcp**   | resume_process        | 通过`kill`指令发送`SIGCONT`信号恢复进程（支持本地/远程）                  | - `pid`：需恢复的进程PID（正整数，必填）<br>- `host`：远程主机名/IP（默认`localhost`，本地操作可不填）<br>- `port`：SSH端口（默认22，远程操作时使用）<br>- `username`：SSH用户名（默认`root`，远程操作时需指定）<br>- `password`：SSH密码（远程操作时必填） | - `success`：操作是否成功（布尔值）<br>- `message`：操作结果描述（字符串）<br>- `data`：包含操作详情的字典<br>&nbsp;&nbsp;- `host`：操作的主机名/IP<br>&nbsp;&nbsp;- `pid`：被恢复的进程PID |
+|                | get_kill_signals      | 查看本地或远程服务器的`kill`信号量含义及功能说明                          | - `host`：远程主机名/IP（本地查询可不填）<br>- `port`：SSH端口（默认22，远程查询时使用）<br>- `username`：SSH用户名（远程查询时必填）<br>- `password`：SSH密码（远程查询时必填） | - `success`：查询是否成功（布尔值）<br>- `message`：查询结果描述（字符串）<br>- `data`：包含信号量信息的字典<br>&nbsp;&nbsp;- `host`：查询的主机名/IP（本地为`localhost`）<br>&nbsp;&nbsp;- `signals`：信号量列表，每个元素包含：<br>&nbsp;&nbsp;&nbsp;&nbsp;- `number`：信号编号（整数）<br>&nbsp;&nbsp;&nbsp;&nbsp;- `name`：信号名称（如`SIGTERM`）<br>&nbsp;&nbsp;&nbsp;&nbsp;- `description`：信号功能说明 |
+
+
+---
+
+ **perf_microarch_mcp**
+<a id="perf_microarch_mcp"></a>
+| MCP_Server名称       | MCP_Tool列表              | 工具功能                                                                                | 核心输入参数                       | 关键返回内容                                                                                                                         |
+|----------------------|---------------------------|---------------------------------------------------------------------------------------|------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| **perf_microarch_mcp** | cache_miss_audit_tool     | 通过 `perf stat -a -e cache-misses,cycles,instructions sleep 10` 采集整机的微架构指标，支持本地和远程执行 | - `host`：可选，远程主机名/IP，留空则采集本机 | `cache_misses`：缓存未命中次数<br>`cycles`：CPU 周期数<br>`instructions`：指令数<br>`ipc`：每周期指令数 (Instructions per Cycle)<br>`seconds`：采集时长（秒） |
+
+
+---
+ **cache_miss_audit_mcp**
+<a id="cache_miss_audit_mcp"></a>
+| MCP_Server名称       | MCP_Tool列表              | 工具功能                                                                                | 核心输入参数                       | 关键返回内容                                                                                                                         |
+|----------------------|---------------------------|---------------------------------------------------------------------------------------|------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| **cache_miss_audit_mcp** | cache_miss_audit_tool     | 通过 `perf stat -a -e cache-misses,cycles,instructions sleep 10` 采集整机的微架构指标，支持本地和远程执行 | - `host`：可选，远程主机名/IP，留空则采集本机 | `cache_miss`：缓存未命中次数<br>`cycles`：CPU 周期数<br>`instructions`：指令数<br>`ipc`：每周期指令数 (Instructions per Cycle)<br>`seconds`：采集时长（秒） |
+
+
+
+---
+
+#### **cat_mcp**
+<a id="cat_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能         | 核心输入参数                                                                 | 关键返回内容       |
+|----------------|-----------------------|------------------|------------------------------------------------------------------------------|--------------------|
+| **cat_mcp**    | cat_file_view_tool    | 快速查看文件内容 | - `host`：远程主机名/IP（本地采集可不填）<br>- `file`：查看的文件路径       | 文件内容字符串     |
+
+---
+
+#### **chmod_mcp**
+<a id="chmod_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表            | 工具功能                 | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|-------------------------|--------------------------|------------------------------------------------------------------------------|----------------------------|
+| **chmod_mcp**  | chmod_change_mode_tool  | 修改文件或目录的权限     | - `host`：远程主机名/IP（本地操作可不填）<br>- `mode`：权限模式（如755、644等）<br>- `file`：目标文件或目录路径 | 布尔值，表示操作是否成功   |
+
+
+---
+
+#### **chown_mcp**
+<a id="chown_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表              | 工具功能                     | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|---------------------------|------------------------------|------------------------------------------------------------------------------|----------------------------|
+| **chown_mcp**  | chown_change_owner_tool   | 修改文件或目录的所有者和所属组 | - `host`：远程主机名/IP（本地操作可不填）<br>- `owner_group`：文件所有者和文件关联组 <br>- `file`：要修改的目标文件 | 布尔值，表示操作是否成功   |
+
+
+---
+
+#### **disk_manager_mcp**
+<a id="disk_manager_mcp"></a>
+| MCP_Server名称     | MCP_Tool列表          | 工具功能                                                                 | 核心输入参数                                                                 | 关键返回内容                                                                 |
+|--------------------|-----------------------|--------------------------------------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+|                    | top_collect_tool      | 获取目标设备（本地/远程）中**内存占用排名前k个**的进程信息，k支持自定义配置 | - `host`：远程主机名/IP（本地采集可不填）<br>- `k`：需获取的进程数量（默认5） | 进程列表（含`pid`进程ID、`name`进程名称、`memory`内存使用量（MB））          |
+|                    | get_process_info_tool | 查询指定PID进程的**详细运行信息**，支持本地与远程进程信息获取             | - `host`：远程主机名/IP（本地查询可不填）<br>- `pid`：需查询的进程ID（必传，且为正整数） | 进程详细字典（含`status`状态、`create_time`创建时间、`cpu_times`CPU时间、`memory_info`内存信息、`open_files`打开文件列表、`connections`网络连接等） |
+|                    | change_name_to_pid_tool | 根据进程名称反向查询对应的**PID列表**，解决“已知进程名查ID”的场景需求     | - `host`：远程主机名/IP（本地查询可不填）<br>- `name`：需查询的进程名称（必传，不能为空） | 以空格分隔的PID字符串（如“1234 5678”）                                      |
+|                    | get_cpu_info_tool     | 采集目标设备的CPU硬件与使用状态信息，包括核心数、频率、核心使用率         | - `host`：远程主机名/IP（本地采集可不填）                                    | CPU信息字典（含`physical_cores`物理核心数、`total_cores`逻辑核心数、`max_frequency`最大频率（MHz）、`cpu_usage`各核心使用率（%）等） |
+|                    | memory_anlyze_tool    | 分析目标设备的内存使用情况，计算总内存、可用内存及使用率                 | - `host`：远程主机名/IP（本地采集可不填）                                    | 内存信息字典（含`total`总内存（MB）、`available`可用内存（MB）、`used`已用内存（MB）、`percent`内存使用率（%）等） |
+| **disk_manager_mcp** | get_disk_info_tool    | 采集目标设备的磁盘分区信息与容量使用状态，过滤临时文件系统（tmpfs/devtmpfs） | - `host`：远程主机名/IP（本地采集可不填）                                    | 磁盘列表（含`device`设备名、`mountpoint`挂载点、`fstype`文件系统类型、`total`总容量（GB）、`percent`磁盘使用率（%）等） |
+|                    | get_os_info_tool      | 获取目标设备的操作系统类型与版本信息，适配OpenEuler、Ubuntu、CentOS等多系统 | - `host`：远程主机名/IP（本地采集可不填）                                    | 操作系统信息字符串（如“OpenEuler 22.03 LTS”或“Ubuntu 20.04.5 LTS”）        |
+|                    | get_network_info_tool | 采集目标设备的网络接口信息，包括IP地址、MAC地址、接口启用状态             | - `host`：远程主机名/IP（本地采集可不填）                                    | 网络接口列表（含`interface`接口名、`ip_address`IP地址、`mac_address`MAC地址、`is_up`接口是否启用（布尔值）等） |
+|                    | write_report_tool     | 将系统信息分析结果写入本地报告文件，自动生成带时间戳的文件路径             | - `report`：报告内容字符串（必传，不能为空）                                 | 报告文件路径字符串（如“/reports/system_report_20240520_153000.txt”）        |
+|                    | telnet_test_tool      | 测试目标主机指定端口的Telnet连通性，验证端口开放状态                       | - `host`：远程主机名/IP（必传）<br>- `port`：端口号（1-65535，必传）        | 连通性结果（布尔值：`True`成功，`False`失败）                                |
+|                    | ping_test_tool        | 测试目标主机的ICMP Ping连通性，验证主机网络可达性                           | - `host`：远程主机名/IP（必传）                                             | 连通性结果（布尔值：`True`成功，`False`失败）                                |
+|                    | get_dns_info_tool     | 采集目标设备的DNS配置信息，包括DNS服务器列表与搜索域                       | - `host`：远程主机名/IP（本地采集可不填）                                    | DNS信息字典（含`nameservers`DNS服务器列表、`search`搜索域列表）              |
+|                    | perf_data_tool        | 采集目标设备的实时性能数据，支持“指定进程”或“全系统”性能监控               | - `host`：远程主机名/IP（本地采集可不填）<br>- `pid`：进程ID（全系统监控可不填） | 性能数据字典（含`cpu_usage`CPU使用率（%）、`memory_usage`内存使用率（%）、`io_counters`I/O统计信息） |
+
+---
+
+**echo_mcp**
+<a id="echo_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表            | 工具功能                 | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|-------------------------|--------------------------|------------------------------------------------------------------------------|----------------------------|
+| **echo_mcp**  | echo_write_to_file_tool | 使用echo命令将文本写入文件 | - `host`：远程主机名/IP（本地操作可不填）<br>- `text`：要写入的文本内容<br>- `file`：要写入的文件路径<br>- `options`：echo选项（可选），如"-n"不输出换行符等<br>- `mode`：写入模式，"w"表示覆盖写入，"a"表示追加写入，默认为"w" | 布尔值，表示写入操作是否成功 |
+
+---
+
+**fallocate_mcp**
+<a id="fallocate_mcp"></a>
+| MCP_Server名称   | MCP_Tool列表              | 工具功能                 | 核心输入参数                                                                 | 关键返回内容                   |
+|------------------|---------------------------|--------------------------|------------------------------------------------------------------------------|--------------------------------|
+| **fallocate_mcp** | fallocate_create_file_tool | 创建并启用swap文件（修正工具功能描述，与参数匹配） | - `host`：远程主机名/IP（本地采集可不填）<br>- `name`：swap空间对应的设备或文件路径 <br>- `size`：创建的磁盘空间大小 | 布尔值，表示创建启用swap文件是否成功 |
+
+---
+
+**file_content_tool_mcp**
+<a id="file_content_tool_mcp"></a>
+| MCP_Server名称         | MCP_Tool列表            | 工具功能                                                                 | 核心输入参数                                                                 | 关键返回内容                                                                 |
+|------------------------|-------------------------|--------------------------------------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+|                        | file_grep_tool          | 通过`grep`命令搜索文件中匹配指定模式的内容（支持正则、大小写忽略等）       | - `file_path`：目标文件路径（绝对路径，必填）<br>- `pattern`：搜索模式（支持正则，如"error"，必填）<br>- `options`：`grep`可选参数（如"-n"显示行号、"-i"忽略大小写，可选）<br>- `host`：远程主机名/IP（默认`localhost`，本地操作可不填）<br>- `port`：SSH端口（默认22，远程操作时使用）<br>- `username`：SSH用户名（默认`root`，远程操作时需指定）<br>- `password`：SSH密码（远程操作时必填） | - `success`：操作是否成功（布尔值）<br>- `message`：操作结果描述（如"本地文件搜索完成"）<br>- `data`：包含操作详情的字典<br>&nbsp;&nbsp;- `host`：操作的主机名/IP<br>&nbsp;&nbsp;- `file_path`：目标文件路径<br>&nbsp;&nbsp;- `result`：匹配结果列表（每行一个匹配项） |
+|                        | file_sed_tool           | 通过`sed`命令替换文件中匹配的内容（支持全局替换、原文件修改）             | - `file_path`：目标文件路径（绝对路径，必填）<br>- `pattern`：替换模式（如"s/old/new/g"，`g`表示全局替换，必填）<br>- `in_place`：是否直接修改原文件（布尔值，默认`False`，仅输出结果）<br>- `options`：`sed`可选参数（如"-i.bak"备份原文件，可选）<br>- `host`/`port`/`username`/`password`：同`file_grep_tool` | - `success`：操作是否成功（布尔值）<br>- `message`：操作结果描述（如"远程sed执行成功"）<br>- `data`：包含操作详情的字典<br>&nbsp;&nbsp;- `host`：操作的主机名/IP<br>&nbsp;&nbsp;- `file_path`：目标文件路径<br>&nbsp;&nbsp;- `result`：替换后内容（`in_place=False`时返回） |
+|   **file_content_tool_mcp**   | file_awk_tool           | 通过`awk`命令对文本文件进行高级处理（支持列提取、条件过滤）               | - `file_path`：目标文件路径（绝对路径，必填）<br>- `script`：`awk`处理脚本（如"'{print $1,$3}'"提取1、3列，必填）<br>- `options`：`awk`可选参数（如"-F:"指定分隔符为冒号，可选）<br>- `host`/`port`/`username`/`password`：同`file_grep_tool` | - `success`：操作是否成功（布尔值）<br>- `message`：操作结果描述（如"本地awk处理成功"）<br>- `data`：包含操作详情的字典<br>&nbsp;&nbsp;- `host`：操作的主机名/IP<br>&nbsp;&nbsp;- `file_path`：目标文件路径<br>&nbsp;&nbsp;- `result`：处理结果列表（每行一个结果项） |
+|                        | file_sort_tool          | 通过`sort`命令对文本文件进行排序（支持按列、升序/降序）                   | - `file_path`：目标文件路径（绝对路径，必填）<br>- `options`：`sort`可选参数（如"-n"按数字排序、"-k2"按第2列排序、"-r"降序，可选）<br>- `output_file`：排序结果输出路径（可选，默认不保存到文件）<br>- `host`/`port`/`username`/`password`：同`file_grep_tool` | - `success`：操作是否成功（布尔值）<br>- `message`：操作结果描述（如"远程排序完成"）<br>- `data`：包含操作详情的字典<br>&nbsp;&nbsp;- `host`：操作的主机名/IP<br>&nbsp;&nbsp;- `file_path`/`output_file`：目标文件/输出文件路径<br>&nbsp;&nbsp;- `result`：排序结果列表（`output_file`为空时返回） |
+|                      | file_unique_tool        | 通过`unique`命令对文本文件进行去重（支持统计重复次数）                   | - `file_path`：目标文件路径（绝对路径，必填）<br>- `options`：`unique`可选参数（如"-u"仅显示唯一行、"-c"统计重复次数，可选）<br>- `output_file`：去重结果输出路径（可选，默认不保存到文件）<br>- `host`/`port`/`username`/`password`：同`file_grep_tool` | - `success`：操作是否成功（布尔值）<br>- `message`：操作结果描述（如"本地去重完成"）<br>- `data`：包含操作详情的字典<br>&nbsp;&nbsp;- `host`：操作的主机名/IP<br>&nbsp;&nbsp;- `file_path`/`output_file`：目标文件/输出文件路径<br>&nbsp;&nbsp;- `result`：去重结果列表（`output_file`为空时返回） |
+|                        | file_echo_tool          | 通过`echo`命令向文件写入内容（支持覆盖/追加模式）                         | - `content`：要写入的内容（如"Hello World"，必填）<br>- `file_path`：目标文件路径（绝对路径，必填）<br>- `append`：是否追加内容（布尔值，默认`False`，覆盖原文件）<br>- `host`/`port`/`username`/`password`：同`file_grep_tool` | - `success`：操作是否成功（布尔值）<br>- `message`：操作结果描述（如"本地写入成功"）<br>- `data`：包含操作详情的字典<br>&nbsp;&nbsp;- `host`：操作的主机名/IP<br>&nbsp;&nbsp;- `file_path`：目标文件路径<br>&nbsp;&nbsp;- `action`：操作类型（"overwrite"覆盖/"append"追加） |
+
+
+---
+
+**find_mcp**
+<a id="find_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表            | 工具功能                     | 核心输入参数                                                                 | 关键返回内容                                   |
+|----------------|-------------------------|------------------------------|------------------------------------------------------------------------------|------------------------------------------------|
+|                | find_with_name_tool     | 基于名称在指定目录下查找文件 | - `host`：远程主机名/IP（本地采集可不填）<br>- `path`：指定查找的目录 <br>- `name`：要找的文件名 | 查找到的文件列表（含`file`符合查找要求的具体文件路径） |
+|   **find_mcp**  | find_with_date_tool     | 基于修改时间在指定目录下查找文件 | - `host`：远程主机名/IP（本地采集可不填）<br>- `path`：指定查找的目录 <br>- `date_condition`：修改时间条件（如"-mtime -1"表示1天内修改，补充参数使功能匹配） | 查找到的文件列表（含`file`符合查找要求的具体文件路径） |
+|    | find_with_size_tool     | 基于文件大小在指定目录下查找文件 | - `host`：远程主机名/IP（本地采集可不填）<br>- `path`：指定查找的目录 <br>- `size_condition`：文件大小条件（如"+10M"表示大于10MB，补充参数使功能匹配） | 查找到的文件列表（含`file`符合查找要求的具体文件路径） |
+
+
+---
+
+**flame_graph_mcp**
+<a id="flame_graph_mcp"></a>
+| MCP_Server名称   | MCP_Tool列表          | 工具功能                                      | 核心输入参数                                                                                                                                                         | 关键返回内容                                                                            |
+|------------------|-----------------------| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **flame_graph_mcp** | flame_graph           | 基于 `perf.data` 生成 CPU 火焰图，用于性能分析（支持本地/远程） | - `host`：远程主机地址（可选）<br>- `perf_data_path`：perf.data 输入路径（必选）<br>- `output_path`：SVG 输出路径（默认：\~/cpu\_flamegraph.svg）<br>- `flamegraph_path`：FlameGraph 脚本路径（必选） | - `svg_path`：生成的火焰图文件路径<br>- `status`：生成状态（success / failure）<br>- `message`：状态信息 |
+
+---
+
+**free_mcp**
+<a id="free_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                                   | 核心输入参数                                                                 | 关键返回内容                                                                 |
+|----------------|-----------------------|--------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| **free_mcp**   | free_collect_tool     | 获取目标设备（本地/远程）中内存整体状态信息 | - `host`：远程主机名/IP（本地采集可不填）                                    | 内存信息列表（含`total`系统内存总量（MB）、`used`系统已使用内存量(MB)、`free`空闲物理内存（MB）、`available`系统可分配内存（MB）） |
+
+---
+
+**func_timing_trace_mcp**
+<a id="func_timing_trace_mcp"></a>
+| MCP_Server名称         | MCP_Tool列表              | 工具功能                                       | 核心输入参数                                             | 关键返回内容                                                                                                                                    |
+|------------------------|---------------------------| ------------------------------------------ | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **func_timing_trace_mcp** | func_timing_trace_tool    | 使用 `perf record -g` 采集目标进程的函数调用栈耗时，并解析热点函数 | - `pid`：目标进程 PID<br>- `host`：可选，远程主机 IP/域名；留空则采集本机 | `top_functions`：函数耗时分析结果，包含列表，每项包括：<br>• `function`：函数名<br>• `self_percent`：函数自身耗时占比<br>• `total_percent`：函数总耗时占比<br>• `call_stack`：函数调用栈 |
+
+
+---
+
+**grep_mcp**
+<a id="grep_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                 | 核心输入参数                                                                 | 关键返回内容                                   |
+|----------------|-----------------------|--------------------------|------------------------------------------------------------------------------|------------------------------------------------|
+| **grep_mcp**   | grep_search_tool      | 在文件中搜索指定模式的内容 | - `host`：远程主机名/IP（本地搜索可不填）<br>- `options`：grep选项（可选），如"-i"忽略大小写，"-n"显示行号等<br>- `pattern`：要搜索的模式（支持正则表达式）<br>- `file`：要搜索的文件路径 | 包含匹配行的字符串，如果没有找到匹配项则返回相应的提示信息 |
+
+---
+
+**head_mcp**
+<a id="head_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                 | 核心输入参数                                                                 | 关键返回内容       |
+|----------------|-----------------------|--------------------------|------------------------------------------------------------------------------|--------------------|
+| **head_mcp**   | head_file_view_tool   | 快速查看文件开头部分内容 | - `host`：远程主机名/IP（本地采集可不填）<br>- `num`：查看文件开头行数，默认为10行 <br>- `file`：查看的文件路径 | 文件内容字符串     |
+
+
+---
+
+**hotspot_trace_mcp**
+<a id="hotspot_trace_mcp"></a>
+| MCP_Server名称     | MCP_Tool列表            | 工具功能                                                 | 核心输入参数                                                  | 关键返回内容                                                                                                                 |
+|--------------------|-------------------------| ---------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **hotspot_trace_mcp** | hotspot_trace_tool      | 使用 `perf record` 和 `perf report` 分析系统或指定进程的 CPU 性能瓶颈 | - `host`：远程主机名/IP（可选，不填则分析本机）<br>- `pid`：目标进程 ID（可选，不填则分析整机） | - `total_samples`：总样本数<br>- `event_count`：事件计数（如 cycles）<br>- `hot_functions`：热点函数列表（按 Children 百分比排序，包含函数名、库、符号类型和占比） |
+
+---
+
+**kill_mcp**
+<a id="kill_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                                                 | 核心输入参数                                                                 | 关键返回内容                                                                 |
+|----------------|-----------------------|----------------------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+|                | pause_process         | 通过`kill`指令发送`SIGSTOP`信号暂停进程（支持本地/远程）  | - `pid`：需暂停的进程PID（正整数，必填）<br>- `host`：远程主机名/IP（默认`localhost`，本地操作可不填）<br>- `port`：SSH端口（默认22，远程操作时使用）<br>- `username`：SSH用户名（默认`root`，远程操作时需指定）<br>- `password`：SSH密码（远程操作时必填） | - `success`：操作是否成功（布尔值）<br>- `message`：操作结果描述（字符串）<br>- `data`：包含操作详情的字典<br>&nbsp;&nbsp;- `host`：操作的主机名/IP<br>&nbsp;&nbsp;- `pid`：被暂停的进程PID |
+| **kill_mcp**   | resume_process        | 通过`kill`指令发送`SIGCONT`信号恢复进程（支持本地/远程）  | - `pid`：需恢复的进程PID（正整数，必填）<br>- `host`：远程主机名/IP（默认`localhost`，本地操作可不填）<br>- `port`：SSH端口（默认22，远程操作时使用）<br>- `username`：SSH用户名（默认`root`，远程操作时需指定）<br>- `password`：SSH密码（远程操作时必填） | - `success`：操作是否成功（布尔值）<br>- `message`：操作结果描述（字符串）<br>- `data`：包含操作详情的字典<br>&nbsp;&nbsp;- `host`：操作的主机名/IP<br>&nbsp;&nbsp;- `pid`：被恢复的进程PID |
+|                | get_kill_signals      | 查看本地或远程服务器的`kill`信号量含义及功能说明         | - `host`：远程主机名/IP（本地查询可不填）<br>- `port`：SSH端口（默认22，远程查询时使用）<br>- `username`：SSH用户名（远程查询时必填）<br>- `password`：SSH密码（远程查询时必填） | - `success`：查询是否成功（布尔值）<br>- `message`：查询结果描述（字符串）<br>- `data`：包含信号量信息的字典<br>&nbsp;&nbsp;- `host`：查询的主机名/IP（本地为`localhost`）<br>&nbsp;&nbsp;- `signals`：信号量列表，每个元素包含：<br>&nbsp;&nbsp;&nbsp;&nbsp;- `number`：信号编号（整数）<br>&nbsp;&nbsp;&nbsp;&nbsp;- `name`：信号名称（如`SIGTERM`）<br>&nbsp;&nbsp;&nbsp;&nbsp;- `description`：信号功能说明 |
+
+
+---
+
+**ls_mcp**
+<a id="ls_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能         | 核心输入参数                                                                 | 关键返回内容       |
+|----------------|-----------------------|------------------|------------------------------------------------------------------------------|--------------------|
+| **ls_mcp**     | ls_collect_tool       | 列出目录内容     | - `host`：远程主机名/IP（本地采集可不填）<br>- `file`：目标文件/目录         | 目标目录内容的列表 |
+
+---
+
+**lscpu_mcp**
+<a id="lscpu_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                                  | 核心输入参数                         | 关键返回内容                                                                                                                                   |
+|----------------|-----------------------| ------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **lscpu_mcp**  | lscpu_info_tool       | 使用 `lscpu` 命令获取本地或远程主机的 CPU 架构及核心静态信息 | - `host`：远程主机名/IP（若不提供则获取本机信息） | `architecture`：CPU 架构（如 x86\_64）、`cpus_total`：CPU 总数量、`model_name`：CPU 型号名称、`cpu_max_mhz`：CPU 最大频率 (MHz)、`vulnerabilities`：常见安全漏洞的缓解状态字典 |
+
+---
+
+**mkdir_mcp**
+<a id="mkdir_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                                                 | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|-----------------------|----------------------------------------------------------|------------------------------------------------------------------------------|----------------------------|
+| **mkdir_mcp**  | mkdir_collect_tool    | 进行目录创建、支持批量创建、设置权限、递归创建多级目录     | - `host`：远程主机名/IP（本地采集可不填）<br>- `dir`：创建目录名             | 布尔值，表示mkdir操作是否成功 |
+
+---
+
+**mv_mcp**
+<a id="mv_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                 | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|-----------------------|--------------------------|------------------------------------------------------------------------------|----------------------------|
+| **mv_mcp**     | mv_collect_tool       | 移动或重命名文件/目录     | - `host`：远程主机名/IP（本地采集可不填）<br>- `source`：源文件或目录 <br>- `target`：目标文件或目录 | 布尔值，表示mv操作是否成功 |
+
+---
+
+**nohup_mcp**
+<a id="nohup_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                                                 | 核心输入参数                                                                 | 关键返回内容                                                                 |
+|----------------|-----------------------|----------------------------------------------------------|------------------------------------------------------------------------------|------------------------------------------------------------------------------|
+| **nohup_mcp**  | run_with_nohup        | 使用`nohup`在本地或远程服务器运行命令，支持后台执行       | - `command`：需执行的命令（字符串，必填）<br>- `host`：远程主机IP或hostname（本地执行可不填）<br>- `port`：SSH端口（默认22，远程执行时使用）<br>- `username`：SSH用户名（远程执行时必填）<br>- `password`：SSH密码（远程执行时必填）<br>- `output_file`：输出日志文件路径（可选，默认自动生成）<br>- `working_dir`：命令执行的工作目录（可选） | - `success`：操作是否成功（布尔值）<br>- `message`：执行结果描述（字符串）<br>- `pid`：进程ID（成功执行时返回）<br>- `output_file`：输出日志文件路径<br>- `command`：实际执行的命令<br>- `host`：执行命令的主机（本地为`localhost`） |
+
+---
+
+**numa_bind_docker_mcp**
+<a id="numa_bind_docker_mcp"></a>
+| MCP_Server名称         | MCP_Tool列表              | 工具功能                                                                      | 核心输入参数                                                                                                                                  | 关键返回内容                                                                           |
+|------------------------|---------------------------| ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **numa_bind_docker_mcp** | numa_bind_docker_tool     | 使用 `numactl` 将指定 NUMA 绑定参数插入到镜像原有的 ENTRYPOINT / CMD 前，运行 Docker 容器（本地/远程） | - `image`：镜像名称<br>- `cpuset_cpus`：允许使用的 CPU 核心范围<br>- `cpuset_mems`：允许使用的内存节点<br>- `detach`：是否后台运行容器（默认 False）<br>- `host`：远程主机名/IP（可选） | - `status`：操作状态（success / error）<br>- `message`：操作结果信息<br>- `output`：命令的原始输出（如有） |
+
+---
+
+**numa_bind_proc_mcp**
+<a id="numa_bind_proc_mcp"></a>
+| MCP_Server名称         | MCP_Tool列表              | 工具功能                                             | 核心输入参数                                                                                              | 关键返回内容                                            |
+|------------------------|---------------------------| ------------------------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| **numa_bind_proc_mcp** | numa_bind_proc_tool       | 使用 `numactl` 命令在指定的 NUMA 节点和内存节点上运行程序（支持本地/远程执行） | - `host`：远程主机名/IP（本地可不填）<br>- `numa_node`：NUMA 节点编号（整数）<br>- `memory_node`：内存节点编号（整数）<br>- `program_path`：程序路径（必填） | `stdout`：程序标准输出、`stderr`：程序标准错误、`exit_code`：程序退出码 |
+
+---
+
+**numa_container_mcp**
+<a id="numa_container_mcp"></a>
+| MCP_Server名称     | MCP_Tool列表            | 工具功能                                   | 核心输入参数                                                          | 关键返回内容                                                                                                  |
+|--------------------|-------------------------| -------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **numa_container_mcp** | numa_container          | 监控指定 Docker 容器的 NUMA 内存访问情况（支持本地/远程执行） | - `container_id`：要监控的容器 ID 或名称<br>- `host`：远程主机地址（可选，若为空则在本地执行） | - `status`：操作状态（success / error）<br>- `message`：操作结果信息<br>- `output`：NUMA 内存访问统计信息（包含每个 NUMA 节点的内存使用情况） |
+
+---
+
+**numa_cross_node_mcp**
+<a id="numa_cross_node_mcp"></a>
+| MCP_Server名称       | MCP_Tool列表              | 工具功能                            | 核心输入参数                                                        | 关键返回内容                                                                                                                                       |
+|----------------------|---------------------------| ------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| **numa_cross_node_mcp** | numa_cross_node           | 自动检测 NUMA 跨节点访问异常的进程（支持本地与远程主机） | - `host`：远程主机 IP/域名（可选，留空则检测本机）<br>- `threshold`：跨节点内存比例阈值（默认 30%） | `overall_conclusion`：整体结论（是否存在问题、严重程度、摘要），`anomaly_processes`：异常进程列表（包含 `pid`、`local_memory`、`remote_memory`、`cross_ratio`、`name`、`command`） |
+
+---
+
+**numa_diagnose_mcp**
+<a id="numa_diagnose_mcp"></a>
+| MCP_Server名称     | MCP_Tool列表            | 工具功能                                          | 核心输入参数                       | 关键返回内容                                                                                                                          |
+|--------------------|-------------------------| --------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **numa_diagnose_mcp** | numa_diagnose           | 获取 NUMA 架构硬件监控信息，包括 CPU 实时频率、规格参数以及 NUMA 拓扑结构 | - `host`：远程主机地址（可选，不填则在本地执行） | - `real_time_frequencies`：各 CPU 核心实时频率 (MHz)<br>- `specifications`：CPU 规格信息（型号 / 频率范围 / NUMA 节点）<br>- `numa_topology`：NUMA 拓扑结构 |
+
+
+---
+
+**numa_perf_compare_mcp**
+<a id="numa_perf_compare_mcp"></a>
+| MCP_Server名称         | MCP_Tool列表              | 工具功能                            | 核心输入参数                                                                             | 关键返回内容                                                                                          |
+|------------------------|---------------------------| ------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **numa_perf_compare_mcp** | numa_perf_compare         | 执行NUMA基准测试，支持本地绑定、跨节点绑定和不绑定三种策略 | - `benchmark`：基准测试可执行文件路径（如 `/root/mcp_center/stream`）<br>- `host`：远程主机名称或IP地址（可选） | `numa_nodes`：系统NUMA节点数量<br>`test_results`：包含三种绑定策略的测试结果<br>`timestamp`：执行时间<br>`error`：错误信息（如有） |
+
+---
+
+**numa_rebind_proc_mcp**
+<a id="numa_rebind_proc_mcp"></a>
+| MCP_Server名称         | MCP_Tool列表              | 工具功能                                                           | 核心输入参数                                                                                                   | 关键返回内容                                                                     |
+|------------------------|---------------------------| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **numa_rebind_proc_mcp** | numa_rebind_proc_tool     | 修改已运行进程的 NUMA 内存绑定，使用 migratepages 工具将进程的内存从一个 NUMA 节点迁移到另一个节点 | - `pid`：进程 ID<br>- `from_node`：当前内存所在的 NUMA 节点编号<br>- `to_node`：目标 NUMA 节点编号<br>- `host`：远程主机 IP 或名称（可选） | `status`：操作状态（success / error）<br>`message`：操作结果信息<br>`output`：命令的原始输出（如有） |
+
+---
+
+**numa_topo_mcp**
+<a id="numa_topo_mcp"></a>
+| MCP_Server名称     | MCP_Tool列表            | 工具功能                            | 核心输入参数                             | 关键返回内容                                                                                                                |
+|--------------------|-------------------------| ------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **numa_topo_mcp**  | numa_topo_tool          | 使用 numactl 获取本地或远程主机的 NUMA 拓扑信息 | - `host`：远程主机名称或 IP（可选，不填表示获取本机信息） | - `nodes_total`：总节点数<br>- `nodes`：节点信息列表，每个节点包含：`node_id`（节点 ID）、`cpus`（CPU 列表）、`size_mb`（内存大小 MB）、`free_mb`（空闲内存 MB） |
+
+---
+
+**numastat_mcp**
+<a id="numastat_mcp"></a>
+| MCP_Server名称     | MCP_Tool列表            | 工具功能                                 | 核心输入参数                          | 关键返回内容                                                                                                                                      |
+|--------------------|-------------------------| ------------------------------------ | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **numastat_mcp**   | numastat_info_tool      | 使用 `numastat` 命令获取本地或远程主机的 NUMA 统计信息 | - `host`：远程主机名称或 IP，若不提供则获取本机信息 | `numa_hit`: NUMA 命中次数、`numa_miss`: NUMA 未命中次数、`numa_foreign`: 外部访问次数、`interleave_hit`: 交错命中次数、`local_node`: 本地节点访问次数、`other_node`: 其他节点访问次数 |
+
+---
+
+**nvidia_mcp**
+<a id="nvidia_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表            | 工具功能                                  | 核心输入参数                                                                 | 关键返回内容                                                                                     |
+|----------------|-------------------------|-------------------------------------------|------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
+|                | nvidia_smi_status       | 输出结构化 GPU 状态数据（JSON 友好）      | - `host`：远程主机 IP/hostname（本地可不填）<br>- `port`：SSH 端口（默认 22）<br>- `username`/`password`：远程查询必填<br>- `gpu_index`：指定 GPU 索引（可选）<br>- `include_processes`：是否包含进程信息（默认 False） | - `success`：查询成功与否<br>- `message`：结果描述<br>- `data`：结构化数据，包含：<br>&nbsp;&nbsp;- `host`：主机地址<br>&nbsp;&nbsp;- `gpus`：GPU 列表（含索引、型号、利用率、显存等） |
+| **nvidia_mcp** | nvidia_smi_raw_table    | 输出 `nvidia-smi` 原生表格（保留原始格式） | - `host`：远程主机 IP/hostname（本地可不填）<br>- `port`：SSH 端口（默认 22）<br>- `username`/`password`：远程查询必填 | - `success`：查询成功与否<br>- `message`：结果描述<br>- `data`：原始表格数据，包含：<br>&nbsp;&nbsp;- `host`：主机地址<br>&nbsp;&nbsp;- `raw_table`：`nvidia-smi` 原生表格字符串（含换行和格式） |
+
+---
+
+**perf_interrupt_mcp**
+<a id="perf_interrupt_mcp"></a>
+| MCP_Server名称     | MCP_Tool列表            | 工具功能                         | 核心输入参数                             | 关键返回内容                                                                                                                          |
+|--------------------|-------------------------| ---------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **perf_interrupt_mcp** | perf_interrupt_health_check | 检查系统中断统计信息，以定位高频中断导致的 CPU 占用 | - `host`：远程主机名称或 IP 地址，若不提供则获取本机信息 | 返回一个包含中断信息的列表，每个元素包含：`irq_number` 中断编号、`total_count` 总触发次数、`device` 设备名称、`cpu_distribution` 各 CPU 核心的中断分布、`interrupt_type` 中断类型 |
+
+---
+
+**rm_mcp**
+<a id="rm_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                 | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|-----------------------|--------------------------|------------------------------------------------------------------------------|----------------------------|
+| **rm_mcp**     | rm_collect_tool       | 对文件或文件夹进行删除   | - `host`：远程主机名/IP（本地采集可不填）<br>- `path`：要进行删除的文件或文件夹路径 | 布尔值，表示rm操作是否成功 |
+
+---
+
+**sar_mcp**
+
+<a id="sar_mcp"></a>
+
+|MCP_Server名称|MCP_Tool列表|工具功能|核心输入参数|关键返回内容|
+|---|---|---|---|---|
+||sar_cpu_collect_tool|分析CPU使用的周期性规律|- `host`：远程主机名/IP（本地采集可不填）<br>- `interval`：监控的时间间隔<br>- `count`：监控次数|采集指标列表：含`timestamp`采集时间点、`user`用户空间程序占用CPU的百分比、`nice`低优先级用户进程占用的CPU百分比、`system`内核空间程序占用CPU的百分比、`iowait`CPU等待磁盘I/O操作的时间百分比、`steal`虚拟化环境中其他虚拟机占用的CPU时间百分比、`idle`CPU空闲时间百分比|
+||sar_memory_collect_tool|分析内存资源使用的周期性规律|- `host`：远程主机名/IP（本地采集可不填）<br>- `interval`：监控的时间间隔<br>- `count`：监控次数|采集指标列表：含`timestamp`采集时间点、`kbmemfree`物理空闲内存量、`kbavail`实际可用内存、`kbmemused`已使用的物理内存、`memused`已用内存占总物理内存的百分比、`kbbuffers`内核缓冲区（Buffer）占用的内存、`kbcached`内核缓存（Cache）占用的内存、`kbcommit`当前工作负载所需的总内存量、`commit`kbcommit占系统总可用内存百分比、`kbactive`活跃内存、`kbinact`非活跃内存、`kbdirty`等待写入磁盘的脏数据量|
+||sar_disk_collect_tool|分析磁盘IO使用的周期性规律|- `host`：远程主机名/IP（本地采集可不填）<br>- `interval`：监控的时间间隔<br>- `count`：监控次数|采集指标列表：含`timestamp`采集时间点、`name`磁盘设备名称、`tps`每秒传输次数、`rkB_s`每秒读取的数据量、`wkB_s`每秒写入的数据量、`dkB_s`每秒丢弃的数据量、`areq-sz`平均每次I/O请求的数据大小、`aqu-sz`平均I/O请求队列长度、`await`平均每次I/O请求的等待时间、`util`设备带宽利用率|
+|**sar_mcp**|sar_network_collect_tool|分析网络流量的周期性规律|- `host`：远程主机名/IP（本地采集可不填）<br>- `interval`：监控的时间间隔<br>- `count`：监控次数|采集指标列表：含`timestamp`采集时间点、`iface`网络接口名称、`rxpck_s`每秒接收的数据包数量、`txpck_s`每秒发送的数据包数量、`rxkB_s`每秒接收的数据量、`txkB_s`每秒发送的数据量、`rxcmp_s`每秒接收的压缩数据包数、`txcmp_s`每秒发送的压缩数据包数、`rxmcst_s`每秒接收的多播数据包数、`ifutil`网络接口带宽利用率|
+||sar_cpu_historicalinfo_collect_tool|进行历史状态分析，排查过去某时段cpu的性能问题|- `host`：远程主机名/IP（本地查询可不填）<br>- `file`：sar要分析的log文件<br>- `starttime`：分析开始的时间点<br>- `endtime`：分析结束的时间点|采集指标列表：含`timestamp`采集时间点、`user`用户空间程序占用CPU的百分比、`nice`低优先级用户进程占用的CPU百分比、`system`内核空间程序占用CPU的百分比、`iowait`CPU等待磁盘I/O操作的时间百分比、`steal`虚拟化环境中其他虚拟机占用的CPU时间百分比、`idle`CPU空闲时间百分比|
+||sar_memory_historicalinfo_collect_tool|进行历史状态分析，排查过去某时段内存的性能问题|- `host`：远程主机名/IP（本地查询可不填）<br>- `file`：sar要分析的log文件<br>- `starttime`：分析开始的时间点<br>- `endtime`：分析结束的时间点|采集指标列表：含`timestamp`采集时间点、`kbmemfree`物理空闲内存量、`kbavail`实际可用内存、`kbmemused`已使用的物理内存、`memused`已用内存占总物理内存的百分比、`kbbuffers`内核缓冲区（Buffer）占用的内存、`kbcached`内核缓存（Cache）占用的内存、`kbcommit`当前工作负载所需的总内存量、`commit`kbcommit占系统总可用内存百分比、`kbactive`活跃内存、`kbinact`非活跃内存、`kbdirty`等待写入磁盘的脏数据量|
+||sar_disk_historicalinfo_collect_tool|进行历史状态分析，排查过去某时段磁盘IO的性能问题|- `host`：远程主机名/IP（本地查询可不填）<br>- `file`：sar要分析的log文件<br>- `starttime`：分析开始的时间点<br>- `endtime`：分析结束的时间点|采集指标列表：含`timestamp`采集时间点、`name`磁盘设备名称、`tps`每秒传输次数、`rkB_s`每秒读取的数据量、`wkB_s`每秒写入的数据量、`dkB_s`每秒丢弃的数据量、`areq-sz`平均每次I/O请求的数据大小、`aqu-sz`平均I/O请求队列长度、`await`平均每次I/O请求的等待时间、`util`设备带宽利用率|
+||sar_network_historicalinfo_collect_tool|进行历史状态分析，排查过去某时段网络的性能问题|- `host`：远程主机名/IP（本地查询可不填）<br>- `file`：sar要分析的log文件<br>- `starttime`：分析开始的时间点<br>- `endtime`：分析结束的时间点|采集指标列表：含`timestamp`采集时间点、`iface`网络接口名称、`rxpck_s`每秒接收的数据包数量、`txpck_s`每秒发送的数据包数量、`rxkB_s`每秒接收的数据量、`txkB_s`每秒发送的数据量、`rxcmp_s`每秒接收的压缩数据包数、`txcmp_s`每秒发送的压缩数据包数、`rxmcst_s`每秒接收的多播数据包数、`ifutil`网络接口带宽利用率|
+
+---
+
+**sed_mcp**
+<a id="sed_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                 | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|-----------------------|--------------------------|------------------------------------------------------------------------------|----------------------------|
+|  **sed_mcp**   | sed_text_replace_tool | 在文件中替换指定模式的文本 | - `host`：远程主机名/IP（本地操作可不填）<br>- `options`：sed选项（可选），如"-i"直接修改文件<br>- `pattern`：要替换的模式（支持正则表达式）<br>- `replacement`：替换后的文本<br>- `file`：要操作的文件路径 | 布尔值，表示操作是否成功 |
+|      | sed_text_delete_tool  | 删除文件中匹配模式的行     | - `host`：远程主机名/IP（本地操作可不填）<br>- `options`：sed选项（可选），如"-i"直接修改文件<br>- `pattern`：要删除的行的模式（支持正则表达式）<br>- `file`：要操作的文件路径 | 布尔值，表示操作是否成功 |
+
+---
+
+**strace_mcp**
+<a id="strace_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表                | 工具功能                                   | 核心输入参数                                                                 | 关键返回内容                                                                                     |
+|----------------|-----------------------------|--------------------------------------------|------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
+|                | strace_track_file_process   | 跟踪进程的文件操作和运行状态（如打开、读取、写入文件等） | - `pid`：目标进程PID（必填）<br>- `host`：远程主机IP/hostname（本地跟踪可不填）<br>- `port`：SSH端口（默认22）<br>- `username`/`password`：远程跟踪时必填<br>- `output_file`：日志路径（可选）<br>- `follow_children`：是否跟踪子进程（默认False）<br>- `duration`：跟踪时长（秒，可选） | - `success`：跟踪启动状态<br>- `message`：结果描述<br>- `strace_pid`：跟踪进程ID<br>- `output_file`：日志路径<br>- `target_pid`/`host`：目标进程及主机信息 |
+| **strace_mcp** | strace_check_permission_file| 排查进程的"权限不足"和"文件找不到"错误        | - `pid`：目标进程PID（必填）<br>- 远程参数（`host`/`port`/`username`/`password`）<br>- `output_file`：日志路径（可选）<br>- `duration`：跟踪时长（默认30秒） | - 基础状态信息（`success`/`message`等）<br>- `errors`：错误统计字典，包含：<br>&nbsp;&nbsp;- 权限不足错误详情<br>&nbsp;&nbsp;- 文件找不到错误详情 |
+|                | strace_check_network        | 诊断进程网络问题（连接失败、超时、DNS解析等）  | - `pid`：目标进程PID（必填）<br>- 远程参数（同上）<br>- `output_file`：日志路径（可选）<br>- `duration`：跟踪时长（默认30秒）<br>- `trace_dns`：是否跟踪DNS调用（默认True） | - 基础状态信息<br>- `errors`：网络错误统计，包含：<br>&nbsp;&nbsp;- 连接被拒绝、超时等错误<br>&nbsp;&nbsp;- DNS解析失败详情（若启用） |
+|  | strace_locate_freeze        | 定位进程卡顿原因（IO阻塞、锁等待等慢操作）    | - `pid`：目标进程PID（必填）<br>- 远程参数（同上）<br>- `output_file`：日志路径（可选）<br>- `duration`：跟踪时长（默认30秒）<br>- `slow_threshold`：慢操作阈值（默认0.5秒） | - 基础状态信息<br>- `analysis`：卡顿分析字典，包含：<br>&nbsp;&nbsp;- 慢操作调用详情<br>&nbsp;&nbsp;- 阻塞类型分类统计<br>&nbsp;&nbsp;- 耗时最长的系统调用 |
+
+---
+
+**strace_syscall_mcp**
+<a id="strace_syscall_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                 | 核心输入参数                                                                 | 关键返回内容                                                                                     |
+|----------------|-----------------------|--------------------------|------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------|
+| **strace_syscall_mcp** | strace_syscall       | 采集指定进程的系统调用统计信息 | - `host`：可选，远程主机地址<br>- `pid`：目标进程ID（必填）<br>- `timeout`：采集超时时间，默认10秒 | List\[Dict]，每个字典包含：<br>- `syscall`：系统调用名称<br>- `total_time`：总耗时（秒）<br>- `call_count`：调用次数<br>- `avg_time`：平均耗时（微秒）<br>- `error_count`：错误次数 |
+
+---
+
+**swapoff_mcp**
+<a id="swapoff_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表                | 工具功能                                   | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|-----------------------------|--------------------------------------------|------------------------------------------------------------------------------|----------------------------|
+| **swapoff_mcp** | swapoff_disabling_swap_tool | 停用交换空间（Swap），释放已启用的交换分区或交换文件，将其从系统内存管理中移除 | - `host`：远程主机名/IP（本地采集可不填）<br>- `name`：停用的swap空间路径 | 布尔值，表示停用指定swap空间是否成功 |
+
+---
+
+**swapon_mcp**
+<a id="swapon_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                 | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|-----------------------|--------------------------|------------------------------------------------------------------------------|----------------------------|
+| **swapon_mcp** | swapon_collect_tool   | 获取目标设备（本地/远程）中当前swap设备状态 | - `host`：远程主机名/IP（本地采集可不填） | swap设备列表（含`name`swap空间对应的设备或文件路径、`type`swap空间的类型、`size`swap空间的总大小、`used`当前已使用的swap空间量、`prio`swap空间的优先级） |
+
+---
+
+**tail_mcp**
+<a id="tail_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                 | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|-----------------------|--------------------------|------------------------------------------------------------------------------|----------------------------|
+| **tail_mcp**   | tail_file_view_tool   | 快速查看文件末尾部分内容   | - `host`：远程主机名/IP（本地采集可不填）<br>- `num`：查看文件末尾行数，默认为10行 <br>- `file`：查看的文件路径 | 文件内容字符串 |
+
+---
+
+**tar_mcp**
+<a id="tar_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                 | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|-----------------------|--------------------------|------------------------------------------------------------------------------|----------------------------|
+|  **tar_mcp**    | tar_extract_file_tool | 使用tar命令解压文件或目录 | - `host`：远程主机名称或IP地址，若不提供则表示对本机文件进行修改<br>- `options`：tar命令选项（如`-xzvf`等）<br>- `file`：压缩包文件路径<br>- `extract_path`：指定解压目录 | 布尔值，表示解压操作是否成功 |
+|      | tar_compress_file_tool | 使用tar命令压缩文件或目录 | - `host`：远程主机名称或IP地址，若不提供则表示对本机文件进行压缩<br>- `options`：tar命令选项（如`-czvf`、`-xzvf`等）<br>- `source_path`：需要压缩的文件或目录路径<br>- `archive_path`：压缩包输出路径 | 布尔值，表示压缩操作是否成功 |
+
+
+---
+
+**touch_mcp**
+<a id="touch_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表              | 工具功能                 | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|---------------------------|--------------------------|------------------------------------------------------------------------------|----------------------------|
+|   **touch_mcp**   | touch_create_files_tool   | 进行文件快速初始化、批量创建 | - `host`：远程主机名/IP（本地采集可不填）<br>- `file`：创建的文件名 | 布尔值，表示touch操作是否成功 |
+|   | touch_timestamp_files_tool | 进行文件时间戳校准与模拟   | - `host`：远程主机名/IP（本地查询可不填）<br>- `options`：更新访问时间\更新修改时间(`-a`表示仅更新访问时间、`-m`表示仅更新修改时间) <br>- `file`：文件名 | 布尔值，表示touch操作是否成功 |
+
+
+---
+
+**vmstat_mcp**
+<a id="vmstat_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表                | 工具功能                 | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|-----------------------------|--------------------------|------------------------------------------------------------------------------|----------------------------|
+|  **vmstat_mcp**   | vmstat_collect_tool         | 获取目标设备资源整体状态   | - `host`：远程主机名/IP（本地采集可不填） | 系统资源状态字典（含`r`运行队列进程数、`b`等待 I/O 的进程数、`si`每秒从磁盘加载到内存的数据量（KB/s）、`so`每秒从内存换出到磁盘的数据量（KB/s）、`bi`从磁盘读取的块数、`bo`写入磁盘的块数、`in`每秒发生的中断次数（含时钟中断）、`cs`每秒上下文切换次数、`us`用户进程消耗 CPU 时间、`sy`内核进程消耗 CPU 时间、`id`CPU 空闲时间、`wa`CPU 等待 I/O 完成的时间百分比、`st`被虚拟机偷走的 CPU 时间百分比） |
+| | vmstat_slabinfo_collect_tool | 获取内核 slab 内存缓存（slabinfo）的统计信息 | - `host`：远程主机名/IP（本地查询可不填） | slab内存缓存信息详细字典（含`cache`内核中slab缓存名称、`num`当前活跃的缓存对象数量、`total`该缓存的总对象数量、`size`每个缓存对象的大小、`pages`每个slab中包含的缓存对象数量） |
+
+
+---
+
+**zip_mcp**
+<a id="zip_mcp"></a>
+| MCP_Server名称 | MCP_Tool列表          | 工具功能                 | 核心输入参数                                                                 | 关键返回内容               |
+|----------------|-----------------------|--------------------------|------------------------------------------------------------------------------|----------------------------|
+|  **zip_mcp**  | zip_extract_file_tool | 使用unzip命令解压zip文件  | - `host`：远程主机名称或IP地址，若不提供则表示对本机文件进行修改<br>- `file`：压缩包文件路径<br>- `extract_path`：指定解压目录 | 布尔值，表示解压操作是否成功 |
+|      | tar_compress_file_tool | 使用zip命令压缩文件或目录  | - `host`：远程主机名称或IP地址，若不提供则表示对本机文件进行压缩<br>- `source_path`：需要压缩的文件或目录路径<br>- `archive_path`：压缩包输出路径 | 布尔值，表示压缩操作是否成功 |
