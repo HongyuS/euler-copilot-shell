@@ -40,6 +40,9 @@ class HermesChatClient(LLMClientBase):
         """初始化 Hermes Chat API 客户端"""
         self.logger = get_logger(__name__)
 
+        self.current_agent_id: str = ""  # 当前选择的智能体 ID
+        self.current_task_id: str = ""  # 当前正在运行的任务 ID
+
         # HTTP 管理器 - 立即初始化
         self.http_manager = HermesHttpManager(base_url, auth_token)
 
@@ -49,12 +52,6 @@ class HermesChatClient(LLMClientBase):
         self._agent_manager: HermesAgentManager | None = None
         self._conversation_manager: HermesConversationManager | None = None
         self._stream_processor: HermesStreamProcessor | None = None
-
-        # 当前选择的智能体ID
-        self._current_agent_id: str = ""
-
-        # 当前正在运行的任务ID（用于停止请求）
-        self._current_task_id: str = ""
 
         # MCP 事件处理器（可选）
         self._mcp_handler: MCPEventHandler | None = None
@@ -108,7 +105,7 @@ class HermesChatClient(LLMClientBase):
             agent_id: 智能体ID，空字符串表示不使用智能体
 
         """
-        self._current_agent_id = agent_id
+        self.current_agent_id = agent_id
         self.logger.info("设置当前智能体ID: %s", agent_id or "无智能体")
 
     def reset_conversation(self) -> None:
@@ -148,7 +145,7 @@ class HermesChatClient(LLMClientBase):
             self.logger.info("使用会话ID: %s", conversation_id)
 
             # 创建聊天请求
-            app = HermesApp(self._current_agent_id)
+            app = HermesApp(self.current_agent_id)
             request = HermesChatRequest(
                 app=app,
                 conversation_id=conversation_id,
@@ -422,15 +419,15 @@ class HermesChatClient(LLMClientBase):
     def _handle_task_id(self, event: HermesStreamEvent) -> None:
         """处理事件中的任务ID"""
         task_id = event.get_task_id()
-        if task_id and not self._current_task_id:
-            self._current_task_id = task_id
+        if task_id and not self.current_task_id:
+            self.current_task_id = task_id
             self.logger.debug("设置当前任务ID: %s", task_id)
 
     def _cleanup_task_id(self, context: str) -> None:
         """清理任务ID"""
-        if self._current_task_id:
-            self.logger.debug("%s清理任务ID: %s", context, self._current_task_id)
-            self._current_task_id = ""
+        if self.current_task_id:
+            self.logger.debug("%s清理任务ID: %s", context, self.current_task_id)
+            self.current_task_id = ""
 
     async def _handle_event_content(self, event: HermesStreamEvent) -> AsyncGenerator[str, None]:
         """处理单个事件的内容"""
@@ -459,7 +456,7 @@ class HermesChatClient(LLMClientBase):
     async def _stop(self) -> None:
         """停止当前会话"""
         if self._conversation_manager is not None:
-            await self._conversation_manager.stop_conversation(self._current_task_id)
+            await self._conversation_manager.stop_conversation(self.current_task_id)
             # 停止后清理任务ID
             self._cleanup_task_id("手动停止")
 

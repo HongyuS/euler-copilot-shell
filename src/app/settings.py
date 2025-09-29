@@ -466,6 +466,11 @@ class SettingsScreen(ModalScreen):
         base_url_input = self.query_one("#base-url", Input)
         api_key_input = self.query_one("#api-key", Input)
 
+        # 保存当前智能体状态（如果是Hermes客户端）
+        current_agent_id = ""
+        if isinstance(self.llm_client, HermesChatClient):
+            current_agent_id = getattr(self.llm_client, "current_agent_id", "")
+
         if self.backend == Backend.OPENAI:
             # 获取模型输入值，如果输入框不存在则使用当前选择的模型
             try:
@@ -484,6 +489,9 @@ class SettingsScreen(ModalScreen):
                 base_url=base_url_input.value,
                 auth_token=api_key_input.value,
             )
+            # 恢复智能体状态
+            if current_agent_id:
+                self.llm_client.set_current_agent(current_agent_id)
 
     async def _toggle_mcp_authorization_async(self) -> None:
         """异步切换 MCP 工具授权模式"""
