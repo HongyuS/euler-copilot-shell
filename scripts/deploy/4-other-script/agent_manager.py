@@ -379,20 +379,18 @@ async def query_mcp_server(api_client: ApiClient, mcp_id: str) -> dict[str, Any]
 async def install_mcp_server(api_client: ApiClient, mcp_id: str) -> dict[str, Any] | None:
     """安装mcp服务"""
     logger.info("安装MCP服务: %s", mcp_id)
-    response = await api_client.request("GET", "/api/mcp")
+    response = await api_client.request("GET", "/api/mcp/"+mcp_id)
 
     if response.get("code") != HTTP_OK:
-        msg = f"查询MCP服务列表失败: {response.get('message', '未知错误')}"
+        msg = f"查询MCP服务失败: {response.get('message', '未知错误')}"
         raise RuntimeError(msg)
 
-    services = response.get("result", {}).get("services", [])
-    for service in services:
-        if service.get("mcpserviceId") == mcp_id:
-            logger.debug("MCP服务 %s 状态: %s", mcp_id, service.get("status"))
-            if service.get("status") != "ready":
-                logger.debug("开始安装MCP服务%s", mcp_id)
-                return await api_client.request("POST", f"/api/mcp/{mcp_id}/install")
-            break
+    service = response.get("result", {})
+    if service.get("serviceId") == mcp_id:
+        logger.debug("MCP服务 %s 状态: %s", mcp_id, service.get("status"))
+        if service.get("status") != "ready":
+            logger.debug("开始安装MCP服务%s", mcp_id)
+            return await api_client.request("POST", f"/api/mcp/{mcp_id}/install")
     return None
 
 
@@ -461,6 +459,8 @@ async def comb_create(api_client: ApiClient, config_path: str) -> None:
 
     # 创建并发布应用
     try:
+        if 'mcpService' in config and config['mcpService']:
+            config['mcpService'] = [item['id'] for item in config['mcpService'] if 'id' in item]
         app_data = AppData(**config)
         app_id = await call_app_api(api_client, app_data)
         await deploy_app(api_client, app_id)
