@@ -2,11 +2,13 @@
 配置验证器
 
 提供实际 API 调用验证配置的有效性。
+支持通过环境变量 OI_SKIP_SSL_VERIFY / OI_SSL_VERIFY 控制 SSL 校验。
 """
 
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 import httpx
@@ -21,13 +23,57 @@ HTTP_UNAUTHORIZED = 401
 HTTP_FORBIDDEN = 403
 HTTP_NOT_FOUND = 404
 
+TRUTHY_VALUES = {"1", "true", "yes", "on"}
+FALSY_VALUES = {"0", "false", "no", "off"}
+SSL_VERIFY_ENV_VAR = "OI_SSL_VERIFY"
+SSL_SKIP_ENV_VAR = "OI_SKIP_SSL_VERIFY"
+
+
+def _parse_env_flag(value: str | None) -> bool | None:
+    """解析环境变量中的布尔标志值"""
+    if value is None:
+        return None
+
+    normalized = value.strip().lower()
+    if normalized in TRUTHY_VALUES:
+        return True
+    if normalized in FALSY_VALUES:
+        return False
+
+    return None
+
+
+def _resolve_verify_ssl(*, verify_ssl: bool | None = None) -> bool:
+    """根据参数和环境变量确定是否启用 SSL 校验"""
+    if verify_ssl is not None:
+        return verify_ssl
+
+    skip_flag = _parse_env_flag(os.getenv(SSL_SKIP_ENV_VAR))
+    if skip_flag is True:
+        return False
+    if skip_flag is False:
+        return True
+
+    verify_flag = _parse_env_flag(os.getenv(SSL_VERIFY_ENV_VAR))
+    if verify_flag is not None:
+        return verify_flag
+
+    return True
+
+
+def should_verify_ssl(*, verify_ssl: bool | None = None) -> bool:
+    """公开的 SSL 校验决策入口，供其他模块复用"""
+    return _resolve_verify_ssl(verify_ssl=verify_ssl)
+
 
 class APIValidator:
     """API 配置验证器"""
 
-    def __init__(self) -> None:
+    def __init__(self, *, verify_ssl: bool | None = None) -> None:
         """初始化验证器"""
         self.logger = get_logger(__name__)
+        self.verify_ssl = should_verify_ssl(verify_ssl=verify_ssl)
+        self.logger.debug("SSL 验证状态: %s", self.verify_ssl)
 
     async def validate_llm_config(  # noqa: PLR0913
         self,
@@ -56,7 +102,11 @@ class APIValidator:
         self.logger.info("开始验证 LLM 配置 - 端点: %s, 模型: %s", endpoint, model)
 
         try:
-            client = AsyncOpenAI(api_key=api_key, base_url=endpoint, timeout=timeout)
+            client = self._create_openai_client(
+                endpoint=endpoint,
+                api_key=api_key,
+                timeout=timeout,
+            )
 
             # 测试基本对话功能
             chat_valid, chat_msg = await self._test_basic_chat(client, model, max_tokens, temperature)
@@ -139,6 +189,22 @@ class APIValidator:
 
         # 两种格式都失败
         return False, "无法连接到 Embedding 模型服务。", {}
+
+    def _create_openai_client(
+        self,
+        *,
+        endpoint: str,
+        api_key: str,
+        timeout: int,
+    ) -> AsyncOpenAI:
+        """构造 AsyncOpenAI 客户端，应用统一的 SSL 校验设置"""
+        http_client = httpx.AsyncClient(timeout=timeout, verify=self.verify_ssl)
+        return AsyncOpenAI(
+            api_key=api_key,
+            base_url=endpoint,
+            timeout=timeout,
+            http_client=http_client,
+        )
 
     async def _test_basic_chat(
         self,
@@ -493,7 +559,11 @@ FUNCTION_CALL: get_current_time()
     ) -> tuple[bool, str, dict[str, Any]]:
         """验证 OpenAI 格式的 embedding 配置"""
         try:
-            client = AsyncOpenAI(api_key=api_key, base_url=endpoint, timeout=timeout)
+            client = self._create_openai_client(
+                endpoint=endpoint,
+                api_key=api_key,
+                timeout=timeout,
+            )
 
             # 测试 embedding 功能
             test_text = "这是一个测试文本"
@@ -537,7 +607,7 @@ FUNCTION_CALL: get_current_time()
 
             data = {"inputs": "这是一个测试文本", "normalize": True}
 
-            async with httpx.AsyncClient(timeout=timeout) as client:
+            async with httpx.AsyncClient(timeout=timeout, verify=self.verify_ssl) as client:
                 response = await client.post(embed_endpoint, json=data, headers=headers)
 
                 if response.status_code == HTTP_OK:

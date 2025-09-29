@@ -5,10 +5,12 @@ import time
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING
 
+import httpx
 from openai import AsyncOpenAI, OpenAIError
 
 from backend.base import LLMClientBase
 from log.manager import get_logger, log_api_request, log_exception
+from tool.validators import should_verify_ssl
 
 if TYPE_CHECKING:
     from openai.types.chat import ChatCompletionMessageParam
@@ -17,16 +19,26 @@ if TYPE_CHECKING:
 class OpenAIClient(LLMClientBase):
     """OpenAI 大模型客户端"""
 
-    def __init__(self, base_url: str, model: str, api_key: str = "") -> None:
+    def __init__(
+        self,
+        base_url: str,
+        model: str,
+        api_key: str = "",
+        *,
+        verify_ssl: bool | None = None,
+    ) -> None:
         """初始化 OpenAI 大模型客户端"""
         self.logger = get_logger(__name__)
 
         self.model = model
         self.base_url = base_url
+        self.verify_ssl = should_verify_ssl(verify_ssl=verify_ssl)
         self.client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
+            http_client=httpx.AsyncClient(verify=self.verify_ssl),
         )
+        self.logger.debug("OpenAIClient SSL 验证状态: %s", self.verify_ssl)
 
         # 添加历史记录管理
         self._conversation_history: list[ChatCompletionMessageParam] = []
