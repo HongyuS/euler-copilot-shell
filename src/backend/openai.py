@@ -3,6 +3,7 @@
 import asyncio
 import time
 from collections.abc import AsyncGenerator
+from importlib import import_module
 from typing import TYPE_CHECKING
 
 import httpx
@@ -10,10 +11,15 @@ from openai import AsyncOpenAI, OpenAIError
 
 from backend.base import LLMClientBase
 from log.manager import get_logger, log_api_request, log_exception
-from tool.validators import should_verify_ssl
 
 if TYPE_CHECKING:
     from openai.types.chat import ChatCompletionMessageParam
+
+
+def _should_verify_ssl(*, verify_ssl: bool | None = None) -> bool:
+    """延迟导入工具模块以决定 SSL 校验策略"""
+    module = import_module("tool.validators")
+    return module.should_verify_ssl(verify_ssl=verify_ssl)
 
 
 class OpenAIClient(LLMClientBase):
@@ -32,7 +38,7 @@ class OpenAIClient(LLMClientBase):
 
         self.model = model
         self.base_url = base_url
-        self.verify_ssl = should_verify_ssl(verify_ssl=verify_ssl)
+        self.verify_ssl = _should_verify_ssl(verify_ssl=verify_ssl)
         self.client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
