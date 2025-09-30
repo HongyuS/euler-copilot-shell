@@ -106,7 +106,7 @@ class OutputLine(Static):
             self.add_class("command-line")
         self.text_content = text
 
-    def update(self, content: VisualType = "", *, layout: bool = False) -> None:
+    def update(self, content: VisualType = "", *, layout: bool = True) -> None:
         """更新组件内容，确保禁用富文本标记解析"""
         # 如果是字符串，更新内部存储的文本内容
         if isinstance(content, str):
@@ -399,16 +399,39 @@ class IntelligentTerminal(App):
         if self._llm_client is None:
             self._llm_client = BackendFactory.create_client(self.config_manager)
 
+            # 初始化时设置智能体状态
+            if (self.current_agent and self.current_agent[0] and
+                isinstance(self._llm_client, HermesChatClient)):
+                self._llm_client.set_current_agent(self.current_agent[0])
+
         # 为 Hermes 客户端设置 MCP 事件处理器以支持 MCP 交互
         if isinstance(self._llm_client, HermesChatClient):
             mcp_handler = TUIMCPEventHandler(self, self._llm_client)
             self._llm_client.set_mcp_handler(mcp_handler)
 
+            # 确保智能体状态同步
+            if self.current_agent and self.current_agent[0]:
+                current_client_agent = getattr(self._llm_client, "current_agent_id", "")
+                if current_client_agent != self.current_agent[0]:
+                    self._llm_client.set_current_agent(self.current_agent[0])
+
         return self._llm_client
 
     def refresh_llm_client(self) -> None:
         """刷新 LLM 客户端实例，用于配置更改后重新创建客户端"""
+        # 保存当前智能体状态
+        current_agent_id = self.current_agent[0] if self.current_agent else ""
+
         self._llm_client = BackendFactory.create_client(self.config_manager)
+
+        # 恢复智能体状态到新的客户端
+        if current_agent_id and isinstance(self._llm_client, HermesChatClient):
+            self._llm_client.set_current_agent(current_agent_id)
+
+        # 为 Hermes 客户端设置 MCP 事件处理器
+        if isinstance(self._llm_client, HermesChatClient):
+            mcp_handler = TUIMCPEventHandler(self, self._llm_client)
+            self._llm_client.set_mcp_handler(mcp_handler)
 
         # 后端切换时重新初始化智能体状态
         self._reinitialize_agent_state()
@@ -1057,8 +1080,8 @@ class IntelligentTerminal(App):
             app_id, name = selected_agent
 
             # 设置智能体到客户端
-            if hasattr(llm_client, "set_current_agent"):
-                llm_client.set_current_agent(app_id)  # type: ignore[attr-defined]
+            if isinstance(llm_client, HermesChatClient):
+                llm_client.set_current_agent(app_id)
 
         dialog = AgentSelectionDialog(agent_list, on_agent_selected, self.current_agent)
         self.push_screen(dialog)

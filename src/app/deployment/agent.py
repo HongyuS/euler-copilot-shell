@@ -233,7 +233,7 @@ class ApiClient:
         self,
         service_id: str,
         max_wait_time: int = 300,
-        check_interval: int = 10,
+        check_interval: int = 2,
     ) -> bool:
         """
         等待 MCP 服务安装完成
@@ -836,7 +836,7 @@ class AgentManager:
         retry_count: int = 0,
     ) -> tuple[bool, str]:
         """验证单个服务状态"""
-        await asyncio.sleep(2)
+        await asyncio.sleep(0.1)
 
         service_name = service_file.stem  # 去掉 .service 后缀
 
@@ -1278,36 +1278,29 @@ class AgentManager:
         )
 
         # 重试配置
-        max_attempts = 6  # 30秒 / 5秒 = 6次
-        retry_interval = 5  # 5秒重试间隔
+        max_attempts = 5  # 10秒 / 2秒 = 5次
+        retry_interval = 2  # 2秒重试间隔
 
         for attempt in range(1, max_attempts + 1):
-            try:
-                # 使用流式请求，只读取响应头，避免 SSE 连接一直保持开放
-                async with (
-                    httpx.AsyncClient(timeout=self.api_client.timeout) as client,
-                    client.stream("GET", url, headers={"Accept": "text/event-stream"}) as response,
-                ):
-                    if response.status_code == HTTP_OK:
-                        # 验证成功
-                        self._report_progress(
-                            state,
-                            f"  [green]{config.name} SSE Endpoint 验证通过[/green]",
-                            callback,
-                        )
-                        logger.info("SSE Endpoint 验证成功: %s (尝试 %d 次)", url, attempt)
-                        return True
+            # 方式1：先尝试原来的简单 GET 请求方式
+            if await self._try_simple_sse_check(url, config.name, attempt, max_attempts):
+                self._report_progress(
+                    state,
+                    f"  [green]{config.name} SSE Endpoint 验证通过[/green]",
+                    callback,
+                )
+                logger.info("SSE Endpoint 简单验证成功: %s (尝试 %d 次)", url, attempt)
+                return True
 
-                    logger.debug(
-                        "SSE Endpoint 响应码非 200: %s, 状态码: %d, 尝试: %d/%d",
-                        url,
-                        response.status_code,
-                        attempt,
-                        max_attempts,
-                    )
-
-            except (httpx.RequestError, httpx.HTTPStatusError) as e:
-                logger.debug("SSE Endpoint 连接失败: %s, 错误: %s, 尝试: %d/%d", url, e, attempt, max_attempts)
+            # 方式2：如果简单方式失败，尝试 MCP 协议 initialize 方法
+            if await self._try_mcp_initialize_check(url, config.name, attempt, max_attempts):
+                self._report_progress(
+                    state,
+                    f"  [green]{config.name} SSE Endpoint 验证通过[/green]",
+                    callback,
+                )
+                logger.info("SSE Endpoint MCP 协议验证成功: %s (尝试 %d 次)", url, attempt)
+                return True
 
             # 如果还有重试机会，等待后继续
             if attempt < max_attempts:
@@ -1316,7 +1309,7 @@ class AgentManager:
         # 所有尝试都失败了
         self._report_progress(
             state,
-            f"  [red]{config.name} SSE Endpoint 验证失败: 3分钟内无法连接[/red]",
+            f"  [red]{config.name} SSE Endpoint 验证失败: 30秒内无法连接[/red]",
             callback,
         )
         logger.error(
@@ -1325,4 +1318,113 @@ class AgentManager:
             max_attempts,
             max_attempts * retry_interval,
         )
+        return False
+
+    async def _try_simple_sse_check(
+        self,
+        url: str,
+        config_name: str,
+        attempt: int,
+        max_attempts: int,
+    ) -> bool:
+        """尝试简单的 SSE 检查（原来的方式）"""
+        try:
+            # 使用流式请求，只读取响应头，避免 SSE 连接一直保持开放
+            async with (
+                httpx.AsyncClient(timeout=self.api_client.timeout) as client,
+                client.stream("GET", url, headers={"Accept": "text/event-stream"}) as response,
+            ):
+                if response.status_code == HTTP_OK:
+                    logger.debug("SSE Endpoint 简单检查成功: %s (尝试 %d 次)", url, attempt)
+                    return True
+
+                logger.debug(
+                    "SSE Endpoint 简单检查响应码非 200: %s, 状态码: %d, 尝试: %d/%d",
+                    url,
+                    response.status_code,
+                    attempt,
+                    max_attempts,
+                )
+
+        except (httpx.RequestError, httpx.HTTPStatusError) as e:
+            logger.debug("SSE Endpoint 简单检查连接失败: %s, 错误: %s, 尝试: %d/%d", url, e, attempt, max_attempts)
+
+        return False
+
+    async def _try_mcp_initialize_check(
+        self,
+        url: str,
+        config_name: str,
+        attempt: int,
+        max_attempts: int,
+    ) -> bool:
+        """尝试 MCP 协议的 initialize 检查"""
+        # MCP 协议初始化请求负载
+        mcp_payload = {
+            "jsonrpc": "2.0",
+            "id": "health-check",
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {
+                    "name": "openEuler Intelligence",
+                    "version": "1.0",
+                },
+            },
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json,text/event-stream",
+            "MCP-Protocol-Version": "2024-11-05",
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self.api_client.timeout) as client:
+                response = await client.post(url, json=mcp_payload, headers=headers)
+
+                if response.status_code == HTTP_OK:
+                    # 尝试解析 SSE 响应，确保是有效的 MCP JSON-RPC 响应
+                    try:
+                        response_text = response.text
+
+                        # 检查是否是 SSE 格式的响应
+                        if "event: message" in response_text and "data: " in response_text:
+                            logger.debug("SSE Endpoint MCP 协议检查成功: %s (尝试 %d 次)", url, attempt)
+                            return True
+
+                        # 限制日志输出长度，避免过长的响应内容
+                        max_log_length = 100
+                        truncated_response = (
+                            response_text[:max_log_length] + "..."
+                            if len(response_text) > max_log_length
+                            else response_text
+                        )
+                        logger.debug(
+                            "SSE Endpoint MCP 响应格式异常: %s, 响应: %s, 尝试: %d/%d",
+                            url,
+                            truncated_response,
+                            attempt,
+                            max_attempts,
+                        )
+                    except json.JSONDecodeError:
+                        logger.debug(
+                            "SSE Endpoint MCP 响应非 JSON 格式: %s, 尝试: %d/%d",
+                            url,
+                            attempt,
+                            max_attempts,
+                        )
+                else:
+                    logger.debug(
+                        "SSE Endpoint MCP 响应码非 200: %s, 状态码: %d, 尝试: %d/%d",
+                        url,
+                        response.status_code,
+                        attempt,
+                        max_attempts,
+                    )
+
+        except (httpx.RequestError, httpx.HTTPStatusError) as e:
+            logger.debug("SSE Endpoint MCP 连接失败: %s, 错误: %s, 尝试: %d/%d", url, e, attempt, max_attempts)
+
         return False
