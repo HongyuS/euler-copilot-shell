@@ -1,4 +1,5 @@
 *venv/
+*venv-*/
 **/__pycache__/
 **/*.pyc
 
@@ -8,6 +9,9 @@
 **/*.egg-info/
 **/*.so
 **/*.o
+# 保留 scripts/build 目录
+!scripts/build/
+!scripts/build/**
 
 .env
 

@@ -1,0 +1,487 @@
+/* Smart Shell CSS 样式 */
+
+/* 主应用样式 */
+Hermes {
+    layout: vertical;
+}
+
+/* 输出区域样式 - 占据除了输入区域外的所有空间 */
+#output-container {
+    height: 1fr;
+    overflow: auto;
+    scrollbar-size: 1 1;
+    border: solid #4963b1;
+}
+
+/* 输出容器聚焦时的样式 */
+#output-container:focus {
+    border: solid #688efd;
+}
+
+/* 文本区域 */
+Static {
+    height: auto;
+    padding: 1 1;
+    border: none;
+}
+
+/* 用户输入的命令行样式 */
+.command-line {
+    color: #688efd;
+    padding: 0 1;
+}
+
+/* 底部输入区域样式 */
+#input-container {
+    height: auto;
+    min-height: 3;
+    dock: bottom;
+    padding: 0 1;
+    border-top: solid #688efd;
+    width: 100%;
+    overflow: auto;
+    scrollbar-size: 1 1;
+}
+
+/* 输入框样式 */
+#command-input {
+    width: 100%;
+    color: #688efd;
+    padding: 0 1;
+    border: none;
+    height: 1;
+    max-height: 1;
+}
+
+/* 设置界面样式 */
+SettingsScreen {
+    align: center middle;
+}
+
+#settings-screen {
+    align: center middle;
+    width: 80%;
+    height: 95%;
+    color: #ffffff;
+}
+
+/* 设置容器样式 */
+#settings-container {
+    align: center top;
+    border: solid #4963b1;
+    padding: 1 2;
+}
+
+/* 设置标题样式 */
+#settings-title {
+    text-align: center;
+    color: #4963b1;
+    padding-bottom: 1;
+}
+
+/* 设置选项样式 */
+.settings-option {
+    padding: 1 0;
+    width: 100%;
+    height: auto;
+    align: left middle;
+}
+
+/* 设置标签样式 */
+.settings-label {
+    width: 20%;
+    content-align: right middle;
+    padding-right: 1;
+    margin-top: 1;
+}
+
+/* 设置值样式 */
+.settings-input {
+    width: 80%;
+    content-align: left middle;
+}
+
+/* 设置按钮样式 */
+.settings-button {
+    content-align: left middle;
+    color: #4963b1;
+    border: solid #4963b1;
+    width: 40%;
+    margin-left: 1;
+}
+
+#save-btn, #cancel-btn {
+    width: auto;
+    min-width: 16;
+    height: 3;
+    margin: 0 1;
+}
+
+/* 操作按钮容器样式 */
+#action-buttons {
+    align: center middle;
+    dock: bottom;
+    height: auto;
+    margin-top: 1;
+    padding: 1;
+    content-align: center bottom;
+}
+
+/* 退出对话框屏幕样式 */
+ExitDialog {
+    align: center middle;
+}
+
+#exit-dialog-screen {
+    align: center middle;
+    width: 50%;
+    height: 12;
+    border: solid #ff5252;
+    color: #ffffff;
+    margin: 1 1;
+    padding: 1;
+}
+
+/* 退出对话框样式 */
+#exit-dialog {
+    align: center middle;
+}
+
+/* 对话框文本样式 */
+#dialog-text {
+    text-align: center;
+    margin-bottom: 1;
+    padding: 1;
+}
+
+/* 对话框按钮容器 */
+#dialog-buttons {
+    align: center middle;
+    width: 100%;
+    height: 3;
+    margin-top: 1;
+}
+
+/* 智能体选择对话框屏幕样式 */
+AgentSelectionDialog {
+    align: center middle;
+}
+
+#agent-dialog-screen {
+    align: center middle;
+    width: 60%;
+    height: 70%;
+    border: solid #4963b1;
+    color: #ffffff;
+    margin: 1 1;
+    padding: 1;
+}
+
+/* 智能体选择对话框样式 */
+#agent-dialog {
+    align: center middle;
+    min-height: 17;
+}
+
+/* 智能体对话框标题样式 */
+#agent-dialog-title {
+    text-align: center;
+    margin-bottom: 1;
+    padding: 1;
+    color: #688efd;
+    text-style: bold;
+}
+
+/* 智能体内容显示区域 */
+#agent-content {
+    height: 1fr;
+    width: 100%;
+    background: #1a1a1a;
+    color: #ffffff;
+    padding: 2;
+    border: solid #688efd;
+    margin: 1 0;
+    overflow: auto;
+    scrollbar-size: 1 1;
+}
+
+/* 智能体对话框帮助文本样式 */
+#agent-dialog-help {
+    text-align: center;
+    margin-top: 1;
+    padding: 1;
+    color: #aaaaaa;
+    text-style: italic;
+}
+
+/* 后端要求对话框屏幕样式 */
+BackendRequiredDialog {
+    align: center middle;
+}
+
+#backend-dialog-screen {
+    align: center middle;
+    width: 50%;
+    height: 15;
+    border: solid #ff9800;
+    color: #ffffff;
+    margin: 1 1;
+    padding: 1;
+}
+
+/* 后端要求对话框样式 */
+#backend-dialog {
+    align: center middle;
+}
+
+/* 后端对话框标题样式 */
+#backend-dialog-title {
+    text-align: center;
+    margin-bottom: 1;
+    padding: 1;
+    color: #ff9800;
+    text-style: bold;
+}
+
+/* 后端对话框文本样式 */
+#backend-dialog-text {
+    text-align: center;
+    margin-bottom: 1;
+    padding: 1;
+    color: #ffffff;
+}
+
+/* 后端对话框帮助文本样式 */
+#backend-dialog-help {
+    text-align: center;
+    margin-top: 1;
+    padding: 1;
+    color: #aaaaaa;
+    text-style: italic;
+}
+
+/* MCP 组件样式 */
+#mcp-confirm, #mcp-parameter {
+    height: auto;
+    width: 100%;
+    padding: 1;
+    border: solid #ff9800;
+    background: #1a1a1a;
+}
+
+/* MCP 模式下的输入容器 */
+#input-container.mcp-mode {
+    height: auto;
+}
+
+/* 正常模式下的输入容器 */
+#input-container.normal-mode {
+    height: 3;
+    min-height: 3;
+    max-height: 3;
+}
+
+/* MCP 确认组件样式 */
+.confirm-info {
+    text-align: left;
+    color: #ffffff;
+    height: auto;
+    padding: 0 1;
+    margin-bottom: 1;
+}
+
+.confirm-reason {
+    text-align: left;
+    color: #cccccc;
+    height: auto;
+    padding: 0 1;
+    margin-bottom: 1;
+    text-style: italic;
+}
+
+.confirm-buttons {
+    height: 3;
+    align: center middle;
+    margin-top: 0;
+}
+
+/* MCP 组件内部容器样式 - 防止占用全部空间 */
+#mcp-confirm > Vertical, #mcp-parameter > Vertical {
+    height: auto;
+}
+
+.mcp-content {
+    height: auto;
+    layout: vertical;
+}
+
+.help-text {
+    color: #888888;
+    text-style: italic;
+    width: auto;
+}
+
+.risk-low {
+    color: #4caf50;
+}
+
+.risk-medium {
+    color: #ff9800;
+}
+
+.risk-high {
+    color: #f44336;
+}
+
+/* MCP 参数组件样式 */
+.param-header {
+    text-align: center;
+    text-style: bold;
+    color: #2196f3;
+    margin-bottom: 0;
+    height: auto;
+    padding: 0 1;
+}
+
+.param-tool {
+    text-align: left;
+    color: #4caf50;
+    height: auto;
+    padding: 0 1;
+    margin-bottom: 0;
+}
+
+.param-message {
+    text-align: left;
+    color: #ffffff;
+    height: auto;
+    padding: 0 1;
+    margin-bottom: 0;
+}
+
+.param-input-compact {
+    width: 100%;
+    margin-bottom: 0;
+}
+
+.param-buttons {
+    height: 3;
+    align: center middle;
+    margin-top: 0;
+}
+
+/* MCP 按钮样式 */
+#mcp-confirm-yes, #mcp-confirm-no, #mcp-param-submit, #mcp-param-cancel {
+    margin: 0 1;
+    width: auto;
+    min-height: 3;
+    height: 3;
+}
+
+/* 进度消息样式 */
+.progress-line {
+    background: rgba(76, 175, 80, 0.1);
+    border-left: solid #4caf50;
+    padding: 1;
+    margin: 1 0;
+}
+
+/* 进度消息过渡动画效果 */
+.progress-line:focus {
+    background: rgba(76, 175, 80, 0.2);
+}
+
+/* 初始化 - 模式选择界面 */
+.mode-container {
+    background: $surface;
+    border: solid $primary;
+    padding: 2;
+}
+
+.mode-title {
+    color: #4963b1;
+    text-style: bold;
+    text-align: center;
+    padding: 1;
+    margin-bottom: 1;
+}
+
+.mode-description {
+    color: #888888;
+    text-align: center;
+    padding: 1;
+    margin-bottom: 2;
+}
+
+.options-row {
+    height: auto;
+    width: 100%;
+    align: center middle;
+    margin: 2 0;
+}
+
+.mode-option {
+    width: 1fr;
+    height: auto;
+    min-height: 11;
+    max-height: 12;
+    background: $surface;
+    border: solid #888888;
+    padding: 1;
+    margin: 0 2;
+    text-align: center;
+    text-wrap: wrap;
+    color: $text;
+}
+
+.mode-option:hover {
+    border: solid #4963b1;
+    background: rgba(73, 99, 177, 0.1);
+}
+
+.mode-option:focus {
+    border: solid #688efd;
+    background: rgba(104, 142, 253, 0.2);
+    outline: none;
+}
+
+/* 初始化 - 连接现有服务界面 */
+.connect-container {
+    background: $surface;
+    border: solid $primary;
+    padding: 2;
+}
+
+.connect-title {
+    color: #4963b1;
+    text-style: bold;
+    text-align: center;
+    padding: 1;
+}
+
+.connect-description {
+    color: #888888;
+    text-align: center;
+    padding: 1;
+}
+
+.validation-status {
+    color: #888888;
+    text-style: italic;
+    text-align: center;
+    padding: 1;
+}
+
+/* 初始化 - 选择部署模式 - 底部按钮 */
+.mode-button-row {
+    height: 3;
+    align: center middle;
+    dock: bottom;
+}
+
+.mode-button-row > Button {
+    margin: 0 1;
+    width: auto;
+    min-height: 3;
+    height: 3;
+}
