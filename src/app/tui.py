@@ -106,7 +106,7 @@ class OutputLine(Static):
             self.add_class("command-line")
         self.text_content = text
 
-    def update(self, content: VisualType = "", *, layout: bool = False) -> None:
+    def update(self, content: VisualType = "", *, layout: bool = True) -> None:
         """更新组件内容，确保禁用富文本标记解析"""
         # 如果是字符串，更新内部存储的文本内容
         if isinstance(content, str):
