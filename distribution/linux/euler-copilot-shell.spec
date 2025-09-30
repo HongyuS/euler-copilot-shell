@@ -4,7 +4,7 @@
 
 Name:           euler-copilot-shell
 Version:        0.10.1
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        openEuler Intelligence 智能命令行工具集
 License:        MulanPSL-2.0
 URL:            https://gitee.com/openeuler/euler-copilot-shell
@@ -131,6 +131,9 @@ rm -f /usr/lib/openeuler-intelligence/scripts/5-resource/env.*
 fi
 
 %changelog
+* Tue Sep 30 2025 openEuler <contact@openeuler.org> - 0.10.1-5
+- 支持通过环境变量 OI_SKIP_SSL_VERIFY / OI_SSL_VERIFY 控制 OpenAI 客户端 SSL 验证
+
 * Wed Sep 17 2025 openEuler <contact@openeuler.org> - 0.10.1-4
 - 修复 Token 计算器中类型注解的兼容性问题
 - 优化部署脚本中下载资源文件的逻辑
