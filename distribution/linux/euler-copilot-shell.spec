@@ -49,14 +49,15 @@ openEuler Intelligence 部署安装工具包，包含部署脚本和相关资源
 python3 -m venv %{_builddir}/venv
 source %{_builddir}/venv/bin/activate
 
-# 升级 pip 和 setuptools
-pip install --upgrade pip setuptools wheel
+# 升级 pip 并安装 uv
+pip install --upgrade pip
+pip install uv
 
-# 安装项目依赖
-pip install -r requirements.txt
+# 使用 uv 安装项目依赖
+uv pip install .
 
-# 安装 PyInstaller
-pip install pyinstaller
+# 安装 PyInstaller（通过 uv 保证环境一致）
+uv pip install pyinstaller
 
 # 使用虚拟环境中的 PyInstaller 创建单一可执行文件
 pyinstaller --noconfirm \
