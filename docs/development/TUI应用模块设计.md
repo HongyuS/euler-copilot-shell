@@ -28,7 +28,7 @@ graph TB
     end
     
     subgraph "事件处理层"
-        O[TUIMCPHandler<br/>MCP事件处理] --> E
+        O[TUIMCPEventHandler<br/>MCP事件处理] --> E
         O --> G
         P[Textual消息系统] --> A
     end
@@ -36,6 +36,7 @@ graph TB
     subgraph "输出组件"
         Q[OutputLine<br/>纯文本输出]
         R[MarkdownOutputLine<br/>富文本输出]
+        S[ProgressOutputLine<br/>进度输出]
     end
     
     A --> E
@@ -52,8 +53,8 @@ graph TB
 1. **主界面组件** (`tui.py`)
    - 应用主窗口和布局管理
    - 异步任务管理和状态控制
-   - 快捷键绑定和焦点控制
-   - MCP 模式切换机制
+   - 快捷键绑定和焦点控制（支持 Ctrl+C 中断当前会话）
+   - MCP 模式切换机制与进度行跟踪
 
 2. **MCP 交互组件** (`mcp_widgets.py`)
    - 工具确认界面和风险展示
@@ -89,9 +90,12 @@ classDiagram
         +handle_input(event: Input.Submitted) None
         +get_llm_client() LLMClientBase
         +action_settings() None
+        +action_request_quit() None
         +action_reset_conversation() None
         +action_choose_agent() None
         +action_toggle_focus() None
+        +action_interrupt() None
+        +refresh_llm_client() None
     }
     
     class FocusableContainer {
@@ -124,7 +128,7 @@ classDiagram
 ```mermaid
 sequenceDiagram
     participant S as HermesStreamEvent
-    participant H as TUIMCPHandler
+    participant H as TUIMCPEventHandler
     participant T as IntelligentTerminal
     participant C as MCPConfirmWidget
     participant P as MCPParameterWidget

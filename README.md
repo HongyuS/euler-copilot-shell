@@ -22,9 +22,11 @@
 
 2. 安装依赖（建议使用 Python 虚拟环境）:
 
-   ```sh
-   pip install -r requirements.txt
-   ```
+  ```sh
+  uv venv --python 3.11 .venv
+  source .venv/bin/activate
+  uv pip install -e '.[dev]'
+  ```
 
 ### 方式二：通过 RPM 包安装
 
@@ -344,8 +346,9 @@ oi --agent
 ```text
 smart-shell/
 ├── README.md                     # 项目说明文档
-├── requirements.txt              # Python 依赖包列表
-├── setup.py                      # 包安装配置文件
+├── pyproject.toml                # 项目配置与依赖（由 uv 管理）
+├── requirements.txt              # pip 兼容依赖列表（使用 uv export 生成）
+├── uv.lock                       # uv 生成的锁定文件
 ├── LICENSE                       # 开源许可证
 ├── distribution/                 # 发布相关文件
 ├── docs/                         # 项目文档目录

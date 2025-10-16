@@ -15,8 +15,8 @@ openEuler Intelligence 智能 Shell 是一个基于 Python 的智能命令行工
   - `/docs/development/`: 开发相关文档
   - `/docs/development/api/`: API 规范文档（仅供参考，请勿修改）
 - `/.venv`: Python 虚拟环境
-- `/requirements.txt`: Python 依赖包列表
-- `/setup.py`: 项目安装配置
+- `/pyproject.toml`: Python 依赖与项目配置（使用 uv 管理）
+- `/uv.lock`: uv 生成的锁定文件
 
 ## Libraries and Frameworks
 
@@ -30,11 +30,14 @@ openEuler Intelligence 智能 Shell 是一个基于 Python 的智能命令行工
 **重要：开发与测试必须使用 `.venv` 虚拟环境**
 
 ```bash
+# 创建虚拟环境（仅首次）
+uv venv --python 3.11 .venv
+
 # 激活虚拟环境
 source .venv/bin/activate
 
-# 安装依赖
-pip install -r requirements.txt
+# 安装依赖（包含可编辑模式安装项目本身和开发工具）
+uv pip install -e '.[dev]'
 
 # 运行项目
 python src/main.py
