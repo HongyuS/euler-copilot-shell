@@ -33,58 +33,19 @@ config_toml_file="../5-resource/config.toml"
 env_file="../5-resource/env"
 mysql_temp="../5-resource/mysql_temp"
 
-is_x86_architecture() {
-  # 获取系统架构信息（使用 uname -m 或 arch 命令）
-  local arch
-  arch=$(uname -m) # 多数系统支持，返回架构名称（如 x86_64、i686、aarch64 等）
-  # 备选：arch 命令，输出与 uname -m 类似
-  # arch=$(arch)
+# 配置MinIO（RPM安装后的配置）
+install_minio() {
+  echo -e "${COLOR_INFO}[Info] 开始配置MinIO...${COLOR_RESET}"
 
-  # x86 架构的常见标识：i386、i686（32位），x86_64（64位）
-  if [[ $arch == i386 || $arch == i686 || $arch == x86_64 ]]; then
-    return 0 # 是 x86 架构，返回 0（成功）
-  else
-    return 1 # 非 x86 架构，返回 1（失败）
-  fi
-}
-# 安装配置MinIO（非x86架构专用）
-install_minio_arrch64() {
-  # 仅在非x86架构执行（主要针对aarch64）
-  if is_x86_architecture; then
-    echo -e "${COLOR_INFO}[Info] 当前为x86架构，跳过MinIO安装流程${COLOR_RESET}"
-    return 0
-  fi
-
-  # 检查是否已设置密码，未设置则使用默认值
-  if [ -z "$MINIO_ROOT_PASSWORD" ]; then
-    echo -e "${COLOR_INFO}[Info] 未指定MINIO_ROOT_PASSWORD，使用默认密码${COLOR_RESET}"
-    MINIO_ROOT_PASSWORD="minioadmin" # 默认为minioadmin
-  fi
-
-  echo -e "${COLOR_INFO}[Info] 开始安装配置MinIO...${COLOR_RESET}"
-
-  echo -e "${COLOR_INFO}[Info] 安装MinIO到系统目录...${COLOR_RESET}"
-  minio_dir="/opt/minio"
-  chmod +x -R "$minio_dir"
-  mv "$minio_dir/minio" /usr/local/bin/ || {
-    echo -e "${COLOR_ERROR}[Error] 无法安装MinIO到/usr/local/bin${COLOR_RESET}"
-    rm -rf "$minio_dir"
-    return 1
-  }
-  if ! file /usr/local/bin/minio | grep -q "ARM aarch64"; then
-    echo -e "${COLOR_ERROR}[Error] MinIO二进制文件架构不匹配${COLOR_RESET}"
-    rm -f /usr/local/bin/minio
-    return 1
-  fi
-
-  # 4. 配置MinIO环境变量
+  # 1. 配置MinIO环境变量
   echo -e "${COLOR_INFO}[Info] 配置MinIO环境变量...${COLOR_RESET}"
   cat >/etc/default/minio <<EOF
 MINIO_ROOT_USER=minioadmin
 MINIO_ROOT_PASSWORD=$MINIO_ROOT_PASSWORD
 MINIO_VOLUMES=/var/lib/minio
 EOF
-  # 5. 创建用户和数据目录
+
+  # 2. 创建用户和数据目录（RPM可能已创建，这里确保存在）
   echo -e "${COLOR_INFO}[Info] 创建MinIO用户和数据目录...${COLOR_RESET}"
   if ! id minio-user &>/dev/null; then
     groupadd minio-user
@@ -100,29 +61,7 @@ EOF
     return 1
   }
 
-  # 6. 配置systemd服务
-  echo -e "${COLOR_INFO}[Info] 配置MinIO系统服务...${COLOR_RESET}"
-  cat >/etc/systemd/system/minio.service <<'EOF'
-[Unit]
-Description=MinIO Object Storage Server
-Documentation=https://min.io/docs/minio/linux/index.html
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-User=minio-user
-Group=minio-user
-EnvironmentFile=/etc/default/minio
-ExecStart=/usr/local/bin/minio server $MINIO_VOLUMES
-Restart=always
-RestartSec=5
-LimitNOFILE=65536
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  # 7. 启动并启用服务
+  # 3. 启动MinIO服务
   echo -e "${COLOR_INFO}[Info] 启动MinIO服务...${COLOR_RESET}"
   systemctl daemon-reload
   systemctl enable --now minio || {
@@ -130,10 +69,10 @@ EOF
     return 1
   }
 
-  # 8. 检查服务状态
+  # 4. 检查服务状态
   echo -e "${COLOR_INFO}[Info] 验证MinIO服务状态...${COLOR_RESET}"
   if systemctl is-active --quiet minio; then
-    echo -e "${COLOR_SUCCESS}[Success] MinIO安装配置完成"
+    echo -e "${COLOR_SUCCESS}[Success] MinIO配置完成${COLOR_RESET}"
     return 0
   else
     echo -e "${COLOR_ERROR}[Error] MinIO服务未正常运行，请查看日志: journalctl -u minio -f${COLOR_RESET}"
@@ -141,48 +80,7 @@ EOF
   fi
 }
 
-# 安装配置MinIO
-install_minio() {
-  ! is_x86_architecture || {
-    echo -e "${COLOR_INFO}[Info] 开始配置MinIO...${COLOR_RESET}"
-
-    cat >/etc/default/minio <<EOF
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=$MINIO_ROOT_PASSWORD
-MINIO_VOLUMES=/var/lib/minio
-EOF
-
-    # 4. 创建用户和目录
-    echo -e "${COLOR_INFO}[Info] 创建MinIO用户和目录...${COLOR_RESET}"
-    if ! id minio-user &>/dev/null; then
-      groupadd minio-user
-      useradd -g minio-user --shell=/sbin/nologin -r minio-user
-    fi
-
-    mkdir -p /var/lib/minio
-    chown -R minio-user:minio-user /var/lib/minio
-
-    # 5. 启动服务
-    echo -e "${COLOR_INFO}[Info] 启动MinIO服务...${COLOR_RESET}"
-    systemctl enable --now minio || {
-      echo -e "${COLOR_ERROR}[Error] MinIO服务启动失败${COLOR_RESET}"
-      return 1
-    }
-
-    # 6. 检查服务状态
-    echo -e "${COLOR_INFO}[Info] 检查MinIO服务状态...${COLOR_RESET}"
-    if ! systemctl is-active --quiet minio; then
-      echo -e "${COLOR_ERROR}[Error] MinIO服务未正常运行${COLOR_RESET}"
-      return 1
-    fi
-
-    echo -e "${COLOR_SUCCESS}[Success] MinIO配置完成${COLOR_RESET}"
-    return 0
-  }
-  install_minio_arrch64 || return 1
-  return 0
-
-}
+# 更新配置文件中的密码
 update_password() {
   # 使用sed命令更新配置文件
   sed -i "s/secret_key = .*/secret_key = '$MINIO_ROOT_PASSWORD'/" $config_toml_file

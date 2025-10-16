@@ -107,6 +107,39 @@ get_wget_log_filename() {
   local logfile="$HOME/.cache/openEuler Intelligence/logs/${timestamp}_${filename}.log"
   echo "$logfile"
 }
+# 获取最新的 MinIO RPM 下载地址
+get_latest_minio_rpm_url() {
+  local arch=$1
+  local base_url
+
+  case "$arch" in
+  x86_64 | i386 | i686)
+    base_url="https://dl.min.io/server/minio/release/linux-amd64/archive/"
+    ;;
+  aarch64 | arm64)
+    base_url="https://dl.min.io/server/minio/release/linux-arm64/archive/"
+    ;;
+  *)
+    echo -e "${COLOR_ERROR}[Error] 不支持的架构: $arch${COLOR_RESET}" >&2
+    return 1
+    ;;
+  esac
+
+  # 获取目录列表并解析最新的 RPM 文件
+  # 使用兼容 macOS 和 Linux 的 grep 选项
+  local rpm_file
+  rpm_file=$(curl -sL "$base_url" | grep -o 'minio-[0-9][^"]*\.rpm' | sort -V | tail -1)
+
+  if [ -z "$rpm_file" ]; then
+    echo -e "${COLOR_ERROR}[Error] 无法获取最新的 MinIO RPM 文件名${COLOR_RESET}" >&2
+    return 1
+  fi
+
+  # 只输出 URL 到 stdout（作为函数返回值）
+  echo "${base_url}${rpm_file}"
+  return 0
+}
+
 # 安装MinIO
 install_minio() {
   echo -e "${COLOR_INFO}[Info] 开始安装MinIO...${COLOR_RESET}"
@@ -121,15 +154,35 @@ install_minio() {
 
   # 根据架构选择不同的安装方式
   case "$arch" in
-  x86_64 | i386 | i686)
-    local minio_url="https://dl.min.io/server/minio/release/linux-amd64/archive/minio-20250524170830.0.0-1.x86_64.rpm"
-    local minio_file="$minio_dir/minio-20250524170830.0.0-1.x86_64.rpm"
+  x86_64 | i386 | i686 | aarch64 | arm64)
+    # 首先检查缓存目录中是否已存在 MinIO RPM 文件（任何版本）
+    local existing_rpm
+    existing_rpm=$(find "$minio_dir" -name "minio-*.rpm" -type f 2>/dev/null | head -1)
 
-    # 检查RPM文件是否已存在，不存在则下载
-    if [ -f "$minio_file" ]; then
-      echo -e "${COLOR_INFO}[Info] MinIO RPM文件已存在于缓存目录，跳过下载${COLOR_RESET}"
+    if [ -n "$existing_rpm" ]; then
+      # 找到已存在的 RPM 文件，直接使用
+      echo -e "${COLOR_INFO}[Info] 发现已存在的 MinIO RPM 文件: $(basename "$existing_rpm")${COLOR_RESET}"
+      echo -e "${COLOR_INFO}[Info] 使用缓存的 RPM 文件，跳过下载${COLOR_RESET}"
+      local minio_file="$existing_rpm"
     else
+      # 没有找到已存在的 RPM，获取最新版本并下载
+      echo -e "${COLOR_INFO}[Info] 未找到缓存的 MinIO RPM，准备下载最新版本...${COLOR_RESET}"
+      echo -e "${COLOR_INFO}[Info] 获取最新的 MinIO RPM 下载地址（$arch）...${COLOR_RESET}"
+
+      local minio_url
+      minio_url=$(get_latest_minio_rpm_url "$arch")
+      if [ $? -ne 0 ] || [ -z "$minio_url" ]; then
+        echo -e "${COLOR_ERROR}[Error] 获取 MinIO 下载地址失败${COLOR_RESET}"
+        return 1
+      fi
+
+      local rpm_filename
+      rpm_filename=$(basename "$minio_url")
+      local minio_file="$minio_dir/$rpm_filename"
+
+      echo -e "${COLOR_INFO}[Info] 最新版本: $rpm_filename${COLOR_RESET}"
       echo -e "${COLOR_INFO}[Info] 正在下载MinIO软件包...${COLOR_RESET}"
+
       local logfile
       logfile=$(get_wget_log_filename "$minio_file")
       if ! wget "$minio_url" --no-check-certificate -O "$minio_file" -o "$logfile"; then
@@ -138,32 +191,12 @@ install_minio() {
       fi
     fi
 
+    # 安装 RPM 文件
     dnf install -y "$minio_file" || {
       echo -e "${COLOR_ERROR}[Error] MinIO安装失败${COLOR_RESET}"
       return 1
     }
     echo -e "${COLOR_SUCCESS}[Success] MinIO安装成功${COLOR_RESET}"
-    return 0
-    ;;
-  aarch64 | arm64)
-    local minio_url="https://dl.min.io/server/minio/release/linux-arm64/minio"
-    local minio_binary="$minio_dir/minio"
-
-    # 检查二进制文件是否已存在，不存在则下载
-    if [ -f "$minio_binary" ]; then
-      echo -e "${COLOR_INFO}[Info] MinIO二进制文件已存在于缓存目录，跳过下载${COLOR_RESET}"
-    else
-      echo -e "${COLOR_INFO}[Info] 正在下载MinIO二进制文件（aarch64）...${COLOR_RESET}"
-      local logfile
-      logfile=$(get_wget_log_filename "$minio_binary")
-      if ! wget -q --show-progress "$minio_url" -O "$minio_binary" --no-check-certificate -o "$logfile"; then
-        echo -e "${COLOR_ERROR}[Error] 下载MinIO失败，请检查网络连接${COLOR_RESET}"
-        return 1
-      fi
-    fi
-    # 设置执行权限
-    chmod +x "$minio_binary"
-    echo -e "${COLOR_SUCCESS}[Success] MinIO二进制文件准备完成${COLOR_RESET}"
     return 0
     ;;
   *)
