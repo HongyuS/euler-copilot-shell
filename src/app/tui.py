@@ -13,6 +13,7 @@ from textual.containers import Container
 from textual.message import Message
 from textual.widgets import Footer, Header, Input, Static
 
+from __version__ import __version__
 from app.dialogs import AgentSelectionDialog, BackendRequiredDialog, ExitDialog
 from app.mcp_widgets import MCPConfirmResult, MCPConfirmWidget, MCPParameterResult, MCPParameterWidget
 from app.settings import SettingsScreen
@@ -249,6 +250,7 @@ class IntelligentTerminal(App):
         super().__init__()
         # 设置应用标题
         self.title = "openEuler Intelligence"
+        self.sub_title = f"智能命令行工具 {__version__}"
         self.config_manager = ConfigManager()
         self.processing: bool = False
         # 添加保存任务的集合到类属性
@@ -267,7 +269,7 @@ class IntelligentTerminal(App):
 
     def compose(self) -> ComposeResult:
         """构建界面"""
-        yield Header(show_clock=True)
+        yield Header(show_clock=False)
         yield FocusableContainer(id="output-container")
         with Container(id="input-container", classes="normal-mode"):
             yield CommandInput()
@@ -1077,7 +1079,7 @@ class IntelligentTerminal(App):
         def on_agent_selected(selected_agent: tuple[str, str]) -> None:
             """智能体选择回调"""
             self.current_agent = selected_agent
-            app_id, name = selected_agent
+            app_id, _name = selected_agent
 
             # 设置智能体到客户端
             if isinstance(llm_client, HermesChatClient):

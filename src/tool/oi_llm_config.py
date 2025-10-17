@@ -547,7 +547,7 @@ class LLMConfigScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         """组合界面组件"""
         with Container(classes="config-container"):
-            yield Header()
+            yield Header(show_clock=False)
 
             with TabbedContent():
                 with TabPane("LLM 配置", id="llm_tab"):
@@ -820,7 +820,7 @@ class LLMConfigScreen(ModalScreen[bool]):
 
         try:
             # 执行验证
-            is_valid, message, info = await self.config.validate_llm_connectivity()
+            is_valid, message, _info = await self.config.validate_llm_connectivity()
 
             # 更新验证状态
             if is_valid:
@@ -851,7 +851,7 @@ class LLMConfigScreen(ModalScreen[bool]):
 
         try:
             # 执行验证
-            is_valid, message, info = await self.config.validate_embedding_connectivity()
+            is_valid, message, _info = await self.config.validate_embedding_connectivity()
 
             # 更新验证状态
             if is_valid:

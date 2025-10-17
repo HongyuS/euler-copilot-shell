@@ -133,7 +133,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         """组合界面组件"""
         with Container(classes="config-container"):
-            yield Header()
+            yield Header(show_clock=False)
 
             with TabbedContent():
                 with TabPane("基础配置", id="basic"):
@@ -706,7 +706,7 @@ class DeploymentProgressScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         """组合界面组件"""
         with Container(classes="progress-container"):
-            yield Header()
+            yield Header(show_clock=False)
 
             with Vertical(classes="progress-section"):
                 yield Static("部署进度:", id="progress_label")

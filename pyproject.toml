@@ -44,6 +44,7 @@ packages = ["src/app", "src/backend", "src/config", "src/log", "src/tool"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/main.py" = "main.py"
+"src/__version__.py" = "__version__.py"
 
 [tool.hatch.build.targets.wheel.package-data]
 app = ["css/*.tcss"]
