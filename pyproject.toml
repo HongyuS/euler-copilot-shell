@@ -33,6 +33,12 @@ dev = ["ruff==0.14.0"]
 requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build]
+exclude = ["*.pyc", "__pycache__", ".DS_Store"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/app", "src/backend", "src/config", "src/log", "src/tool"]
 
@@ -43,15 +49,5 @@ packages = ["src/app", "src/backend", "src/config", "src/log", "src/tool"]
 app = ["css/*.tcss"]
 
 [tool.hatch.build.targets.sdist]
-include = [
-    "LICENSE",
-    "MANIFEST.in",
-    "README.md",
-    "requirements.txt",
-    "distribution",
-    "docs",
-    "resource",
-    "scripts",
-    "src",
-    "tools",
-]
+include = ["LICENSE", "MANIFEST.in", "README.md", "requirements.txt", "src"]
+exclude = ["*.pyc", "__pycache__", ".DS_Store"]
