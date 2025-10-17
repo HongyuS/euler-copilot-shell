@@ -11,12 +11,13 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Container
 from textual.message import Message
-from textual.widgets import Footer, Header, Input, Static
+from textual.widgets import Footer, Input, Static
 
 from __version__ import __version__
 from app.dialogs import AgentSelectionDialog, BackendRequiredDialog, ExitDialog
 from app.mcp_widgets import MCPConfirmResult, MCPConfirmWidget, MCPParameterResult, MCPParameterWidget
 from app.settings import SettingsScreen
+from app.tui_header import OIHeader
 from app.tui_mcp_handler import TUIMCPEventHandler
 from backend.factory import BackendFactory
 from backend.hermes import HermesChatClient
@@ -225,7 +226,7 @@ class IntelligentTerminal(App):
         Binding(key="ctrl+s", action="settings", description="设置"),
         Binding(key="ctrl+r", action="reset_conversation", description="重置对话"),
         Binding(key="ctrl+t", action="choose_agent", description="选择智能体"),
-        Binding(key="ctrl+c", action="interrupt", description="中断", priority=True),
+        Binding(key="ctrl+c", action="cancel", description="取消", priority=True),
         Binding(key="tab", action="toggle_focus", description="切换焦点"),
     ]
 
@@ -269,7 +270,7 @@ class IntelligentTerminal(App):
 
     def compose(self) -> ComposeResult:
         """构建界面"""
-        yield Header(show_clock=False)
+        yield OIHeader()
         yield FocusableContainer(id="output-container")
         with Container(id="input-container", classes="normal-mode"):
             yield CommandInput()
@@ -339,16 +340,16 @@ class IntelligentTerminal(App):
             # 否则聚焦到当前的输入组件
             self._focus_current_input_widget()
 
-    def action_interrupt(self) -> None:
-        """中断当前正在进行的操作（命令执行或AI问答）"""
+    def action_cancel(self) -> None:
+        """取消当前正在进行的操作（命令执行或AI问答）"""
         if not self.processing:
             # 如果当前没有正在处理的操作，只显示提示
-            self.logger.debug("当前没有正在进行的操作可以中断")
+            self.logger.debug("当前没有正在进行的操作可以取消")
             return
 
-        self.logger.info("用户请求中断当前操作")
+        self.logger.info("用户请求取消当前操作")
 
-        # 中断当前所有的后台任务
+        # 取消当前所有的后台任务
         interrupted_count = 0
         for task in list(self.background_tasks):
             if not task.done():
@@ -356,17 +357,17 @@ class IntelligentTerminal(App):
                 interrupted_count += 1
                 self.logger.debug("已取消后台任务")
 
-        # 中断 LLM 客户端
+        # 取消 LLM 客户端请求
         if self._llm_client is not None:
-            # 异步调用中断方法
-            interrupt_task = asyncio.create_task(self._interrupt_llm_client())
-            self.background_tasks.add(interrupt_task)
-            interrupt_task.add_done_callback(self._task_done_callback)
+            # 异步调用取消方法
+            cancel_task = asyncio.create_task(self._cancel_llm_request())
+            self.background_tasks.add(cancel_task)
+            cancel_task.add_done_callback(self._task_done_callback)
 
         if interrupted_count > 0:
             # 显示中断消息
             output_container = self.query_one("#output-container")
-            interrupt_line = OutputLine("[已中断]")
+            interrupt_line = OutputLine("[已取消]")
             output_container.mount(interrupt_line)
             # 异步滚动到底部
             scroll_task = asyncio.create_task(self._scroll_to_end())
@@ -552,14 +553,14 @@ class IntelligentTerminal(App):
             # 确保处理标志被重置
             self.processing = False
 
-    async def _interrupt_llm_client(self) -> None:
-        """异步中断 LLM 客户端"""
+    async def _cancel_llm_request(self) -> None:
+        """异步取消 LLM 请求"""
         try:
             if self._llm_client is not None:
                 await self._llm_client.interrupt()
-                self.logger.info("LLM 客户端中断完成")
+                self.logger.info("LLM 请求已取消")
         except Exception:
-            self.logger.exception("中断 LLM 客户端时出错")
+            self.logger.exception("取消 LLM 请求时出错")
 
     async def _process_command(self, user_input: str) -> None:
         """异步处理命令"""

@@ -20,9 +20,10 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import ModalScreen
-from textual.widgets import Button, Header, Input, Label, Static, TabbedContent, TabPane
+from textual.widgets import Button, Input, Label, Static, TabbedContent, TabPane
 
 from app.deployment.models import EmbeddingConfig, LLMConfig
+from app.tui_header import OIHeader
 from log.manager import get_logger
 from tool.validators import APIValidator
 
@@ -547,7 +548,7 @@ class LLMConfigScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         """组合界面组件"""
         with Container(classes="config-container"):
-            yield Header(show_clock=False)
+            yield OIHeader()
 
             with TabbedContent():
                 with TabPane("LLM 配置", id="llm_tab"):
