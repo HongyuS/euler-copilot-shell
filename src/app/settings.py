@@ -15,6 +15,7 @@ from app.dialogs import ExitDialog
 from backend.hermes import HermesChatClient
 from backend.openai import OpenAIClient
 from config import Backend, ConfigManager
+from log import get_logger
 from tool.validators import APIValidator, validate_oi_connection
 
 if TYPE_CHECKING:
@@ -47,10 +48,12 @@ class SettingsScreen(ModalScreen):
         self.is_validated = False
         self.validation_message = ""
         self.validator = APIValidator()
+        self.logger = get_logger(__name__)
 
         # 防抖和验证任务管理
         self._validation_task: asyncio.Task | None = None
         self._debounce_timer: asyncio.Task | None = None
+        self._validation_generation = 0  # 用于标记验证代数，避免旧的验证任务执行
 
     def compose(self) -> ComposeResult:
         """构建设置页面"""
@@ -374,6 +377,10 @@ class SettingsScreen(ModalScreen):
 
     def _schedule_validation(self) -> None:
         """调度验证任务，带防抖机制"""
+        # 增加验证代数，使旧的验证任务失效
+        self._validation_generation += 1
+        current_generation = self._validation_generation
+
         # 取消之前的定时器
         if self._debounce_timer and not self._debounce_timer.done():
             self._debounce_timer.cancel()
@@ -384,12 +391,20 @@ class SettingsScreen(ModalScreen):
 
         # 创建新的定时器，1秒后启动验证
         async def debounce_and_validate() -> None:
-            await asyncio.sleep(1.0)  # 防抖延迟
-            if self._validation_task and not self._validation_task.done():
-                return  # 如果已经有验证任务在运行，跳过
-            self._validation_task = asyncio.create_task(self._validate_configuration())
-            self.background_tasks.add(self._validation_task)
-            self._validation_task.add_done_callback(self.background_tasks.discard)
+            try:
+                await asyncio.sleep(1.0)  # 防抖延迟
+                # 检查这个任务是否已经过期（有更新的验证请求）
+                if current_generation != self._validation_generation:
+                    return  # 已经有更新的验证请求，跳过这个过期的验证
+                # 再次检查：如果已经有验证任务在运行，跳过
+                if self._validation_task and not self._validation_task.done():
+                    return
+                self._validation_task = asyncio.create_task(self._validate_configuration())
+                self.background_tasks.add(self._validation_task)
+                self._validation_task.add_done_callback(self.background_tasks.discard)
+            except asyncio.CancelledError:
+                # 任务被取消，直接退出
+                pass
 
         self._debounce_timer = asyncio.create_task(debounce_and_validate())
         self.background_tasks.add(self._debounce_timer)
@@ -412,16 +427,16 @@ class SettingsScreen(ModalScreen):
 
     async def _validate_configuration(self) -> None:
         """验证当前配置"""
-        base_url = self.query_one("#base-url", Input).value.strip()
-        api_key = self.query_one("#api-key", Input).value.strip()
-
-        if not base_url:
-            self.is_validated = False
-            self.validation_message = "Base URL 不能为空"
-            self._update_save_button_state()
-            return
-
         try:
+            base_url = self.query_one("#base-url", Input).value.strip()
+            api_key = self.query_one("#api-key", Input).value.strip()
+
+            if not base_url:
+                self.is_validated = False
+                self.validation_message = "Base URL 不能为空"
+                self._update_save_button_state()
+                return
+
             if self.backend == Backend.OPENAI:
                 # 获取模型输入值（可以为空）
                 try:
@@ -446,12 +461,21 @@ class SettingsScreen(ModalScreen):
                 self.is_validated = valid
                 self.validation_message = message
 
-        except (TimeoutError, ValueError, RuntimeError) as e:
-            self.is_validated = False
-            self.validation_message = f"验证过程中发生错误: {e!s}"
+            # 将验证结果记录到日志，不显示通知
+            if self.is_validated:
+                self.logger.info("配置验证成功: %s", self.validation_message)
+            else:
+                self.logger.warning("配置验证失败: %s", self.validation_message)
 
-        self.notify(self.validation_message, severity="error" if not self.is_validated else "information")
-        self._update_save_button_state()
+            self._update_save_button_state()
+
+        except asyncio.CancelledError:
+            # 验证被取消，直接退出，不更新状态
+            raise
+        except (TimeoutError, ValueError, RuntimeError):
+            self.is_validated = False
+            self.logger.exception("配置验证异常")
+            self._update_save_button_state()
 
     def _update_save_button_state(self) -> None:
         """根据验证状态更新保存按钮"""
