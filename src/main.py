@@ -9,7 +9,7 @@ from __version__ import __version__
 from app.tui import IntelligentTerminal
 from config.manager import ConfigManager
 from config.model import LogLevel
-from i18n.manager import _, get_supported_locales, init_i18n, set_locale
+from i18n.manager import _, get_locale, get_supported_locales, init_i18n, set_locale
 from log.manager import (
     cleanup_empty_logs,
     disable_console_output,
@@ -168,8 +168,18 @@ def main() -> None:
     # 首先初始化配置管理器
     config_manager = ConfigManager()
 
-    # 初始化国际化系统 - 使用配置中的语言设置
-    init_i18n(config_manager.get_locale())
+    # 初始化国际化系统
+    # 如果配置中没有设置语言（空字符串），则自动检测系统语言
+    configured_locale = config_manager.get_locale()
+    if configured_locale:
+        # 使用用户配置的语言
+        init_i18n(configured_locale)
+    else:
+        # 自动检测系统语言
+        init_i18n(None)
+        # 保存检测到的语言到配置中
+        detected_locale = get_locale()
+        config_manager.set_locale(detected_locale)
 
     # 解析命令行参数（需要在初始化 i18n 后进行，以支持翻译）
     args = parse_args()
