@@ -1,6 +1,5 @@
-httpx==0.28.1
-openai==1.99.6
-rich==14.1.0
-ruff==0.12.8
-textual==5.3.0
-toml==0.10.2
+# Dependencies are managed with uv. This file is kept for compatibility with
+# tooling that still expects pip-style requirement lists.
+#
+# To regenerate this file from the locked dependency set, run:
+#   uv export --format requirements-txt --no-dev --frozen > requirements.txt

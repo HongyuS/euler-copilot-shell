@@ -5,6 +5,7 @@ import asyncio
 import atexit
 import sys
 
+from __version__ import __version__
 from app.tui import IntelligentTerminal
 from config.manager import ConfigManager
 from config.model import LogLevel
@@ -22,33 +23,77 @@ from tool import backend_init, llm_config, select_agent
 def parse_args() -> argparse.Namespace:
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
-        description="openEuler Intelligence",
+        prog="oi",
+        description="openEuler Intelligence - 智能命令行工具",
+        epilog="""
+更多信息和使用文档请访问:
+  https://gitee.com/openeuler/euler-copilot-shell/tree/master/docs
+        """,
         formatter_class=argparse.RawTextHelpFormatter,
+        add_help=False,
     )
-    parser.add_argument(
+
+    # 通用选项组
+    general_group = parser.add_argument_group(
+        "通用选项",
+        "显示帮助信息和版本信息",
+    )
+    general_group.add_argument(
+        "-h",
+        "--help",
+        action="help",
+        help="显示此帮助信息并退出",
+    )
+    general_group.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="显示程序版本号并退出",
+    )
+
+    # 后端配置选项组
+    backend_group = parser.add_argument_group(
+        "后端配置选项",
+        "用于初始化和配置 openEuler Intelligence 后端服务",
+    )
+    backend_group.add_argument(
         "--init",
         action="store_true",
         help="初始化 openEuler Intelligence 后端\n * 初始化操作需要管理员权限和网络连接",
     )
-    parser.add_argument(
-        "--agent",
-        action="store_true",
-        help="选择默认智能体",
-    )
-    parser.add_argument(
+    backend_group.add_argument(
         "--llm-config",
         action="store_true",
         help="更改 openEuler Intelligence 大模型设置（需要有效的本地后端服务）\n * 配置编辑操作需要管理员权限",
     )
-    parser.add_argument(
+
+    # 应用配置选项组
+    app_group = parser.add_argument_group(
+        "应用配置选项",
+        "用于配置应用前端行为和偏好设置",
+    )
+    app_group.add_argument(
+        "--agent",
+        action="store_true",
+        help="选择默认智能体",
+    )
+
+    # 日志管理选项组
+    log_group = parser.add_argument_group(
+        "日志管理选项",
+        "用于查看和配置日志输出",
+    )
+    log_group.add_argument(
         "--logs",
         action="store_true",
         help="显示最新的日志内容（最多1000行）",
     )
-    parser.add_argument(
+    log_group.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        help="设置日志级别",
+        metavar="LEVEL",
+        help="设置日志级别 (可选: DEBUG, INFO, WARNING, ERROR)",
     )
 
     # 注册清理函数，确保在程序异常退出时也能清理空日志文件

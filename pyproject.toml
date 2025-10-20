@@ -1,0 +1,54 @@
+[project]
+name = "oi-cli"
+version = "0.10.2"
+description = "智能 Shell 命令行工具"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MulanPSL-2.0" }
+authors = [{ name = "openEuler", email = "contact@openeuler.org" }]
+dependencies = [
+    "httpx==0.28.1",
+    "openai==2.3.0",
+    "rich==14.2.0",
+    "textual==6.3.0",
+    "toml==0.10.2",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Mulan Permissive Software License v2 (MulanPSL-2.0)",
+]
+
+[project.urls]
+Homepage = "https://gitee.com/openeuler/euler-copilot-shell"
+
+[project.scripts]
+oi = "main:main"
+
+[project.optional-dependencies]
+dev = ["ruff==0.14.0"]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build]
+exclude = ["*.pyc", "__pycache__", ".DS_Store"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/app", "src/backend", "src/config", "src/log", "src/tool"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/main.py" = "main.py"
+"src/__version__.py" = "__version__.py"
+
+[tool.hatch.build.targets.wheel.package-data]
+app = ["css/*.tcss"]
+
+[tool.hatch.build.targets.sdist]
+include = ["LICENSE", "MANIFEST.in", "README.md", "requirements.txt", "src"]
+exclude = ["*.pyc", "__pycache__", ".DS_Store"]

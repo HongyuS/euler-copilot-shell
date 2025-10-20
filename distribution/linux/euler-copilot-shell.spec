@@ -3,8 +3,8 @@
 %global debug_package %{nil}
 
 Name:           euler-copilot-shell
-Version:        0.10.1
-Release:        5%{?dist}
+Version:        0.10.2
+Release:        1%{?dist}
 Summary:        openEuler Intelligence 智能命令行工具集
 License:        MulanPSL-2.0
 URL:            https://gitee.com/openeuler/euler-copilot-shell
@@ -49,14 +49,15 @@ openEuler Intelligence 部署安装工具包，包含部署脚本和相关资源
 python3 -m venv %{_builddir}/venv
 source %{_builddir}/venv/bin/activate
 
-# 升级 pip 和 setuptools
-pip install --upgrade pip setuptools wheel
+# 升级 pip 并安装 uv
+pip install --upgrade pip
+pip install uv
 
-# 安装项目依赖
-pip install -r requirements.txt
+# 使用 uv 安装项目依赖
+uv pip install .
 
-# 安装 PyInstaller
-pip install pyinstaller
+# 安装 PyInstaller（通过 uv 保证环境一致）
+uv pip install pyinstaller
 
 # 使用虚拟环境中的 PyInstaller 创建单一可执行文件
 pyinstaller --noconfirm \
@@ -131,6 +132,9 @@ rm -f /usr/lib/openeuler-intelligence/scripts/5-resource/env.*
 fi
 
 %changelog
+* Mon Oct 20 2025 openEuler <contact@openeuler.org> - 0.10.2-1
+- 修复后端可用性校验，优化令牌格式验证
+
 * Tue Sep 30 2025 openEuler <contact@openeuler.org> - 0.10.1-5
 - 支持通过环境变量 OI_SKIP_SSL_VERIFY / OI_SSL_VERIFY 控制 OpenAI 客户端 SSL 验证
 

@@ -28,6 +28,12 @@ FALSY_VALUES = {"0", "false", "no", "off"}
 SSL_VERIFY_ENV_VAR = "OI_SSL_VERIFY"
 SSL_SKIP_ENV_VAR = "OI_SKIP_SSL_VERIFY"
 
+# 令牌格式常量
+TOKEN_HEX_LENGTH = 32  # UUID4 hex 格式的长度
+TOKEN_LONG_TERM_PREFIX = "sk-"  # noqa: S105
+TOKEN_LONG_TERM_LENGTH = 35  # sk- (3) + 32 hex chars
+TOKEN_PREVIEW_LENGTH = 5  # 日志中显示的令牌预览长度
+
 
 def _parse_env_flag(value: str | None) -> bool | None:
     """解析环境变量中的布尔标志值"""
@@ -115,7 +121,7 @@ class APIValidator:
                 return False, chat_msg, {}
 
             # 测试 function_call 支持并检测类型
-            func_valid, func_msg, func_type = await self._detect_function_call_type(
+            func_valid, _func_msg, func_type = await self._detect_function_call_type(
                 client,
                 model,
                 max_tokens,
@@ -655,6 +661,17 @@ async def validate_oi_connection(base_url: str, access_token: str) -> tuple[bool
         if not base_url.startswith(("http://", "https://")):
             return False, "服务 URL 必须以 http:// 或 https:// 开头"
 
+        # 验证令牌格式
+        if not _is_valid_token_format(access_token):
+            # 记录令牌的前几个字符用于调试
+            token_preview = (
+                access_token[:TOKEN_PREVIEW_LENGTH] + "..."
+                if len(access_token) > TOKEN_PREVIEW_LENGTH
+                else access_token
+            )
+            logger.warning("访问令牌格式无效: %s", token_preview)
+            return False, "访问令牌格式无效"
+
         # 移除尾部的斜杠
         base_url = base_url.rstrip("/")
 
@@ -707,3 +724,38 @@ def _handle_http_error(status_code: int) -> tuple[bool, str]:
 
     message = error_messages.get(status_code, f"服务响应异常，状态码: {status_code}")
     return False, message
+
+
+def _is_valid_token_format(token: str) -> bool:
+    """
+    验证令牌格式是否有效
+
+    支持三种格式：
+    1. 空字符串（兼容旧版本）
+    2. 32字符的十六进制字符串（短期令牌，uuid4().hex格式）
+    3. sk- 前缀 + 32字符的十六进制字符串（长期令牌）
+
+    Args:
+        token: 访问令牌
+
+    Returns:
+        bool: 令牌格式是否有效
+
+    """
+    if not token or not token.strip():
+        # 空令牌，兼容旧版本
+        return True
+
+    token = token.strip()
+
+    # 检查是否为32字符的十六进制字符串（短期令牌）
+    if len(token) == TOKEN_HEX_LENGTH and all(c in "0123456789abcdef" for c in token.lower()):
+        return True
+
+    # 检查是否为 sk- 前缀的长期令牌
+    if token.startswith(TOKEN_LONG_TERM_PREFIX) and len(token) == TOKEN_LONG_TERM_LENGTH:
+        hex_part = token[len(TOKEN_LONG_TERM_PREFIX) :]
+        if all(c in "0123456789abcdef" for c in hex_part.lower()):
+            return True
+
+    return False

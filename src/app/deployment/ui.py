@@ -17,7 +17,6 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
-    Header,
     Input,
     Label,
     RichLog,
@@ -26,11 +25,13 @@ from textual.widgets import (
     TabPane,
 )
 
-if TYPE_CHECKING:
-    from textual.app import ComposeResult
+from app.tui_header import OIHeader
 
 from .models import DeploymentConfig, DeploymentState, EmbeddingConfig, LLMConfig
 from .service import DeploymentService
+
+if TYPE_CHECKING:
+    from textual.app import ComposeResult
 
 FULL_PROGRESS = 100
 
@@ -133,7 +134,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         """组合界面组件"""
         with Container(classes="config-container"):
-            yield Header()
+            yield OIHeader()
 
             with TabbedContent():
                 with TabPane("基础配置", id="basic"):
@@ -706,7 +707,7 @@ class DeploymentProgressScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         """组合界面组件"""
         with Container(classes="progress-container"):
-            yield Header()
+            yield OIHeader()
 
             with Vertical(classes="progress-section"):
                 yield Static("部署进度:", id="progress_label")
