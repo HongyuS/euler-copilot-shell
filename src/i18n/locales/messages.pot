@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: smart-shell 0.10.2\n"
 "Report-Msgid-Bugs-To: contact@openeuler.org\n"
-"POT-Creation-Date: 2025-10-17 17:39+0800\n"
+"POT-Creation-Date: 2025-10-20 17:44+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -16,6 +16,125 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+
+#: src/app/tui.py:217
+msgid "Enter command or question..."
+msgstr ""
+
+#: src/app/tui.py:226
+msgid "Quit"
+msgstr ""
+
+#: src/app/tui.py:227
+msgid "Settings"
+msgstr ""
+
+#: src/app/tui.py:228
+msgid "Reset"
+msgstr ""
+
+#: src/app/tui.py:229
+msgid "Agent"
+msgstr ""
+
+#: src/app/tui.py:230
+msgid "Cancel"
+msgstr ""
+
+#: src/app/tui.py:231
+msgid "Focus"
+msgstr ""
+
+#: src/app/tui.py:255
+#, python-brace-format
+msgid "Intelligent CLI Tool {version}"
+msgstr ""
+
+#: src/app/tui.py:371
+msgid "[Cancelled]"
+msgstr ""
+
+#: src/app/tui.py:576
+msgid ""
+"No response received, please check network connection or try again later"
+msgstr ""
+
+#: src/app/tui.py:684
+msgid "Request timeout, processing stopped"
+msgstr ""
+
+#: src/app/tui.py:691
+msgid "No response for a long time, processing stopped"
+msgstr ""
+
+#: src/app/tui.py:744 src/app/tui.py:902
+msgid "Request timeout, please try again later"
+msgstr ""
+
+#: src/app/tui.py:888
+#, python-brace-format
+msgid "Server error: {message}"
+msgstr ""
+
+#: src/app/tui.py:890
+#, python-brace-format
+msgid "Request failed: {message}"
+msgstr ""
+
+#: src/app/tui.py:894
+msgid "Network connection interrupted, please check network and try again"
+msgstr ""
+
+#: src/app/tui.py:906
+msgid "Network connection error, please check network and try again"
+msgstr ""
+
+#: src/app/tui.py:915 src/app/tui.py:949
+msgid "Server response error, please try again later"
+msgstr ""
+
+#: src/app/tui.py:920
+msgid "Data format error, please try again later"
+msgstr ""
+
+#: src/app/tui.py:927
+msgid "Authentication failed, please check configuration"
+msgstr ""
+
+#: src/app/tui.py:951
+#, python-brace-format
+msgid "Error processing command: {error}"
+msgstr ""
+
+#: src/app/tui.py:1170
+msgid "💡 MCP response sent"
+msgstr ""
+
+#: src/app/tui.py:1173 src/app/tui.py:1202
+msgid "❌ Current client does not support MCP response"
+msgstr ""
+
+#: src/app/tui.py:1182
+#, python-brace-format
+msgid "❌ Failed to send MCP response: {error}"
+msgstr ""
+
+#: src/app/tui.py:1249
+#, python-brace-format
+msgid "⏱️ MCP response timeout ({seconds} seconds)"
+msgstr ""
+
+#: src/app/tui.py:1253
+msgid "🚫 MCP response cancelled"
+msgstr ""
+
+#: src/app/tui.py:1336
+msgid "Backend configuration validation failed, please check and modify"
+msgstr ""
+
+#: src/app/tui.py:1337
+msgid "Configuration Error"
+msgstr ""
 
 #: src/main.py:28
 msgid "openEuler Intelligence - Intelligent command-line tool"
@@ -148,16 +267,16 @@ msgstr ""
 msgid "✓ Logging system initialized\n"
 msgstr ""
 
-#: src/main.py:181
+#: src/main.py:191
 #, python-brace-format
 msgid "✓ Language set to: {locale}\n"
 msgstr ""
 
-#: src/main.py:183
+#: src/main.py:193
 #, python-brace-format
 msgid "✗ Unsupported language: {locale}\n"
 msgstr ""
 
-#: src/main.py:218
+#: src/main.py:228
 msgid "Fatal error in Intelligent Shell application"
 msgstr ""

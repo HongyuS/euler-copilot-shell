@@ -6,8 +6,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: smart-shell\n"
 "Report-Msgid-Bugs-To: contact@openeuler.org\n"
-"POT-Creation-Date: 2025-10-17 17:39+0800\n"
-"PO-Revision-Date: 2025-01-17 00:00+0000\n"
+"POT-Creation-Date: 2025-10-20 17:44+0800\n"
+"PO-Revision-Date: 2025-10-20 19:28+0800\n"
 "Last-Translator: openEuler Intelligence Team\n"
 "Language-Team: English\n"
 "Language: en_US\n"
@@ -15,6 +15,127 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Poedit 3.8\n"
+
+#: src/app/tui.py:217
+msgid "Enter command or question..."
+msgstr "Enter question or command..."
+
+#: src/app/tui.py:226
+msgid "Quit"
+msgstr "Quit"
+
+#: src/app/tui.py:227
+msgid "Settings"
+msgstr "Settings"
+
+#: src/app/tui.py:228
+msgid "Reset"
+msgstr "Reset Conversation"
+
+#: src/app/tui.py:229
+msgid "Agent"
+msgstr "Select Agent"
+
+#: src/app/tui.py:230
+msgid "Cancel"
+msgstr "Cancel"
+
+#: src/app/tui.py:231
+msgid "Focus"
+msgstr "Toggle Focus"
+
+#: src/app/tui.py:255
+#, python-brace-format
+msgid "Intelligent CLI Tool {version}"
+msgstr "Command Line Tool {version}"
+
+#: src/app/tui.py:371
+msgid "[Cancelled]"
+msgstr "[Cancelled]"
+
+#: src/app/tui.py:576
+msgid ""
+"No response received, please check network connection or try again later"
+msgstr ""
+"No response received, please check network connection or try again later"
+
+#: src/app/tui.py:684
+msgid "Request timeout, processing stopped"
+msgstr "Request timeout, processing stopped"
+
+#: src/app/tui.py:691
+msgid "No response for a long time, processing stopped"
+msgstr "No response for a long time, processing stopped"
+
+#: src/app/tui.py:744 src/app/tui.py:902
+msgid "Request timeout, please try again later"
+msgstr "Request timeout, please try again later"
+
+#: src/app/tui.py:888
+#, python-brace-format
+msgid "Server error: {message}"
+msgstr "Server error: {message}"
+
+#: src/app/tui.py:890
+#, python-brace-format
+msgid "Request failed: {message}"
+msgstr "Request failed: {message}"
+
+#: src/app/tui.py:894
+msgid "Network connection interrupted, please check network and try again"
+msgstr "Network connection interrupted, please check network and try again"
+
+#: src/app/tui.py:906
+msgid "Network connection error, please check network and try again"
+msgstr "Network connection error, please check network and try again"
+
+#: src/app/tui.py:915 src/app/tui.py:949
+msgid "Server response error, please try again later"
+msgstr "Server response error, please try again later"
+
+#: src/app/tui.py:920
+msgid "Data format error, please try again later"
+msgstr "Data format error, please try again later"
+
+#: src/app/tui.py:927
+msgid "Authentication failed, please check configuration"
+msgstr "Authentication failed, please check configuration"
+
+#: src/app/tui.py:951
+#, python-brace-format
+msgid "Error processing command: {error}"
+msgstr "Processing command failed with error: {error}"
+
+#: src/app/tui.py:1170
+msgid "💡 MCP response sent"
+msgstr "💡 MCP response sent"
+
+#: src/app/tui.py:1173 src/app/tui.py:1202
+msgid "❌ Current client does not support MCP response"
+msgstr "❌ Current client does not support MCP response"
+
+#: src/app/tui.py:1182
+#, python-brace-format
+msgid "❌ Failed to send MCP response: {error}"
+msgstr "❌ Failed to send MCP response: {error}"
+
+#: src/app/tui.py:1249
+#, python-brace-format
+msgid "⏱️ MCP response timeout ({seconds} seconds)"
+msgstr "⏱️ MCP response timeout ({seconds} seconds)"
+
+#: src/app/tui.py:1253
+msgid "🚫 MCP response cancelled"
+msgstr "🚫 MCP response cancelled"
+
+#: src/app/tui.py:1336
+msgid "Backend configuration validation failed, please check and modify"
+msgstr "Backend configuration validation failed, please check and modify"
+
+#: src/app/tui.py:1337
+msgid "Configuration Error"
+msgstr "Configuration Error"
 
 #: src/main.py:28
 msgid "openEuler Intelligence - Intelligent command-line tool"
@@ -157,16 +278,16 @@ msgstr "✓ Log level successfully set to: {level}\n"
 msgid "✓ Logging system initialized\n"
 msgstr "✓ Logging system initialized\n"
 
-#: src/main.py:181
+#: src/main.py:191
 #, python-brace-format
 msgid "✓ Language set to: {locale}\n"
 msgstr "✓ Language set to: {locale}\n"
 
-#: src/main.py:183
+#: src/main.py:193
 #, python-brace-format
 msgid "✗ Unsupported language: {locale}\n"
 msgstr "✗ Unsupported language: {locale}\n"
 
-#: src/main.py:218
+#: src/main.py:228
 msgid "Fatal error in Intelligent Shell application"
 msgstr "Fatal error in Intelligent Shell application"
