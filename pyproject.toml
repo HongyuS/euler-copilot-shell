@@ -1,6 +1,6 @@
 [project]
 name = "oi-cli"
-version = "0.10.0"
+version = "0.10.2"
 description = "智能 Shell 命令行工具"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -33,25 +33,22 @@ dev = ["ruff==0.14.0"]
 requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build]
+exclude = ["*.pyc", "__pycache__", ".DS_Store"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/app", "src/backend", "src/config", "src/log", "src/tool"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/main.py" = "main.py"
+"src/__version__.py" = "__version__.py"
 
 [tool.hatch.build.targets.wheel.package-data]
 app = ["css/*.tcss"]
 
 [tool.hatch.build.targets.sdist]
-include = [
-    "LICENSE",
-    "MANIFEST.in",
-    "README.md",
-    "requirements.txt",
-    "distribution",
-    "docs",
-    "resource",
-    "scripts",
-    "src",
-    "tools",
-]
+include = ["LICENSE", "MANIFEST.in", "README.md", "requirements.txt", "src"]
+exclude = ["*.pyc", "__pycache__", ".DS_Store"]
