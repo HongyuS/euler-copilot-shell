@@ -30,7 +30,6 @@ VERSION=$(grep -E '^Version:' "$SPEC_FILE" | awk '{print $2}')
 # 如果是 dev 模式，添加时间戳
 if [[ ${DEV_MODE} -eq 1 ]]; then
     TIMESTAMP=$(date +%Y%m%d%H%M%S)
-    VERSION="${VERSION}.dev${TIMESTAMP}"
 fi
 
 # Create build directory in repo
