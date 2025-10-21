@@ -59,6 +59,9 @@ uv pip install .
 # 安装 PyInstaller（通过 uv 保证环境一致）
 uv pip install pyinstaller
 
+# 编译国际化翻译文件
+./scripts/tools/i18n-manager.sh compile
+
 # 使用虚拟环境中的 PyInstaller 创建单一可执行文件
 pyinstaller --noconfirm \
             --distpath dist \
