@@ -6,7 +6,6 @@ import atexit
 import sys
 
 from __version__ import __version__
-from app.tui import IntelligentTerminal
 from config.manager import ConfigManager
 from config.model import LogLevel
 from i18n.manager import _, get_locale, get_supported_locales, init_i18n, set_locale
@@ -222,6 +221,9 @@ def main() -> None:
     logger = get_logger(__name__)
 
     try:
+        # 延迟导入 IntelligentTerminal，确保在 i18n 初始化之后
+        from app.tui import IntelligentTerminal  # noqa: PLC0415
+
         app = IntelligentTerminal()
         app.run()
     except Exception:
