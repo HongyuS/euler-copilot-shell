@@ -24,6 +24,7 @@ from textual.widgets import Button, Input, Label, Static, TabbedContent, TabPane
 
 from app.deployment.models import EmbeddingConfig, LLMConfig
 from app.tui_header import OIHeader
+from i18n.manager import _
 from log.manager import get_logger
 from tool.validators import APIValidator
 
@@ -73,28 +74,28 @@ class LLMSystemConfig:
 
         # 检查是否以管理员权限运行
         if os.geteuid() != 0:
-            errors.append("需要管理员权限才能修改 openEuler Intelligence 配置文件")
+            errors.append(_("需要管理员权限才能修改 openEuler Intelligence 配置文件"))
             # 如果没有管理员权限，直接返回，避免后续的文件操作引发权限错误
             return False, errors
 
         try:
             # 检查核心配置文件是否存在（必须存在）
             if not cls.FRAMEWORK_CONFIG_PATH.exists():
-                errors.append(f"配置文件不存在: {cls.FRAMEWORK_CONFIG_PATH}")
-                errors.append("请先运行 '(sudo) oi --init' 部署后端服务")
+                errors.append(_("配置文件不存在: {path}").format(path=cls.FRAMEWORK_CONFIG_PATH))
+                errors.append(_("请先运行 '(sudo) oi --init' 部署后端服务"))
 
             # 检查核心配置文件是否可写（必须可写）
             if cls.FRAMEWORK_CONFIG_PATH.exists() and not os.access(cls.FRAMEWORK_CONFIG_PATH, os.W_OK):
-                errors.append(f"配置文件不可写: {cls.FRAMEWORK_CONFIG_PATH}")
+                errors.append(_("配置文件不可写: {path}").format(path=cls.FRAMEWORK_CONFIG_PATH))
 
             # 检查 RAG_ENV_PATH 文件是否可写（如果存在的话）
             if cls.RAG_ENV_PATH.exists() and not os.access(cls.RAG_ENV_PATH, os.W_OK):
-                errors.append(f"配置文件不可写: {cls.RAG_ENV_PATH}")
+                errors.append(_("配置文件不可写: {path}").format(path=cls.RAG_ENV_PATH))
 
         except PermissionError as e:
-            errors.append(f"访问配置文件时权限不足: {e}")
+            errors.append(_("访问配置文件时权限不足: {error}").format(error=str(e)))
         except OSError as e:
-            errors.append(f"访问配置文件时发生错误: {e}")
+            errors.append(_("访问配置文件时发生错误: {error}").format(error=str(e)))
 
         return len(errors) == 0, errors
 
@@ -123,7 +124,9 @@ class LLMSystemConfig:
 
         except PermissionError as e:
             logger.exception("权限不足，无法访问配置文件")
-            error_msg = f"权限不足：无法访问配置文件 {e.filename if hasattr(e, 'filename') else ''}，请以管理员身份运行"
+            error_msg = _("权限不足：无法访问配置文件 {filename}，请以管理员身份运行").format(
+                filename=e.filename if hasattr(e, "filename") else "",
+            )
             raise PermissionError(error_msg) from e
         except (OSError, ValueError, toml.TomlDecodeError):
             logger.exception("加载系统配置失败")

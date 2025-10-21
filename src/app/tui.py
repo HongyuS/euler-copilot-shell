@@ -252,7 +252,7 @@ class IntelligentTerminal(App):
         super().__init__()
         # 设置应用标题
         self.title = "openEuler Intelligence"
-        self.sub_title = _("Intelligent CLI Tool {version}").format(version=__version__)
+        self.sub_title = _("Intelligent CLI Assistant {version}").format(version=__version__)
         self.config_manager = ConfigManager()
         self.processing: bool = False
         # 添加保存任务的集合到类属性
