@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from typing import ClassVar
 
+from i18n.manager import _
+
 
 # MCP 状态标记
 class MCPTags:
@@ -36,73 +38,153 @@ class MCPEmojis:
 class MCPTextFragments:
     """MCP 状态文本片段常量"""
 
-    INIT_TOOL = "正在初始化工具"
-    TOOL_WORD = "工具"
-    EXECUTING = "正在执行..."
-    COMPLETED = "执行完成"
-    CANCELLED = "已取消"
-    FAILED = "执行失败"
-    WAITING_CONFIRM = "**等待用户确认执行工具**"
-    WAITING_PARAM = "**等待用户输入参数**"
+    @staticmethod
+    def init_tool() -> str:
+        """正在初始化工具"""
+        return _("正在初始化工具")
+
+    @staticmethod
+    def tool_word() -> str:
+        """工具"""
+        return _("工具")
+
+    @staticmethod
+    def executing() -> str:
+        """正在执行..."""
+        return _("正在执行...")
+
+    @staticmethod
+    def completed() -> str:
+        """执行完成"""
+        return _("执行完成")
+
+    @staticmethod
+    def cancelled() -> str:
+        """已取消"""
+        return _("已取消")
+
+    @staticmethod
+    def failed() -> str:
+        """执行失败"""
+        return _("执行失败")
+
+    @staticmethod
+    def waiting_confirm() -> str:
+        """等待用户确认执行工具"""
+        return _("**等待用户确认执行工具**")
+
+    @staticmethod
+    def waiting_param() -> str:
+        """等待用户输入参数"""
+        return _("**等待用户输入参数**")
 
 
 # MCP 完整状态消息模板
 class MCPMessageTemplates:
     """MCP 状态消息模板常量"""
 
-    # 基础状态指示符（用于识别）
-    INIT_INDICATOR = f"{MCPEmojis.INIT} {MCPTextFragments.INIT_TOOL}"
-    INPUT_INDICATOR = f"{MCPEmojis.INPUT} {MCPTextFragments.TOOL_WORD}"
-    EXECUTING_INDICATOR = MCPTextFragments.EXECUTING
-    OUTPUT_INDICATOR = f"{MCPEmojis.OUTPUT} {MCPTextFragments.TOOL_WORD}"
-    COMPLETED_INDICATOR = MCPTextFragments.COMPLETED
-    CANCEL_INDICATOR = f"{MCPEmojis.CANCEL} {MCPTextFragments.TOOL_WORD}"
-    CANCELLED_INDICATOR = MCPTextFragments.CANCELLED
-    ERROR_INDICATOR = f"{MCPEmojis.ERROR} {MCPTextFragments.TOOL_WORD}"
-    FAILED_INDICATOR = MCPTextFragments.FAILED
-    WAITING_START_INDICATOR = f"{MCPEmojis.WAITING_START} {MCPTextFragments.WAITING_CONFIRM}"
-    WAITING_PARAM_INDICATOR = f"{MCPEmojis.WAITING_PARAM} {MCPTextFragments.WAITING_PARAM}"
+    # 基础状态指示符（用于识别）- 使用函数动态生成
+    @staticmethod
+    def init_indicator() -> str:
+        """初始化指示符"""
+        return f"{MCPEmojis.INIT} {MCPTextFragments.init_tool()}"
+
+    @staticmethod
+    def input_indicator() -> str:
+        """输入指示符"""
+        return f"{MCPEmojis.INPUT} {MCPTextFragments.tool_word()}"
+
+    @staticmethod
+    def executing_indicator() -> str:
+        """执行中指示符"""
+        return MCPTextFragments.executing()
+
+    @staticmethod
+    def output_indicator() -> str:
+        """输出指示符"""
+        return f"{MCPEmojis.OUTPUT} {MCPTextFragments.tool_word()}"
+
+    @staticmethod
+    def completed_indicator() -> str:
+        """完成指示符"""
+        return MCPTextFragments.completed()
+
+    @staticmethod
+    def cancel_indicator() -> str:
+        """取消指示符"""
+        return f"{MCPEmojis.CANCEL} {MCPTextFragments.tool_word()}"
+
+    @staticmethod
+    def cancelled_indicator() -> str:
+        """已取消指示符"""
+        return MCPTextFragments.cancelled()
+
+    @staticmethod
+    def error_indicator() -> str:
+        """错误指示符"""
+        return f"{MCPEmojis.ERROR} {MCPTextFragments.tool_word()}"
+
+    @staticmethod
+    def failed_indicator() -> str:
+        """失败指示符"""
+        return MCPTextFragments.failed()
+
+    @staticmethod
+    def waiting_start_indicator() -> str:
+        """等待确认指示符"""
+        return f"{MCPEmojis.WAITING_START} {MCPTextFragments.waiting_confirm()}"
+
+    @staticmethod
+    def waiting_param_indicator() -> str:
+        """等待参数指示符"""
+        return f"{MCPEmojis.WAITING_PARAM} {MCPTextFragments.waiting_param()}"
 
     # 完整状态消息模板（用于生成）
     @staticmethod
     def init_message(tool_name: str) -> str:
         """生成工具初始化消息"""
-        return f"\n{MCPEmojis.INIT} {MCPTextFragments.INIT_TOOL}: `{tool_name}`\n"
+        return f"\n{MCPEmojis.INIT} {MCPTextFragments.init_tool()}: `{tool_name}`\n"
 
     @staticmethod
     def input_message(tool_name: str) -> str:
         """生成工具执行中消息"""
-        return f"\n{MCPEmojis.INPUT} {MCPTextFragments.TOOL_WORD} `{tool_name}` {MCPTextFragments.EXECUTING}\n"
+        return f"\n{MCPEmojis.INPUT} {MCPTextFragments.tool_word()} `{tool_name}` {MCPTextFragments.executing()}\n"
 
     @staticmethod
     def output_message(tool_name: str) -> str:
         """生成工具执行完成消息"""
-        return f"\n{MCPEmojis.OUTPUT} {MCPTextFragments.TOOL_WORD} `{tool_name}` {MCPTextFragments.COMPLETED}\n"
+        return f"\n{MCPEmojis.OUTPUT} {MCPTextFragments.tool_word()} `{tool_name}` {MCPTextFragments.completed()}\n"
 
     @staticmethod
     def cancel_message(tool_name: str) -> str:
         """生成工具取消消息"""
-        return f"\n{MCPEmojis.CANCEL} {MCPTextFragments.TOOL_WORD} `{tool_name}` {MCPTextFragments.CANCELLED}\n"
+        return f"\n{MCPEmojis.CANCEL} {MCPTextFragments.tool_word()} `{tool_name}` {MCPTextFragments.cancelled()}\n"
 
     @staticmethod
     def error_message(tool_name: str) -> str:
         """生成工具执行失败消息"""
-        return f"\n{MCPEmojis.ERROR} {MCPTextFragments.TOOL_WORD} `{tool_name}` {MCPTextFragments.FAILED}\n"
+        return f"\n{MCPEmojis.ERROR} {MCPTextFragments.tool_word()} `{tool_name}` {MCPTextFragments.failed()}\n"
 
     @staticmethod
     def waiting_start_message(tool_name: str, risk_info: str, reason: str) -> str:
         """生成等待用户确认消息"""
+        tool_name_label = _("名称")
+        explanation_label = _("说明")
         return (
-            f"\n{MCPEmojis.WAITING_START} {MCPTextFragments.WAITING_CONFIRM}\n\n"
-            f"{MCPEmojis.INIT} {MCPTextFragments.TOOL_WORD}名称: `{tool_name}` {risk_info}\n\n💭 说明: {reason}\n"
+            f"\n{MCPEmojis.WAITING_START} {MCPTextFragments.waiting_confirm()}\n\n"
+            f"{MCPEmojis.INIT} {MCPTextFragments.tool_word()}{tool_name_label}: "
+            f"`{tool_name}` {risk_info}\n\n💭 {explanation_label}: {reason}\n"
         )
 
     @staticmethod
     def waiting_param_message(tool_name: str, message_content: str) -> str:
         """生成等待参数输入消息"""
+        tool_name_label = _("名称")
+        explanation_label = _("说明")
         return (
-            f"\n{MCPEmojis.WAITING_PARAM} {MCPTextFragments.WAITING_PARAM}\n\n"
-            f"{MCPEmojis.INIT} {MCPTextFragments.TOOL_WORD}名称: `{tool_name}`\n\n💭 说明: {message_content}\n"
+            f"\n{MCPEmojis.WAITING_PARAM} {MCPTextFragments.waiting_param()}\n\n"
+            f"{MCPEmojis.INIT} {MCPTextFragments.tool_word()}{tool_name_label}: "
+            f"`{tool_name}`\n\n💭 {explanation_label}: {message_content}\n"
         )
 
 
@@ -110,30 +192,36 @@ class MCPMessageTemplates:
 class MCPIndicators:
     """MCP 状态指示符列表常量"""
 
-    # 所有状态指示符（用于通用检测）
-    ALL_INDICATORS: ClassVar[list[str]] = [
-        MCPMessageTemplates.INIT_INDICATOR,
-        MCPMessageTemplates.INPUT_INDICATOR,
-        MCPMessageTemplates.EXECUTING_INDICATOR,
-        MCPMessageTemplates.WAITING_START_INDICATOR,
-        MCPMessageTemplates.WAITING_PARAM_INDICATOR,
-        MCPMessageTemplates.OUTPUT_INDICATOR,
-        MCPMessageTemplates.COMPLETED_INDICATOR,
-        MCPMessageTemplates.CANCEL_INDICATOR,
-        MCPMessageTemplates.CANCELLED_INDICATOR,
-        MCPMessageTemplates.ERROR_INDICATOR,
-        MCPMessageTemplates.FAILED_INDICATOR,
-    ]
+    # 所有状态指示符（用于通用检测）- 使用函数动态生成
+    @staticmethod
+    def all_indicators() -> list[str]:
+        """获取所有状态指示符"""
+        return [
+            MCPMessageTemplates.init_indicator(),
+            MCPMessageTemplates.input_indicator(),
+            MCPMessageTemplates.executing_indicator(),
+            MCPMessageTemplates.waiting_start_indicator(),
+            MCPMessageTemplates.waiting_param_indicator(),
+            MCPMessageTemplates.output_indicator(),
+            MCPMessageTemplates.completed_indicator(),
+            MCPMessageTemplates.cancel_indicator(),
+            MCPMessageTemplates.cancelled_indicator(),
+            MCPMessageTemplates.error_indicator(),
+            MCPMessageTemplates.failed_indicator(),
+        ]
 
     # 最终状态指示符（用于检测工具执行结束）
-    FINAL_INDICATORS: ClassVar[list[str]] = [
-        MCPMessageTemplates.OUTPUT_INDICATOR,
-        MCPMessageTemplates.COMPLETED_INDICATOR,
-        MCPMessageTemplates.CANCEL_INDICATOR,
-        MCPMessageTemplates.CANCELLED_INDICATOR,
-        MCPMessageTemplates.ERROR_INDICATOR,
-        MCPMessageTemplates.FAILED_INDICATOR,
-    ]
+    @staticmethod
+    def final_indicators() -> list[str]:
+        """获取最终状态指示符"""
+        return [
+            MCPMessageTemplates.output_indicator(),
+            MCPMessageTemplates.completed_indicator(),
+            MCPMessageTemplates.cancel_indicator(),
+            MCPMessageTemplates.cancelled_indicator(),
+            MCPMessageTemplates.error_indicator(),
+            MCPMessageTemplates.failed_indicator(),
+        ]
 
     # 进度状态指示符（用于UI快速检测）
     PROGRESS_INDICATORS: ClassVar[list[str]] = [
@@ -190,18 +278,17 @@ class MCPRiskLevels:
     HIGH = "high"
     UNKNOWN = "unknown"
 
-    # 风险级别显示映射
-    RISK_DISPLAY_MAP: ClassVar[dict[str, str]] = {
-        LOW: "🟢 低风险",
-        MEDIUM: "🟡 中等风险",
-        HIGH: "🔴 高风险",
-        UNKNOWN: "⚪ 风险等级未知",
-    }
-
+    # 风险级别显示映射 - 使用函数动态生成
     @classmethod
     def get_risk_display(cls, risk_level: str) -> str:
         """获取风险级别的显示文本"""
-        return cls.RISK_DISPLAY_MAP.get(risk_level, cls.RISK_DISPLAY_MAP[cls.UNKNOWN])
+        risk_display_map = {
+            cls.LOW: f"🟢 {_('低风险')}",
+            cls.MEDIUM: f"🟡 {_('中等风险')}",
+            cls.HIGH: f"🔴 {_('高风险')}",
+            cls.UNKNOWN: f"⚪ {_('未知风险')}",
+        }
+        return risk_display_map.get(risk_level, risk_display_map[cls.UNKNOWN])
 
 
 # 工具函数
@@ -212,12 +299,12 @@ def is_mcp_message(content: str) -> bool:
         return True
 
     # 检查是否包含任何 MCP 状态指示符
-    return any(indicator in content for indicator in MCPIndicators.ALL_INDICATORS)
+    return any(indicator in content for indicator in MCPIndicators.all_indicators())
 
 
 def is_final_mcp_message(content: str) -> bool:
     """检查内容是否为最终状态的 MCP 消息"""
-    return any(indicator in content for indicator in MCPIndicators.FINAL_INDICATORS)
+    return any(indicator in content for indicator in MCPIndicators.final_indicators())
 
 
 def extract_mcp_tag(content: str) -> tuple[str | None, str]:
@@ -268,6 +355,6 @@ def format_tool_message(tool_name: str, status: str, *, use_emoji: bool = True) 
     }
 
     if use_emoji and status in emoji_map:
-        return f"{emoji_map[status]} {MCPTextFragments.TOOL_WORD} `{tool_name}` {status}"
+        return f"{emoji_map[status]} {MCPTextFragments.tool_word()} `{tool_name}` {status}"
 
-    return f"{MCPTextFragments.TOOL_WORD} `{tool_name}` {status}"
+    return f"{MCPTextFragments.tool_word()} `{tool_name}` {status}"

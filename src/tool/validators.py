@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 from openai import APIError, AsyncOpenAI, AuthenticationError, OpenAIError
 
+from i18n.manager import _
 from log.manager import get_logger
 
 # 常量定义
@@ -131,17 +132,20 @@ class APIValidator:
             await client.close()
 
         except TimeoutError:
-            return False, f"连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}", {}
+            return False, _("连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}").format(
+                timeout=timeout,
+                endpoint=endpoint,
+            ), {}
         except (AuthenticationError, APIError, OpenAIError) as e:
-            error_msg = f"LLM 配置验证失败: {e!s}"
+            error_msg = _("LLM 配置验证失败: {error}").format(error=str(e))
             self.logger.exception(error_msg)
             return False, error_msg, {}
         else:
-            success_msg = "LLM 配置验证成功"
+            success_msg = _("LLM 配置验证成功")
             if func_valid:
-                success_msg += f" - 支持工具调用，类型: {func_type}"
+                success_msg += _(" - 支持工具调用，类型: {func_type}").format(func_type=func_type)
             else:
-                success_msg += " - 不支持工具调用"
+                success_msg += _(" - 不支持工具调用")
 
             return (
                 True,
@@ -194,7 +198,7 @@ class APIValidator:
             return True, mindie_msg, mindie_info
 
         # 两种格式都失败
-        return False, "无法连接到 Embedding 模型服务。", {}
+        return False, _("无法连接到 Embedding 模型服务。"), {}
 
     def _create_openai_client(
         self,
@@ -234,12 +238,12 @@ class APIValidator:
 
             response = await client.chat.completions.create(**call_kwargs)
         except (AuthenticationError, APIError, OpenAIError):
-            return False, "基本对话测试失败"
+            return False, _("基本对话测试失败")
         else:
             if response.choices and len(response.choices) > 0:
-                return True, "基本对话功能正常"
+                return True, _("基本对话功能正常")
 
-            return False, "对话响应为空"
+            return False, _("对话响应为空")
 
     async def _detect_function_call_type(
         self,
@@ -311,7 +315,7 @@ class APIValidator:
         if ollama_valid:
             return True, ollama_msg, "ollama"
 
-        return False, "不支持任何 function_call 格式", "none"
+        return False, _("不支持任何 function_call 格式"), "none"
 
     async def _test_tools_format(
         self,
@@ -346,14 +350,14 @@ class APIValidator:
 
             response = await client.chat.completions.create(**call_kwargs)
         except (AuthenticationError, APIError, OpenAIError) as e:
-            return False, f"tools 格式测试失败: {e!s}"
+            return False, _("tools 格式测试失败: {error}").format(error=str(e))
         else:
             if response.choices and len(response.choices) > 0:
                 choice = response.choices[0]
                 if hasattr(choice.message, "tool_calls") and choice.message.tool_calls:
-                    return True, "支持 tools 格式的 function_call"
+                    return True, _("支持 tools 格式的 function_call")
 
-            return False, "不支持工具调用功能"
+            return False, _("不支持工具调用功能")
 
     async def _test_structured_output(
         self,
@@ -394,7 +398,7 @@ class APIValidator:
 
             response = await client.chat.completions.create(**call_kwargs)
         except (AuthenticationError, APIError, OpenAIError) as e:
-            return False, f"structured_output 格式测试失败: {e!s}"
+            return False, _("structured_output 格式测试失败: {error}").format(error=str(e))
         else:
             if response.choices and len(response.choices) > 0:
                 choice = response.choices[0]
@@ -402,11 +406,11 @@ class APIValidator:
                     try:
                         json.loads(choice.message.content)
                     except (json.JSONDecodeError, ValueError):
-                        return False, "structured_output 响应不是有效 JSON"
+                        return False, _("structured_output 响应不是有效 JSON")
                     else:
-                        return True, "支持 structured_output 格式"
+                        return True, _("支持 structured_output 格式")
 
-            return False, "structured_output 响应为空"
+            return False, _("structured_output 响应为空")
 
     async def _test_json_mode(
         self,
@@ -432,7 +436,7 @@ class APIValidator:
 
             response = await client.chat.completions.create(**call_kwargs)
         except (AuthenticationError, APIError, OpenAIError) as e:
-            return False, f"json_mode 格式测试失败: {e!s}"
+            return False, _("json_mode 格式测试失败: {error}").format(error=str(e))
         else:
             if response.choices and len(response.choices) > 0:
                 choice = response.choices[0]
@@ -440,11 +444,11 @@ class APIValidator:
                     try:
                         json.loads(choice.message.content)
                     except (json.JSONDecodeError, ValueError):
-                        return False, "json_mode 响应不是有效 JSON"
+                        return False, _("json_mode 响应不是有效 JSON")
                     else:
-                        return True, "支持 json_mode 格式"
+                        return True, _("支持 json_mode 格式")
 
-            return False, "json_mode 响应为空"
+            return False, _("json_mode 响应为空")
 
     async def _test_vllm_function_call(
         self,
@@ -492,16 +496,16 @@ class APIValidator:
 
                 # 检查是否包含结构化输出的迹象
                 if content and any(keyword in content.lower() for keyword in ["json", "{", "}"]):
-                    return True, "支持 vLLM 结构化输出（部分支持）"
+                    return True, _("支持 vLLM 结构化输出（部分支持）")
 
         except (AuthenticationError, APIError, OpenAIError) as e:
             error_str = str(e).lower()
             if any(keyword in error_str for keyword in ["extra_body", "guided_json", "not supported"]):
-                return False, f"不支持 vLLM guided_json 格式: {e!s}"
+                return False, _("不支持 vLLM guided_json 格式: {error}").format(error=str(e))
             raise
 
         else:
-            return False, "vLLM guided_json 响应无效"
+            return False, _("vLLM guided_json 响应无效")
 
     async def _test_ollama_function_call(
         self,
@@ -548,13 +552,13 @@ FUNCTION_CALL: get_current_time()
                         "call",
                     ]
                 ):
-                    return True, "支持 Ollama function_call 格式"
+                    return True, _("支持 Ollama function_call 格式")
 
         except (AuthenticationError, APIError, OpenAIError) as e:
-            return False, f"不支持 Ollama function_call 格式: {e!s}"
+            return False, _("不支持 Ollama function_call 格式: {error}").format(error=str(e))
 
         else:
-            return False, "Ollama function_call 响应无效"
+            return False, _("Ollama function_call 响应无效")
 
     async def _validate_openai_embedding(
         self,
@@ -577,9 +581,12 @@ FUNCTION_CALL: get_current_time()
 
             await client.close()
         except TimeoutError:
-            return False, f"连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}", {}
+            return False, _("连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}").format(
+                timeout=timeout,
+                endpoint=endpoint,
+            ), {}
         except (AuthenticationError, APIError, OpenAIError) as e:
-            error_msg = f"OpenAI Embedding 配置验证失败: {e!s}"
+            error_msg = _("OpenAI Embedding 配置验证失败: {error}").format(error=str(e))
             self.logger.exception(error_msg)
             return False, error_msg, {}
         else:
@@ -588,7 +595,7 @@ FUNCTION_CALL: get_current_time()
                 dimension = len(embedding)
                 return (
                     True,
-                    f"OpenAI Embedding 配置验证成功 - 维度: {dimension}",
+                    _("OpenAI Embedding 配置验证成功 - 维度: {dimension}").format(dimension=dimension),
                     {
                         "type": "openai",
                         "dimension": dimension,
@@ -596,7 +603,7 @@ FUNCTION_CALL: get_current_time()
                     },
                 )
 
-            return False, "OpenAI Embedding 响应为空", {}
+            return False, _("OpenAI Embedding 响应为空"), {}
 
     async def _validate_mindie_embedding(
         self,
@@ -624,7 +631,9 @@ FUNCTION_CALL: get_current_time()
                             dimension = len(embedding)
                             return (
                                 True,
-                                f"MindIE Embedding 配置验证成功 - 维度: {dimension}",
+                                _("MindIE Embedding 配置验证成功 - 维度: {dimension}").format(
+                                    dimension=dimension,
+                                ),
                                 {
                                     "type": "mindie",
                                     "dimension": dimension,
@@ -632,12 +641,15 @@ FUNCTION_CALL: get_current_time()
                                 },
                             )
 
-                return False, "MindIE Embedding 响应格式不正确", {}
+                return False, _("MindIE Embedding 响应格式不正确"), {}
 
         except httpx.TimeoutException:
-            return False, f"连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}", {}
+            return False, _("连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}").format(
+                timeout=timeout,
+                endpoint=endpoint,
+            ), {}
         except (httpx.RequestError, httpx.HTTPStatusError) as e:
-            error_msg = f"MindIE Embedding 配置验证失败: {e!s}"
+            error_msg = _("MindIE Embedding 配置验证失败: {error}").format(error=str(e))
             self.logger.exception(error_msg)
             return False, error_msg, {}
 
@@ -659,7 +671,7 @@ async def validate_oi_connection(base_url: str, access_token: str) -> tuple[bool
     try:
         # 确保 URL 格式正确
         if not base_url.startswith(("http://", "https://")):
-            return False, "服务 URL 必须以 http:// 或 https:// 开头"
+            return False, _("服务 URL 必须以 http:// 或 https:// 开头")
 
         # 验证令牌格式
         if not _is_valid_token_format(access_token):
@@ -670,7 +682,7 @@ async def validate_oi_connection(base_url: str, access_token: str) -> tuple[bool
                 else access_token
             )
             logger.warning("访问令牌格式无效: %s", token_preview)
-            return False, "访问令牌格式无效"
+            return False, _("访问令牌格式无效")
 
         # 移除尾部的斜杠
         base_url = base_url.rstrip("/")
@@ -695,34 +707,34 @@ async def validate_oi_connection(base_url: str, access_token: str) -> tuple[bool
             try:
                 response_data = response.json()
             except (ValueError, TypeError, KeyError):
-                return False, "服务返回的数据格式不正确"
+                return False, _("服务返回的数据格式不正确")
 
             # 检查 code 字段
             code = response_data.get("code")
             if code == HTTP_OK:
                 logger.info("openEuler Intelligence 服务连接成功")
-                return True, "连接成功"
+                return True, _("连接成功")
 
-            return False, f"服务返回错误代码: {code}"
+            return False, _("服务返回错误代码: {code}").format(code=code)
 
     except httpx.ConnectError:
-        return False, "无法连接到服务，请检查 URL 和网络连接"
+        return False, _("无法连接到服务，请检查 URL 和网络连接")
     except httpx.TimeoutException:
-        return False, "连接超时，请检查网络连接或服务状态"
+        return False, _("连接超时，请检查网络连接或服务状态")
     except Exception as e:
         logger.exception("验证 openEuler Intelligence 连接时发生异常")
-        return False, f"连接验证失败: {e}"
+        return False, _("连接验证失败: {error}").format(error=str(e))
 
 
 def _handle_http_error(status_code: int) -> tuple[bool, str]:
     """处理 HTTP 错误状态码"""
     error_messages = {
-        HTTP_UNAUTHORIZED: "访问令牌无效或已过期",
-        HTTP_FORBIDDEN: "访问权限不足",
-        HTTP_NOT_FOUND: "API 接口不存在，请检查服务版本",
+        HTTP_UNAUTHORIZED: _("访问令牌无效或已过期"),
+        HTTP_FORBIDDEN: _("访问权限不足"),
+        HTTP_NOT_FOUND: _("API 接口不存在，请检查服务版本"),
     }
 
-    message = error_messages.get(status_code, f"服务响应异常，状态码: {status_code}")
+    message = error_messages.get(status_code, _("服务响应异常，状态码: {status_code}").format(status_code=status_code))
     return False, message
 
 
