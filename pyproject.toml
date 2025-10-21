@@ -40,7 +40,14 @@ allow-direct-references = true
 exclude = ["*.pyc", "__pycache__", ".DS_Store"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/app", "src/backend", "src/config", "src/log", "src/tool"]
+packages = [
+    "src/app",
+    "src/backend",
+    "src/config",
+    "src/i18n",
+    "src/log",
+    "src/tool",
+]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/main.py" = "main.py"
@@ -48,6 +55,7 @@ packages = ["src/app", "src/backend", "src/config", "src/log", "src/tool"]
 
 [tool.hatch.build.targets.wheel.package-data]
 app = ["css/*.tcss"]
+i18n = ["locales/*/LC_MESSAGES/*.mo", "locales/*.pot"]
 
 [tool.hatch.build.targets.sdist]
 include = ["LICENSE", "MANIFEST.in", "README.md", "requirements.txt", "src"]

@@ -204,6 +204,15 @@ class ConfigManager:
         self.data.eulerintelli.default_app = app_id
         self._save_settings()
 
+    def get_locale(self) -> str:
+        """获取当前语言环境"""
+        return self.data.locale
+
+    def set_locale(self, locale_code: str) -> None:
+        """更新语言环境并保存"""
+        self.data.locale = locale_code
+        self._save_settings()
+
     def validate_and_update_config(self) -> bool:
         """
         检查配置文件完整性并更新缺失字段
