@@ -1380,11 +1380,9 @@ class IntelligentTerminal(App):
         # 启动监控任务
         monitor_task = asyncio.create_task(monitor_screen_stack())
 
-        # 等待退出事件或超时（5分钟）
+        # 等待退出事件
         try:
-            await asyncio.wait_for(exit_event.wait(), timeout=300.0)
-        except TimeoutError:
-            self.logger.warning("等待设置页面退出超时")
+            await exit_event.wait()
         finally:
             # 取消监控任务
             if not monitor_task.done():
