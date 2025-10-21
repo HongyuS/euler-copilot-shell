@@ -1,14 +1,14 @@
 # SOME DESCRIPTIVE TITLE.
 # Copyright (C) YEAR openEuler Intelligence Project
-# This file is distributed under the same license as the smart-shell package.
+# This file is distributed under the same license as the oi-cli package.
 # FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
 #
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: smart-shell 0.10.2\n"
+"Project-Id-Version: oi-cli 0.10.2\n"
 "Report-Msgid-Bugs-To: contact@openeuler.org\n"
-"POT-Creation-Date: 2025-10-20 17:44+0800\n"
+"POT-Creation-Date: 2025-10-21 09:54+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -16,6 +16,113 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+
+#: src/app/mcp_widgets.py:47
+msgid "需要用户确认是否执行此工具"
+msgstr ""
+
+#: src/app/mcp_widgets.py:51
+msgid "低风险"
+msgstr ""
+
+#: src/app/mcp_widgets.py:52
+msgid "中等风险"
+msgstr ""
+
+#: src/app/mcp_widgets.py:53
+msgid "高风险"
+msgstr ""
+
+#: src/app/mcp_widgets.py:54
+msgid "未知风险"
+msgstr ""
+
+#: src/app/mcp_widgets.py:81
+msgid "✓ 确认"
+msgstr ""
+
+#: src/app/mcp_widgets.py:82 src/app/mcp_widgets.py:201
+msgid "✗ 取消"
+msgstr ""
+
+#: src/app/mcp_widgets.py:164
+msgid "需要补充参数"
+msgstr ""
+
+#: src/app/mcp_widgets.py:169
+msgid "📝 参数输入"
+msgstr ""
+
+#: src/app/mcp_widgets.py:181
+#, python-brace-format
+msgid "请输入 {param_name}"
+msgstr ""
+
+#: src/app/mcp_widgets.py:191
+msgid "补充说明（可选）"
+msgstr ""
+
+#: src/app/mcp_widgets.py:200
+msgid "✓ 提交"
+msgstr ""
+
+#: src/app/settings.py:63
+msgid "设置"
+msgstr ""
+
+#: src/app/settings.py:66
+msgid "后端:"
+msgstr ""
+
+#: src/app/settings.py:76
+msgid "Base URL:"
+msgstr ""
+
+#: src/app/settings.py:88
+msgid "API Key:"
+msgstr ""
+
+#: src/app/settings.py:95
+msgid "API 访问密钥，可选"
+msgstr ""
+
+#: src/app/settings.py:103 src/app/settings.py:239
+msgid "模型:"
+msgstr ""
+
+#: src/app/settings.py:108 src/app/settings.py:244
+msgid "模型名称，可选"
+msgstr ""
+
+#: src/app/settings.py:117 src/app/settings.py:272
+msgid "MCP 工具授权:"
+msgstr ""
+
+#: src/app/settings.py:119 src/app/settings.py:174 src/app/settings.py:274
+#: src/app/settings.py:549 src/app/settings.py:555
+msgid "自动执行"
+msgstr ""
+
+#: src/app/settings.py:119 src/app/settings.py:174 src/app/settings.py:181
+#: src/app/settings.py:274 src/app/settings.py:549 src/app/settings.py:555
+msgid "手动确认"
+msgstr ""
+
+#: src/app/settings.py:133
+msgid "保存"
+msgstr ""
+
+#: src/app/settings.py:134 src/app/dialogs/common.py:27
+msgid "取消"
+msgstr ""
+
+#: src/app/settings.py:437
+msgid "Base URL 不能为空"
+msgstr ""
+
+#: src/app/settings.py:534
+msgid "切换中..."
+msgstr ""
 
 #: src/app/tui.py:217
 msgid "Enter command or question..."
@@ -134,6 +241,40 @@ msgstr ""
 
 #: src/app/tui.py:1337
 msgid "Configuration Error"
+msgstr ""
+
+#: src/app/dialogs/common.py:25
+msgid "确认退出吗？"
+msgstr ""
+
+#: src/app/dialogs/common.py:28
+msgid "确认"
+msgstr ""
+
+#: src/app/dialogs/agent.py:27
+msgid "智能体功能提示"
+msgstr ""
+
+#: src/app/dialogs/agent.py:28
+msgid "请选择 openEuler Intelligence 后端来使用智能体功能"
+msgstr ""
+
+#: src/app/dialogs/agent.py:29
+msgid "按任意键关闭"
+msgstr ""
+
+#: src/app/dialogs/agent.py:60 src/app/dialogs/agent.py:130
+#: src/app/dialogs/agent.py:185 src/app/dialogs/agent.py:205
+#: src/app/dialogs/agent.py:208
+msgid "智能问答"
+msgstr ""
+
+#: src/app/dialogs/agent.py:113
+msgid "OS 智能助手"
+msgstr ""
+
+#: src/app/dialogs/agent.py:115
+msgid "使用上下键选择，回车确认，ESC取消 | ✓ 表示当前选中"
 msgstr ""
 
 #: src/main.py:28

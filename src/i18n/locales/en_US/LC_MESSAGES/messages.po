@@ -1,12 +1,12 @@
-# English translations for smart-shell package.
+# English translations for oi-cli package.
 # Copyright (C) 2025 openEuler Intelligence Project
-# This file is distributed under the same license as the smart-shell package.
+# This file is distributed under the same license as the oi-cli package.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: smart-shell\n"
+"Project-Id-Version: oi-cli\n"
 "Report-Msgid-Bugs-To: contact@openeuler.org\n"
-"POT-Creation-Date: 2025-10-20 17:44+0800\n"
+"POT-Creation-Date: 2025-10-21 09:54+0800\n"
 "PO-Revision-Date: 2025-10-20 19:28+0800\n"
 "Last-Translator: openEuler Intelligence Team\n"
 "Language-Team: English\n"
@@ -16,6 +16,113 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Poedit 3.8\n"
+
+#: src/app/mcp_widgets.py:47
+msgid "需要用户确认是否执行此工具"
+msgstr "User confirmation required to execute this tool"
+
+#: src/app/mcp_widgets.py:51
+msgid "低风险"
+msgstr "Low risk"
+
+#: src/app/mcp_widgets.py:52
+msgid "中等风险"
+msgstr "Medium risk"
+
+#: src/app/mcp_widgets.py:53
+msgid "高风险"
+msgstr "High risk"
+
+#: src/app/mcp_widgets.py:54
+msgid "未知风险"
+msgstr "Unknown risk"
+
+#: src/app/mcp_widgets.py:81
+msgid "✓ 确认"
+msgstr "✓ Confirm"
+
+#: src/app/mcp_widgets.py:82 src/app/mcp_widgets.py:201
+msgid "✗ 取消"
+msgstr "✗ Cancel"
+
+#: src/app/mcp_widgets.py:164
+msgid "需要补充参数"
+msgstr "Parameters required"
+
+#: src/app/mcp_widgets.py:169
+msgid "📝 参数输入"
+msgstr "📝 Parameter Input"
+
+#: src/app/mcp_widgets.py:181
+#, python-brace-format
+msgid "请输入 {param_name}"
+msgstr "Please enter {param_name}"
+
+#: src/app/mcp_widgets.py:191
+msgid "补充说明（可选）"
+msgstr "Additional notes (optional)"
+
+#: src/app/mcp_widgets.py:200
+msgid "✓ 提交"
+msgstr "✓ Submit"
+
+#: src/app/settings.py:63
+msgid "设置"
+msgstr "Settings"
+
+#: src/app/settings.py:66
+msgid "后端:"
+msgstr "Backend:"
+
+#: src/app/settings.py:76
+msgid "Base URL:"
+msgstr "Base URL:"
+
+#: src/app/settings.py:88
+msgid "API Key:"
+msgstr "API Key:"
+
+#: src/app/settings.py:95
+msgid "API 访问密钥，可选"
+msgstr "API access key, optional"
+
+#: src/app/settings.py:103 src/app/settings.py:239
+msgid "模型:"
+msgstr "Model:"
+
+#: src/app/settings.py:108 src/app/settings.py:244
+msgid "模型名称，可选"
+msgstr "Model name, optional"
+
+#: src/app/settings.py:117 src/app/settings.py:272
+msgid "MCP 工具授权:"
+msgstr "MCP Tool Authorization:"
+
+#: src/app/settings.py:119 src/app/settings.py:174 src/app/settings.py:274
+#: src/app/settings.py:549 src/app/settings.py:555
+msgid "自动执行"
+msgstr "Auto Execute"
+
+#: src/app/settings.py:119 src/app/settings.py:174 src/app/settings.py:181
+#: src/app/settings.py:274 src/app/settings.py:549 src/app/settings.py:555
+msgid "手动确认"
+msgstr "Manual Confirm"
+
+#: src/app/settings.py:133
+msgid "保存"
+msgstr "Save"
+
+#: src/app/settings.py:134 src/app/dialogs/common.py:27
+msgid "取消"
+msgstr "Cancel"
+
+#: src/app/settings.py:437
+msgid "Base URL 不能为空"
+msgstr "Base URL cannot be empty"
+
+#: src/app/settings.py:534
+msgid "切换中..."
+msgstr "Switching..."
 
 #: src/app/tui.py:217
 msgid "Enter command or question..."
@@ -136,6 +243,40 @@ msgstr "Backend configuration validation failed, please check and modify"
 #: src/app/tui.py:1337
 msgid "Configuration Error"
 msgstr "Configuration Error"
+
+#: src/app/dialogs/common.py:25
+msgid "确认退出吗？"
+msgstr "Are you sure you want to exit?"
+
+#: src/app/dialogs/common.py:28
+msgid "确认"
+msgstr "Confirm"
+
+#: src/app/dialogs/agent.py:27
+msgid "智能体功能提示"
+msgstr "Agent Feature Notification"
+
+#: src/app/dialogs/agent.py:28
+msgid "请选择 openEuler Intelligence 后端来使用智能体功能"
+msgstr "Please select openEuler Intelligence backend to use agent features"
+
+#: src/app/dialogs/agent.py:29
+msgid "按任意键关闭"
+msgstr "Press any key to close"
+
+#: src/app/dialogs/agent.py:60 src/app/dialogs/agent.py:130
+#: src/app/dialogs/agent.py:185 src/app/dialogs/agent.py:205
+#: src/app/dialogs/agent.py:208
+msgid "智能问答"
+msgstr "Smart Chat"
+
+#: src/app/dialogs/agent.py:113
+msgid "OS 智能助手"
+msgstr "OS Smart Assistant"
+
+#: src/app/dialogs/agent.py:115
+msgid "使用上下键选择，回车确认，ESC取消 | ✓ 表示当前选中"
+msgstr "Use arrow keys to select, Enter to confirm, ESC to cancel | ✓ indicates current selection"
 
 #: src/main.py:28
 msgid "openEuler Intelligence - Intelligent command-line tool"

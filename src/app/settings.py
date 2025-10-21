@@ -15,6 +15,7 @@ from app.dialogs import ExitDialog
 from backend.hermes import HermesChatClient
 from backend.openai import OpenAIClient
 from config import Backend, ConfigManager
+from i18n.manager import _
 from log import get_logger
 from tool.validators import APIValidator, validate_oi_connection
 
@@ -59,10 +60,10 @@ class SettingsScreen(ModalScreen):
         """构建设置页面"""
         yield Container(
             Container(
-                Label("设置", id="settings-title"),
+                Label(_("设置"), id="settings-title"),
                 # 后端选择
                 Horizontal(
-                    Label("后端:", classes="settings-label"),
+                    Label(_("后端:"), classes="settings-label"),
                     Button(
                         f"{self.backend.get_display_name()}",
                         id="backend-btn",
@@ -72,7 +73,7 @@ class SettingsScreen(ModalScreen):
                 ),
                 # Base URL 输入
                 Horizontal(
-                    Label("Base URL:", classes="settings-label"),
+                    Label(_("Base URL:"), classes="settings-label"),
                     Input(
                         value=self.config_manager.get_base_url()
                         if self.backend == Backend.OPENAI
@@ -84,14 +85,14 @@ class SettingsScreen(ModalScreen):
                 ),
                 # API Key 输入
                 Horizontal(
-                    Label("API Key:", classes="settings-label"),
+                    Label(_("API Key:"), classes="settings-label"),
                     Input(
                         value=self.config_manager.get_api_key()
                         if self.backend == Backend.OPENAI
                         else self.config_manager.get_eulerintelli_key(),
                         classes="settings-input",
                         id="api-key",
-                        placeholder="API 访问密钥，可选",
+                        placeholder=_("API 访问密钥，可选"),
                     ),
                     classes="settings-option",
                 ),
@@ -99,12 +100,12 @@ class SettingsScreen(ModalScreen):
                 *(
                     [
                         Horizontal(
-                            Label("模型:", classes="settings-label"),
+                            Label(_("模型:"), classes="settings-label"),
                             Input(
                                 value=self.selected_model,
                                 classes="settings-input",
                                 id="model-input",
-                                placeholder="模型名称，可选",
+                                placeholder=_("模型名称，可选"),
                             ),
                             id="model-section",
                             classes="settings-option",
@@ -113,9 +114,9 @@ class SettingsScreen(ModalScreen):
                     if self.backend == Backend.OPENAI
                     else [
                         Horizontal(
-                            Label("MCP 工具授权:", classes="settings-label"),
+                            Label(_("MCP 工具授权:"), classes="settings-label"),
                             Button(
-                                "自动执行" if self.auto_execute_status else "手动确认",
+                                _("自动执行") if self.auto_execute_status else _("手动确认"),
                                 id="mcp-btn",
                                 classes="settings-button",
                                 disabled=not self.mcp_status_loaded,
@@ -129,8 +130,8 @@ class SettingsScreen(ModalScreen):
                 Static("", id="spacer"),
                 # 操作按钮
                 Horizontal(
-                    Button("保存", id="save-btn", variant="primary"),
-                    Button("取消", id="cancel-btn", variant="default"),
+                    Button(_("保存"), id="save-btn", variant="primary"),
+                    Button(_("取消"), id="cancel-btn", variant="default"),
                     id="action-buttons",
                     classes="settings-option",
                 ),
@@ -170,14 +171,14 @@ class SettingsScreen(ModalScreen):
 
             # 更新 MCP 按钮文本和状态
             mcp_btn = self.query_one("#mcp-btn", Button)
-            mcp_btn.label = "自动执行" if self.auto_execute_status else "手动确认"
+            mcp_btn.label = _("自动执行") if self.auto_execute_status else _("手动确认")
             mcp_btn.disabled = not self.mcp_status_loaded
 
         except (OSError, ValueError, RuntimeError):
             self.auto_execute_status = False
             self.mcp_status_loaded = False
             mcp_btn = self.query_one("#mcp-btn", Button)
-            mcp_btn.label = "手动确认"
+            mcp_btn.label = _("手动确认")
             mcp_btn.disabled = True
 
     @on(Input.Changed, "#base-url, #api-key, #model-input")
@@ -235,12 +236,12 @@ class SettingsScreen(ModalScreen):
                 container = self.query_one("#settings-container")
                 spacer = self.query_one("#spacer")
                 model_section = Horizontal(
-                    Label("模型:", classes="settings-label"),
+                    Label(_("模型:"), classes="settings-label"),
                     Input(
                         value=self.selected_model,
                         classes="settings-input",
                         id="model-input",
-                        placeholder="模型名称，可选",
+                        placeholder=_("模型名称，可选"),
                     ),
                     id="model-section",
                     classes="settings-option",
@@ -268,9 +269,9 @@ class SettingsScreen(ModalScreen):
                 container = self.query_one("#settings-container")
                 spacer = self.query_one("#spacer")
                 mcp_section = Horizontal(
-                    Label("MCP 工具授权:", classes="settings-label"),
+                    Label(_("MCP 工具授权:"), classes="settings-label"),
                     Button(
-                        "自动执行" if self.auto_execute_status else "手动确认",
+                        _("自动执行") if self.auto_execute_status else _("手动确认"),
                         id="mcp-btn",
                         classes="settings-button",
                         disabled=not self.mcp_status_loaded,
@@ -433,7 +434,7 @@ class SettingsScreen(ModalScreen):
 
             if not base_url:
                 self.is_validated = False
-                self.validation_message = "Base URL 不能为空"
+                self.validation_message = _("Base URL 不能为空")
                 self._update_save_button_state()
                 return
 
@@ -447,7 +448,7 @@ class SettingsScreen(ModalScreen):
                     model = self.selected_model
 
                 # 验证 OpenAI 配置（模型和 API Key 都可以为空）
-                valid, message, _ = await self.validator.validate_llm_config(
+                valid, message, _additional_info = await self.validator.validate_llm_config(
                     endpoint=base_url,
                     api_key=api_key,
                     model=model,
@@ -530,7 +531,7 @@ class SettingsScreen(ModalScreen):
             # 先禁用按钮防止重复点击
             mcp_btn = self.query_one("#mcp-btn", Button)
             mcp_btn.disabled = True
-            mcp_btn.label = "切换中..."
+            mcp_btn.label = _("切换中...")
 
             # 根据当前状态调用相应的方法
             if self.auto_execute_status:
@@ -545,13 +546,11 @@ class SettingsScreen(ModalScreen):
                 self.auto_execute_status = await self.llm_client.get_auto_execute_status()  # type: ignore[attr-defined]
 
             # 更新按钮状态
-            mcp_btn.label = "自动执行" if self.auto_execute_status else "手动确认"
+            mcp_btn.label = _("自动执行") if self.auto_execute_status else _("手动确认")
             mcp_btn.disabled = False
 
-        except (OSError, ValueError, RuntimeError) as e:
+        except (OSError, ValueError, RuntimeError):
             # 发生错误时恢复按钮状态
             mcp_btn = self.query_one("#mcp-btn", Button)
-            mcp_btn.label = "自动执行" if self.auto_execute_status else "手动确认"
+            mcp_btn.label = _("自动执行") if self.auto_execute_status else _("手动确认")
             mcp_btn.disabled = False
-            # 可以考虑显示错误消息
-            self.notify(f"切换 MCP 工具授权模式失败: {e!s}", severity="error")

@@ -92,7 +92,7 @@ extract() {
         --keyword=_n:1,2 \
         --output="$POT_FILE" \
         --from-code=UTF-8 \
-        --package-name=smart-shell \
+        --package-name=oi-cli \
         --package-version=0.10.2 \
         --msgid-bugs-address=contact@openeuler.org \
         --copyright-holder="openEuler Intelligence Project" \
