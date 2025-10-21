@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: oi-cli\n"
 "Report-Msgid-Bugs-To: contact@openeuler.org\n"
-"POT-Creation-Date: 2025-10-21 10:23+0800\n"
+"POT-Creation-Date: 2025-10-21 10:54+0800\n"
 "PO-Revision-Date: 2025-10-21 09:40+0800\n"
 "Last-Translator: openEuler Intelligence Team\n"
 "Language-Team: Chinese (Simplified)\n"
@@ -154,8 +154,8 @@ msgstr "切换焦点"
 
 #: src/app/tui.py:255
 #, python-brace-format
-msgid "Intelligent CLI Tool {version}"
-msgstr "智能命令行工具 {version}"
+msgid "Intelligent CLI Assistant {version}"
+msgstr "智能命令行助手 {version}"
 
 #: src/app/tui.py:371
 msgid "[Cancelled]"
@@ -265,7 +265,8 @@ msgstr "按任意键关闭"
 
 #: src/app/dialogs/agent.py:60 src/app/dialogs/agent.py:130
 #: src/app/dialogs/agent.py:185 src/app/dialogs/agent.py:205
-#: src/app/dialogs/agent.py:208
+#: src/app/dialogs/agent.py:208 src/tool/oi_select_agent.py:67
+#: src/tool/oi_select_agent.py:94
 msgid "智能问答"
 msgstr "智能问答"
 
@@ -469,3 +470,321 @@ msgstr "✗ 不支持的语言: {locale}\n"
 #: src/main.py:228
 msgid "Fatal error in Intelligent Shell application"
 msgstr "智能 Shell 应用发生致命错误"
+
+#: src/tool/oi_select_agent.py:29
+msgid "退出"
+msgstr "退出"
+
+#: src/tool/oi_select_agent.py:123
+#, python-brace-format
+msgid "✓ 默认智能体已设置为: {name}\n"
+msgstr "✓ 默认智能体已设置为: {name}\n"
+
+#: src/tool/oi_select_agent.py:125
+#, python-brace-format
+msgid "  App ID: {app_id}\n"
+msgstr "  App ID: {app_id}\n"
+
+#: src/tool/oi_select_agent.py:127
+msgid "  已设置为智能问答模式（无智能体）\n"
+msgstr "  已设置为智能问答模式（无智能体）\n"
+
+#: src/tool/oi_select_agent.py:129
+msgid "已取消选择\n"
+msgstr "已取消选择\n"
+
+#: src/tool/oi_select_agent.py:143
+msgid "错误: 智能体功能需要使用 openEuler Intelligence 后端\n"
+msgstr "错误: 智能体功能需要使用 openEuler Intelligence 后端\n"
+
+#: src/tool/oi_select_agent.py:144
+msgid "请先运行以下命令切换后端：\n"
+msgstr "请先运行以下命令切换后端：\n"
+
+#: src/tool/oi_select_agent.py:145
+msgid ""
+"  oi  # 然后按下 Ctrl+S 进入设置界面切换到 openEuler Intelligence 后端\n"
+msgstr ""
+"  oi  # 然后按下 Ctrl+S 进入设置界面切换到 openEuler Intelligence 后端\n"
+
+#: src/tool/oi_select_agent.py:163
+#, python-brace-format
+msgid "错误: {error}\n"
+msgstr "错误: {error}\n"
+
+#: src/tool/oi_llm_config.py:77
+msgid "需要管理员权限才能修改 openEuler Intelligence 配置文件"
+msgstr "需要管理员权限才能修改 openEuler Intelligence 配置文件"
+
+#: src/tool/oi_llm_config.py:84
+#, python-brace-format
+msgid "配置文件不存在: {path}"
+msgstr "配置文件不存在: {path}"
+
+#: src/tool/oi_llm_config.py:85
+msgid "请先运行 '(sudo) oi --init' 部署后端服务"
+msgstr "请先运行 '(sudo) oi --init' 部署后端服务"
+
+#: src/tool/oi_llm_config.py:89 src/tool/oi_llm_config.py:93
+#, python-brace-format
+msgid "配置文件不可写: {path}"
+msgstr "配置文件不可写: {path}"
+
+#: src/tool/oi_llm_config.py:96
+#, python-brace-format
+msgid "访问配置文件时权限不足: {error}"
+msgstr "访问配置文件时权限不足: {error}"
+
+#: src/tool/oi_llm_config.py:98
+#, python-brace-format
+msgid "访问配置文件时发生错误: {error}"
+msgstr "访问配置文件时发生错误: {error}"
+
+#: src/tool/oi_llm_config.py:127
+#, python-brace-format
+msgid "权限不足：无法访问配置文件 {filename}，请以管理员身份运行"
+msgstr "权限不足：无法访问配置文件 {filename}，请以管理员身份运行"
+
+#: src/tool/validators.py:135 src/tool/validators.py:584
+#: src/tool/validators.py:647
+#, python-brace-format
+msgid "连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}"
+msgstr "连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}"
+
+#: src/tool/validators.py:140
+#, python-brace-format
+msgid "LLM 配置验证失败: {error}"
+msgstr "LLM 配置验证失败: {error}"
+
+#: src/tool/validators.py:144
+msgid "LLM 配置验证成功"
+msgstr "LLM 配置验证成功"
+
+#: src/tool/validators.py:146
+#, python-brace-format
+msgid " - 支持工具调用，类型: {func_type}"
+msgstr " - 支持工具调用，类型: {func_type}"
+
+#: src/tool/validators.py:148
+msgid " - 不支持工具调用"
+msgstr " - 不支持工具调用"
+
+#: src/tool/validators.py:201
+msgid "无法连接到 Embedding 模型服务。"
+msgstr "无法连接到 Embedding 模型服务。"
+
+#: src/tool/validators.py:241
+msgid "基本对话测试失败"
+msgstr "基本对话测试失败"
+
+#: src/tool/validators.py:244
+msgid "基本对话功能正常"
+msgstr "基本对话功能正常"
+
+#: src/tool/validators.py:246
+msgid "对话响应为空"
+msgstr "对话响应为空"
+
+#: src/tool/validators.py:318
+msgid "不支持任何 function_call 格式"
+msgstr "不支持任何 function_call 格式"
+
+#: src/tool/validators.py:353
+#, python-brace-format
+msgid "tools 格式测试失败: {error}"
+msgstr "tools 格式测试失败: {error}"
+
+#: src/tool/validators.py:358
+msgid "支持 tools 格式的 function_call"
+msgstr "支持 tools 格式的 function_call"
+
+#: src/tool/validators.py:360
+msgid "不支持工具调用功能"
+msgstr "不支持工具调用功能"
+
+#: src/tool/validators.py:401
+#, python-brace-format
+msgid "structured_output 格式测试失败: {error}"
+msgstr "structured_output 格式测试失败: {error}"
+
+#: src/tool/validators.py:409
+msgid "structured_output 响应不是有效 JSON"
+msgstr "structured_output 响应不是有效 JSON"
+
+#: src/tool/validators.py:411
+msgid "支持 structured_output 格式"
+msgstr "支持 structured_output 格式"
+
+#: src/tool/validators.py:413
+msgid "structured_output 响应为空"
+msgstr "structured_output 响应为空"
+
+#: src/tool/validators.py:439
+#, python-brace-format
+msgid "json_mode 格式测试失败: {error}"
+msgstr "json_mode 格式测试失败: {error}"
+
+#: src/tool/validators.py:447
+msgid "json_mode 响应不是有效 JSON"
+msgstr "json_mode 响应不是有效 JSON"
+
+#: src/tool/validators.py:449
+msgid "支持 json_mode 格式"
+msgstr "支持 json_mode 格式"
+
+#: src/tool/validators.py:451
+msgid "json_mode 响应为空"
+msgstr "json_mode 响应为空"
+
+#: src/tool/validators.py:499
+msgid "支持 vLLM 结构化输出（部分支持）"
+msgstr "支持 vLLM 结构化输出（部分支持）"
+
+#: src/tool/validators.py:504
+#, python-brace-format
+msgid "不支持 vLLM guided_json 格式: {error}"
+msgstr "不支持 vLLM guided_json 格式: {error}"
+
+#: src/tool/validators.py:508
+msgid "vLLM guided_json 响应无效"
+msgstr "vLLM guided_json 响应无效"
+
+#: src/tool/validators.py:555
+msgid "支持 Ollama function_call 格式"
+msgstr "支持 Ollama function_call 格式"
+
+#: src/tool/validators.py:558
+#, python-brace-format
+msgid "不支持 Ollama function_call 格式: {error}"
+msgstr "不支持 Ollama function_call 格式: {error}"
+
+#: src/tool/validators.py:561
+msgid "Ollama function_call 响应无效"
+msgstr "Ollama function_call 响应无效"
+
+#: src/tool/validators.py:589
+#, python-brace-format
+msgid "OpenAI Embedding 配置验证失败: {error}"
+msgstr "OpenAI Embedding 配置验证失败: {error}"
+
+#: src/tool/validators.py:598
+#, python-brace-format
+msgid "OpenAI Embedding 配置验证成功 - 维度: {dimension}"
+msgstr "OpenAI Embedding 配置验证成功 - 维度: {dimension}"
+
+#: src/tool/validators.py:606
+msgid "OpenAI Embedding 响应为空"
+msgstr "OpenAI Embedding 响应为空"
+
+#: src/tool/validators.py:634
+#, python-brace-format
+msgid "MindIE Embedding 配置验证成功 - 维度: {dimension}"
+msgstr "MindIE Embedding 配置验证成功 - 维度: {dimension}"
+
+#: src/tool/validators.py:644
+msgid "MindIE Embedding 响应格式不正确"
+msgstr "MindIE Embedding 响应格式不正确"
+
+#: src/tool/validators.py:652
+#, python-brace-format
+msgid "MindIE Embedding 配置验证失败: {error}"
+msgstr "MindIE Embedding 配置验证失败: {error}"
+
+#: src/tool/validators.py:674
+msgid "服务 URL 必须以 http:// 或 https:// 开头"
+msgstr "服务 URL 必须以 http:// 或 https:// 开头"
+
+#: src/tool/validators.py:685
+msgid "访问令牌格式无效"
+msgstr "访问令牌格式无效"
+
+#: src/tool/validators.py:710
+msgid "服务返回的数据格式不正确"
+msgstr "服务返回的数据格式不正确"
+
+#: src/tool/validators.py:716
+msgid "连接成功"
+msgstr "连接成功"
+
+#: src/tool/validators.py:718
+#, python-brace-format
+msgid "服务返回错误代码: {code}"
+msgstr "服务返回错误代码: {code}"
+
+#: src/tool/validators.py:721
+msgid "无法连接到服务，请检查 URL 和网络连接"
+msgstr "无法连接到服务，请检查 URL 和网络连接"
+
+#: src/tool/validators.py:723
+msgid "连接超时，请检查网络连接或服务状态"
+msgstr "连接超时，请检查网络连接或服务状态"
+
+#: src/tool/validators.py:726
+#, python-brace-format
+msgid "连接验证失败: {error}"
+msgstr "连接验证失败: {error}"
+
+#: src/tool/validators.py:732
+msgid "访问令牌无效或已过期"
+msgstr "访问令牌无效或已过期"
+
+#: src/tool/validators.py:733
+msgid "访问权限不足"
+msgstr "访问权限不足"
+
+#: src/tool/validators.py:734
+msgid "API 接口不存在，请检查服务版本"
+msgstr "API 接口不存在，请检查服务版本"
+
+#: src/tool/validators.py:737
+#, python-brace-format
+msgid "服务响应异常，状态码: {status_code}"
+msgstr "服务响应异常，状态码: {status_code}"
+
+#: src/tool/command_processor.py:56
+msgid "请输入有效命令或问题。"
+msgstr "请输入有效命令或问题。"
+
+#: src/tool/command_processor.py:75
+msgid "检测到不安全命令，已阻止执行。"
+msgstr "检测到不安全命令，已阻止执行。"
+
+#: src/tool/command_processor.py:135
+msgid "[命令启动失败] 无法创建子进程"
+msgstr "[命令启动失败] 无法创建子进程"
+
+#: src/tool/command_processor.py:136
+#, python-brace-format
+msgid "无法启动命令 '{command}'，请分析可能原因并给出解决建议。"
+msgstr "无法启动命令 '{command}'，请分析可能原因并给出解决建议。"
+
+#: src/tool/command_processor.py:165
+#, python-brace-format
+msgid ""
+"\n"
+"[命令完成] 退出码: {returncode}"
+msgstr ""
+"\n"
+"[命令完成] 退出码: {returncode}"
+
+#: src/tool/command_processor.py:183
+#, python-brace-format
+msgid "[命令失败] 退出码: {returncode}"
+msgstr "[命令失败] 退出码: {returncode}"
+
+#: src/tool/command_processor.py:188
+#, python-brace-format
+msgid ""
+"命令 '{command}' 以非零状态 {returncode} 退出。\n"
+"标准错误输出如下：\n"
+"{stderr_text}\n"
+"请分析原因并提供解决建议。"
+msgstr ""
+"命令 '{command}' 以非零状态 {returncode} 退出。\n"
+"标准错误输出如下：\n"
+"{stderr_text}\n"
+"请分析原因并提供解决建议。"
+
+#: src/tool/command_processor.py:206
+msgid "读取 stderr 失败"
+msgstr "读取 stderr 失败"
