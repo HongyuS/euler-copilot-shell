@@ -1,13 +1,13 @@
-# Simplified Chinese translations for smart-shell package.
+# Simplified Chinese translations for oi-cli package.
 # Copyright (C) 2025 openEuler Intelligence Project
-# This file is distributed under the same license as the smart-shell package.
+# This file is distributed under the same license as the oi-cli package.
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: smart-shell\n"
+"Project-Id-Version: oi-cli\n"
 "Report-Msgid-Bugs-To: contact@openeuler.org\n"
-"POT-Creation-Date: 2025-10-17 17:39+0800\n"
-"PO-Revision-Date: 2025-01-17 00:00+0000\n"
+"POT-Creation-Date: 2025-10-21 09:54+0800\n"
+"PO-Revision-Date: 2025-10-21 09:40+0800\n"
 "Last-Translator: openEuler Intelligence Team\n"
 "Language-Team: Chinese (Simplified)\n"
 "Language: zh_CN\n"
@@ -15,6 +15,267 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
+"X-Generator: Poedit 3.8\n"
+
+#: src/app/mcp_widgets.py:47
+msgid "需要用户确认是否执行此工具"
+msgstr "需要用户确认是否执行此工具"
+
+#: src/app/mcp_widgets.py:51
+msgid "低风险"
+msgstr "低风险"
+
+#: src/app/mcp_widgets.py:52
+msgid "中等风险"
+msgstr "中等风险"
+
+#: src/app/mcp_widgets.py:53
+msgid "高风险"
+msgstr "高风险"
+
+#: src/app/mcp_widgets.py:54
+msgid "未知风险"
+msgstr "未知风险"
+
+#: src/app/mcp_widgets.py:81
+msgid "✓ 确认"
+msgstr "✓ 确认"
+
+#: src/app/mcp_widgets.py:82 src/app/mcp_widgets.py:201
+msgid "✗ 取消"
+msgstr "✗ 取消"
+
+#: src/app/mcp_widgets.py:164
+msgid "需要补充参数"
+msgstr "需要补充参数"
+
+#: src/app/mcp_widgets.py:169
+msgid "📝 参数输入"
+msgstr "📝 参数输入"
+
+#: src/app/mcp_widgets.py:181
+#, python-brace-format
+msgid "请输入 {param_name}"
+msgstr "请输入 {param_name}"
+
+#: src/app/mcp_widgets.py:191
+msgid "补充说明（可选）"
+msgstr "补充说明（可选）"
+
+#: src/app/mcp_widgets.py:200
+msgid "✓ 提交"
+msgstr "✓ 提交"
+
+#: src/app/settings.py:63
+msgid "设置"
+msgstr "设置"
+
+#: src/app/settings.py:66
+msgid "后端:"
+msgstr "后端:"
+
+#: src/app/settings.py:76
+msgid "Base URL:"
+msgstr "基础 URL:"
+
+#: src/app/settings.py:88
+msgid "API Key:"
+msgstr "API 密钥:"
+
+#: src/app/settings.py:95
+msgid "API 访问密钥，可选"
+msgstr "API 访问密钥，可选"
+
+#: src/app/settings.py:103 src/app/settings.py:239
+msgid "模型:"
+msgstr "模型:"
+
+#: src/app/settings.py:108 src/app/settings.py:244
+msgid "模型名称，可选"
+msgstr "模型名称，可选"
+
+#: src/app/settings.py:117 src/app/settings.py:272
+msgid "MCP 工具授权:"
+msgstr "MCP 工具授权:"
+
+#: src/app/settings.py:119 src/app/settings.py:174 src/app/settings.py:274
+#: src/app/settings.py:549 src/app/settings.py:555
+msgid "自动执行"
+msgstr "自动执行"
+
+#: src/app/settings.py:119 src/app/settings.py:174 src/app/settings.py:181
+#: src/app/settings.py:274 src/app/settings.py:549 src/app/settings.py:555
+msgid "手动确认"
+msgstr "手动确认"
+
+#: src/app/settings.py:133
+msgid "保存"
+msgstr "保存"
+
+#: src/app/settings.py:134 src/app/dialogs/common.py:27
+msgid "取消"
+msgstr "取消"
+
+#: src/app/settings.py:437
+msgid "Base URL 不能为空"
+msgstr "基础 URL 不能为空"
+
+#: src/app/settings.py:534
+msgid "切换中..."
+msgstr "切换中..."
+
+#: src/app/tui.py:217
+msgid "Enter command or question..."
+msgstr "输入命令或问题..."
+
+#: src/app/tui.py:226
+msgid "Quit"
+msgstr "退出"
+
+#: src/app/tui.py:227
+msgid "Settings"
+msgstr "设置"
+
+#: src/app/tui.py:228
+msgid "Reset"
+msgstr "重置对话"
+
+#: src/app/tui.py:229
+msgid "Agent"
+msgstr "选择智能体"
+
+#: src/app/tui.py:230
+msgid "Cancel"
+msgstr "取消"
+
+#: src/app/tui.py:231
+msgid "Focus"
+msgstr "切换焦点"
+
+#: src/app/tui.py:255
+#, python-brace-format
+msgid "Intelligent CLI Tool {version}"
+msgstr "智能命令行工具 {version}"
+
+#: src/app/tui.py:371
+msgid "[Cancelled]"
+msgstr "[已取消]"
+
+#: src/app/tui.py:576
+msgid ""
+"No response received, please check network connection or try again later"
+msgstr "没有收到响应，请检查网络连接或稍后重试"
+
+#: src/app/tui.py:684
+msgid "Request timeout, processing stopped"
+msgstr "请求超时，已停止处理"
+
+#: src/app/tui.py:691
+msgid "No response for a long time, processing stopped"
+msgstr "长时间无响应，已停止处理"
+
+#: src/app/tui.py:744 src/app/tui.py:902
+msgid "Request timeout, please try again later"
+msgstr "请求超时，请稍后重试"
+
+#: src/app/tui.py:888
+#, python-brace-format
+msgid "Server error: {message}"
+msgstr "服务端错误: {message}"
+
+#: src/app/tui.py:890
+#, python-brace-format
+msgid "Request failed: {message}"
+msgstr "请求失败: {message}"
+
+#: src/app/tui.py:894
+msgid "Network connection interrupted, please check network and try again"
+msgstr "网络连接异常中断，请检查网络连接后重试"
+
+#: src/app/tui.py:906
+msgid "Network connection error, please check network and try again"
+msgstr "网络连接错误，请检查网络后重试"
+
+#: src/app/tui.py:915 src/app/tui.py:949
+msgid "Server response error, please try again later"
+msgstr "服务端响应异常，请稍后重试"
+
+#: src/app/tui.py:920
+msgid "Data format error, please try again later"
+msgstr "数据格式错误，请稍后重试"
+
+#: src/app/tui.py:927
+msgid "Authentication failed, please check configuration"
+msgstr "认证失败，请检查配置"
+
+#: src/app/tui.py:951
+#, python-brace-format
+msgid "Error processing command: {error}"
+msgstr "处理命令时出错: {error}"
+
+#: src/app/tui.py:1170
+msgid "💡 MCP response sent"
+msgstr "💡 MCP 响应已发送"
+
+#: src/app/tui.py:1173 src/app/tui.py:1202
+msgid "❌ Current client does not support MCP response"
+msgstr "❌ 当前客户端不支持 MCP 响应功能"
+
+#: src/app/tui.py:1182
+#, python-brace-format
+msgid "❌ Failed to send MCP response: {error}"
+msgstr "❌ 发送 MCP 响应失败: {error}"
+
+#: src/app/tui.py:1249
+#, python-brace-format
+msgid "⏱️ MCP response timeout ({seconds} seconds)"
+msgstr "⏱️ MCP 响应超时 ({seconds}秒)"
+
+#: src/app/tui.py:1253
+msgid "🚫 MCP response cancelled"
+msgstr "🚫 MCP 响应被取消"
+
+#: src/app/tui.py:1336
+msgid "Backend configuration validation failed, please check and modify"
+msgstr "后端配置验证失败，请检查并修改配置"
+
+#: src/app/tui.py:1337
+msgid "Configuration Error"
+msgstr "配置错误"
+
+#: src/app/dialogs/common.py:25
+msgid "确认退出吗？"
+msgstr "确认退出吗？"
+
+#: src/app/dialogs/common.py:28
+msgid "确认"
+msgstr "确认"
+
+#: src/app/dialogs/agent.py:27
+msgid "智能体功能提示"
+msgstr "智能体功能提示"
+
+#: src/app/dialogs/agent.py:28
+msgid "请选择 openEuler Intelligence 后端来使用智能体功能"
+msgstr "请选择 openEuler Intelligence 后端来使用智能体功能"
+
+#: src/app/dialogs/agent.py:29
+msgid "按任意键关闭"
+msgstr "按任意键关闭"
+
+#: src/app/dialogs/agent.py:60 src/app/dialogs/agent.py:130
+#: src/app/dialogs/agent.py:185 src/app/dialogs/agent.py:205
+#: src/app/dialogs/agent.py:208
+msgid "智能问答"
+msgstr "智能问答"
+
+#: src/app/dialogs/agent.py:113
+msgid "OS 智能助手"
+msgstr "OS 智能助手"
+
+#: src/app/dialogs/agent.py:115
+msgid "使用上下键选择，回车确认，ESC取消 | ✓ 表示当前选中"
+msgstr "使用上下键选择，回车确认，ESC取消 | ✓ 表示当前选中"
 
 #: src/main.py:28
 msgid "openEuler Intelligence - Intelligent command-line tool"
@@ -155,16 +416,16 @@ msgstr "✓ 日志级别已成功设置为: {level}\n"
 msgid "✓ Logging system initialized\n"
 msgstr "✓ 日志系统初始化完成\n"
 
-#: src/main.py:181
+#: src/main.py:191
 #, python-brace-format
 msgid "✓ Language set to: {locale}\n"
 msgstr "✓ 语言已设置为: {locale}\n"
 
-#: src/main.py:183
+#: src/main.py:193
 #, python-brace-format
 msgid "✗ Unsupported language: {locale}\n"
 msgstr "✗ 不支持的语言: {locale}\n"
 
-#: src/main.py:218
+#: src/main.py:228
 msgid "Fatal error in Intelligent Shell application"
 msgstr "智能 Shell 应用发生致命错误"

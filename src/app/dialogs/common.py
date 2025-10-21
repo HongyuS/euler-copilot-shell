@@ -12,6 +12,8 @@ from textual.containers import Container, Horizontal
 from textual.screen import ModalScreen
 from textual.widgets import Button, Label
 
+from i18n.manager import _
+
 
 class ExitDialog(ModalScreen):
     """退出确认对话框"""
@@ -20,10 +22,10 @@ class ExitDialog(ModalScreen):
         """构建退出确认对话框"""
         yield Container(
             Container(
-                Label("确认退出吗？", id="dialog-text"),
+                Label(_("确认退出吗？"), id="dialog-text"),
                 Horizontal(
-                    Button("取消", classes="dialog-button", id="cancel"),
-                    Button("确认", classes="dialog-button", id="confirm"),
+                    Button(_("取消"), classes="dialog-button", id="cancel"),
+                    Button(_("确认"), classes="dialog-button", id="confirm"),
                     id="dialog-buttons",
                 ),
                 id="exit-dialog",

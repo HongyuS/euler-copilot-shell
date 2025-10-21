@@ -84,7 +84,7 @@ class ConfigModel:
     openai: OpenAIConfig = field(default_factory=OpenAIConfig)
     eulerintelli: HermesConfig = field(default_factory=HermesConfig)
     log_level: LogLevel = field(default=LogLevel.DEBUG)
-    locale: str = field(default="en_US")  # 默认语言为英语
+    locale: str = field(default="")  # 空字符串表示自动检测系统语言
 
     @classmethod
     def from_dict(cls, d: dict) -> "ConfigModel":
@@ -115,7 +115,7 @@ class ConfigModel:
             openai=OpenAIConfig.from_dict(d.get("openai", {})),
             eulerintelli=HermesConfig.from_dict(d.get("eulerintelli", {})),
             log_level=log_level,
-            locale=d.get("locale", "en_US"),
+            locale=d.get("locale", ""),  # 空字符串表示自动检测
         )
 
     def to_dict(self) -> dict:

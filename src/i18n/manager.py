@@ -95,6 +95,8 @@ class I18nManager:
             if system_locale:
                 # 标准化语言代码 (如 zh_CN.UTF-8 -> zh_CN)
                 locale_code = system_locale.split(".")[0]
+                if locale_code.startswith("zh"):
+                    locale_code = "zh_CN"
                 if locale_code in SUPPORTED_LOCALES:
                     return locale_code
         except (ValueError, TypeError, locale.Error):

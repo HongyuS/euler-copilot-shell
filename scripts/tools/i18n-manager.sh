@@ -2,6 +2,7 @@
 # 国际化翻译管理脚本
 
 set -e
+set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -79,26 +80,24 @@ extract() {
         exit 1
     fi
 
-    file_count=$(echo "$python_files" | wc -l | tr -d ' ')
+    file_count=$(echo "$python_files" | wc -l | sed 's/^[[:space:]]*//')
     echo "   Found $file_count Python files"
     echo "   Output file: $POT_FILE"
 
     # 使用 xgettext 提取字符串（使用相对路径）
     # shellcheck disable=SC2086
-    xgettext \
+    if xgettext \
         --language=Python \
         --keyword=_ \
         --keyword=_n:1,2 \
         --output="$POT_FILE" \
         --from-code=UTF-8 \
-        --package-name=smart-shell \
+        --package-name=oi-cli \
         --package-version=0.10.2 \
         --msgid-bugs-address=contact@openeuler.org \
         --copyright-holder="openEuler Intelligence Project" \
         --add-comments=Translators \
-        $python_files
-
-    if [ $? -eq 0 ]; then
+        $python_files; then
         print_green "✅ Successfully extracted strings to messages.pot"
     else
         print_red "❌ Failed to extract strings"
@@ -137,7 +136,7 @@ update() {
         echo "   Updating $locale_name..."
         if msgmerge --update --backup=none "$po_file" "$POT_FILE" 2>/dev/null; then
             echo "   ✅ Updated $locale_name"
-            ((updated++))
+            updated=$((updated + 1))
         else
             print_yellow "   ⚠️  Failed to update $locale_name"
         fi
@@ -163,6 +162,7 @@ compile() {
     check_gettext
 
     compiled=0
+    failed=0
 
     # 遍历所有语言目录
     for locale_path in "$LOCALE_DIR"/*; do
@@ -180,20 +180,35 @@ compile() {
         fi
 
         echo "   Compiling $locale_name..."
-        if msgfmt -o "$mo_file" "$po_file" 2>/dev/null; then
+        # 临时禁用 set -e 和 set -o pipefail 以捕获错误但继续执行
+        set +e
+        set +o pipefail
+        error_output=$(msgfmt -o "$mo_file" "$po_file" 2>&1)
+        msgfmt_status=$?
+        set -e
+        set -o pipefail
+
+        if [ "$msgfmt_status" -eq 0 ]; then
             echo "   ✅ Compiled $locale_name"
-            ((compiled++))
+            compiled=$((compiled + 1))
         else
             print_yellow "   ⚠️  Failed to compile $locale_name"
+            echo "   Error: $error_output"
+            failed=$((failed + 1))
         fi
     done
 
-    if [ $compiled -gt 0 ]; then
-        echo ""
+    echo ""
+    if [ "$compiled" -gt 0 ]; then
         print_green "✅ Successfully compiled $compiled translation file(s)"
-    else
-        echo ""
-        print_yellow "⚠️  No translation files were compiled"
+    fi
+
+    if [ "$failed" -gt 0 ]; then
+        print_yellow "⚠️  Failed to compile $failed translation file(s)"
+    fi
+
+    if [ "$compiled" -eq 0 ] && [ "$failed" -eq 0 ]; then
+        print_yellow "⚠️  No translation files found to compile"
     fi
 }
 

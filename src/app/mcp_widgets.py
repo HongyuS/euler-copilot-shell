@@ -10,6 +10,8 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.message import Message
 from textual.widgets import Button, Input, Static
 
+from i18n.manager import _
+
 if TYPE_CHECKING:
     from textual.app import ComposeResult
 
@@ -42,14 +44,14 @@ class MCPConfirmWidget(Container):
         step_name = self.event.get_step_name()
         content = self.event.get_content()
         risk = content.get("risk", "unknown")
-        reason = content.get("reason", "需要用户确认是否执行此工具")
+        reason = content.get("reason", _("需要用户确认是否执行此工具"))
 
         # 风险级别文本和图标
         risk_info = {
-            "low": ("🟢", "低风险"),
-            "medium": ("🟡", "中等风险"),
-            "high": ("🔴", "高风险"),
-        }.get(risk, ("⚪", "未知风险"))
+            "low": ("🟢", _("低风险")),
+            "medium": ("🟡", _("中等风险")),
+            "high": ("🔴", _("高风险")),
+        }.get(risk, ("⚪", _("未知风险")))
 
         risk_icon, risk_text = risk_info
 
@@ -76,8 +78,8 @@ class MCPConfirmWidget(Container):
                 )
             # 确保按钮始终显示
             with Horizontal(classes="confirm-buttons"):
-                yield Button("✓ 确认", variant="success", id="mcp-confirm-yes")
-                yield Button("✗ 取消", variant="error", id="mcp-confirm-no")
+                yield Button(_("✓ 确认"), variant="success", id="mcp-confirm-yes")
+                yield Button(_("✗ 取消"), variant="error", id="mcp-confirm-no")
 
     @on(Button.Pressed, "#mcp-confirm-yes")
     def confirm_execution(self) -> None:
@@ -159,12 +161,12 @@ class MCPParameterWidget(Container):
         """构建参数输入界面"""
         step_name = self.event.get_step_name()
         content = self.event.get_content()
-        message = content.get("message", "需要补充参数")
+        message = content.get("message", _("需要补充参数"))
         params = content.get("params", {})
 
         with Vertical(classes="mcp-content"):
             # 紧凑的参数输入标题
-            yield Static("📝 参数输入", classes="param-header", markup=False)
+            yield Static(_("📝 参数输入"), classes="param-header", markup=False)
             yield Static(f"🔧 {step_name}", classes="param-tool", markup=False)
             # 显示说明文字，超长时显示省略号
             if len(message) > MAX_DISPLAY_LENGTH:
@@ -176,7 +178,7 @@ class MCPParameterWidget(Container):
             for param_name, param_value in params.items():
                 if param_value is None or param_value == "":
                     param_input = Input(
-                        placeholder=f"请输入 {param_name}",
+                        placeholder=_("请输入 {param_name}").format(param_name=param_name),
                         id=f"param_{param_name}",
                         classes="param-input-compact",
                     )
@@ -186,7 +188,7 @@ class MCPParameterWidget(Container):
             # 简化的补充说明输入
             if params:  # 只有在有其他参数时才显示补充说明
                 description_input = Input(
-                    placeholder="补充说明（可选）",
+                    placeholder=_("补充说明（可选）"),
                     id="param_description",
                     classes="param-input-compact",
                 )
@@ -195,8 +197,8 @@ class MCPParameterWidget(Container):
 
             # 紧凑的按钮行
             with Horizontal(classes="param-buttons"):
-                yield Button("✓ 提交", variant="success", id="mcp-param-submit")
-                yield Button("✗ 取消", variant="error", id="mcp-param-cancel")
+                yield Button(_("✓ 提交"), variant="success", id="mcp-param-submit")
+                yield Button(_("✗ 取消"), variant="error", id="mcp-param-cancel")
 
     @on(Button.Pressed, "#mcp-param-submit")
     def submit_parameters(self) -> None:
