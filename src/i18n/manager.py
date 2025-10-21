@@ -11,8 +11,40 @@ SUPPORTED_LOCALES = {
     "zh_CN": "简体中文",
 }
 
-# 默认语言 - 英语
-DEFAULT_LOCALE = "en_US"
+# 备用语言（当系统语言无法检测时使用）
+FALLBACK_LOCALE = "en_US"
+
+
+def _detect_default_locale() -> str:
+    """
+    检测默认语言环境（在模块加载时调用）
+
+    Returns:
+        检测到的语言代码，如果不支持则返回备用语言（英语）
+
+    """
+    try:
+        # 获取系统语言设置
+        system_locale, _ = locale.getdefaultlocale()
+        if system_locale:
+            # 标准化语言代码 (如 zh_CN.UTF-8 -> zh_CN)
+            locale_code = system_locale.split(".")[0]
+            if locale_code.startswith("zh"):
+                locale_code = "zh_CN"
+            if locale_code.startswith("en"):
+                locale_code = "en_US"
+            if locale_code in SUPPORTED_LOCALES:
+                return locale_code
+    except (ValueError, TypeError, locale.Error):
+        # 捕获可能的 locale 相关异常
+        pass
+
+    # 无法检测或不支持时，返回备用语言
+    return FALLBACK_LOCALE
+
+
+# 默认语言 - 根据系统语言自动检测
+DEFAULT_LOCALE = _detect_default_locale()
 
 
 class I18nManager:
@@ -86,25 +118,10 @@ class I18nManager:
         检测系统语言环境
 
         Returns:
-            检测到的语言代码，如果不支持则返回默认语言（英语）
+            检测到的语言代码，如果不支持则返回默认语言
 
         """
-        try:
-            # 获取系统语言设置
-            system_locale, _ = locale.getdefaultlocale()
-            if system_locale:
-                # 标准化语言代码 (如 zh_CN.UTF-8 -> zh_CN)
-                locale_code = system_locale.split(".")[0]
-                if locale_code.startswith("zh"):
-                    locale_code = "zh_CN"
-                if locale_code in SUPPORTED_LOCALES:
-                    return locale_code
-        except (ValueError, TypeError, locale.Error):
-            # 捕获可能的 locale 相关异常
-            pass
-
-        # 无法检测或不支持时，返回默认语言
-        return DEFAULT_LOCALE
+        return _detect_default_locale()
 
     def translate(self, message: str, **kwargs: str | float) -> str:
         """
