@@ -6,9 +6,9 @@ import atexit
 import sys
 
 from __version__ import __version__
-from app.tui import IntelligentTerminal
 from config.manager import ConfigManager
 from config.model import LogLevel
+from i18n.manager import _, get_locale, get_supported_locales, init_i18n, set_locale
 from log.manager import (
     cleanup_empty_logs,
     disable_console_output,
@@ -24,76 +24,96 @@ def parse_args() -> argparse.Namespace:
     """解析命令行参数"""
     parser = argparse.ArgumentParser(
         prog="oi",
-        description="openEuler Intelligence - 智能命令行工具",
-        epilog="""
-更多信息和使用文档请访问:
+        description=_("openEuler Intelligence - Intelligent command-line tool"),
+        epilog=_("""
+For more information and documentation, please visit:
   https://gitee.com/openeuler/euler-copilot-shell/tree/master/docs
-        """,
+        """),
         formatter_class=argparse.RawTextHelpFormatter,
         add_help=False,
     )
 
     # 通用选项组
     general_group = parser.add_argument_group(
-        "通用选项",
-        "显示帮助信息和版本信息",
+        _("General Options"),
+        _("Show help and version information"),
     )
     general_group.add_argument(
         "-h",
         "--help",
         action="help",
-        help="显示此帮助信息并退出",
+        help=_("Show this help message and exit"),
     )
     general_group.add_argument(
         "-V",
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
-        help="显示程序版本号并退出",
+        help=_("Show program version number and exit"),
     )
 
     # 后端配置选项组
     backend_group = parser.add_argument_group(
-        "后端配置选项",
-        "用于初始化和配置 openEuler Intelligence 后端服务",
+        _("Backend Configuration Options"),
+        _("For initializing and configuring openEuler Intelligence backend services"),
     )
     backend_group.add_argument(
         "--init",
         action="store_true",
-        help="初始化 openEuler Intelligence 后端\n * 初始化操作需要管理员权限和网络连接",
+        help=_(
+            "Initialize openEuler Intelligence backend\n"
+            " * Initialization requires administrator privileges and network connection",
+        ),
     )
     backend_group.add_argument(
         "--llm-config",
         action="store_true",
-        help="更改 openEuler Intelligence 大模型设置（需要有效的本地后端服务）\n * 配置编辑操作需要管理员权限",
+        help=_(
+            "Change openEuler Intelligence LLM settings (requires valid local backend service)\n"
+            " * Configuration editing requires administrator privileges",
+        ),
     )
 
     # 应用配置选项组
     app_group = parser.add_argument_group(
-        "应用配置选项",
-        "用于配置应用前端行为和偏好设置",
+        _("Application Configuration Options"),
+        _("For configuring application frontend behavior and preferences"),
     )
     app_group.add_argument(
         "--agent",
         action="store_true",
-        help="选择默认智能体",
+        help=_("Select default agent"),
+    )
+
+    # 语言设置选项组
+    i18n_group = parser.add_argument_group(
+        _("Language Settings"),
+        _("For configuring application display language"),
+    )
+    locale_choices = list(get_supported_locales().keys())
+    locale_names = ", ".join(f"{k} ({v})" for k, v in get_supported_locales().items())
+    i18n_group.add_argument(
+        "--locale",
+        choices=locale_choices,
+        metavar="LOCALE",
+        help=_("Set display language (available: {locales})").format(locales=locale_names),
     )
 
     # 日志管理选项组
     log_group = parser.add_argument_group(
-        "日志管理选项",
-        "用于查看和配置日志输出",
+        _("Log Management Options"),
+        _("For viewing and configuring log output"),
     )
     log_group.add_argument(
         "--logs",
         action="store_true",
-        help="显示最新的日志内容（最多1000行）",
+        help=_("Show latest log content (up to 1000 lines)"),
     )
     log_group.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         metavar="LEVEL",
-        help="设置日志级别 (可选: DEBUG, INFO, WARNING, ERROR)",
+        help=_("Set log level (available: DEBUG, INFO, WARNING, ERROR)"),
     )
 
     # 注册清理函数，确保在程序异常退出时也能清理空日志文件
@@ -116,14 +136,14 @@ def show_logs() -> None:
             # 直接输出到标准输出，保持原有的日志格式
             sys.stdout.write(line.rstrip() + "\n")
     except (OSError, RuntimeError) as e:
-        sys.stderr.write(f"获取日志失败: {e}\n")
+        sys.stderr.write(_("Failed to retrieve logs: {error}\n").format(error=e))
         sys.exit(1)
 
 
 def set_log_level(config_manager: ConfigManager, level: str) -> None:
     """设置日志级别"""
     if level not in LogLevel.__members__:
-        sys.stderr.write(f"无效的日志级别: {level}\n")
+        sys.stderr.write(_("Invalid log level: {level}\n").format(level=level))
         sys.exit(1)
     config_manager.set_log_level(LogLevel(level))
 
@@ -132,19 +152,46 @@ def set_log_level(config_manager: ConfigManager, level: str) -> None:
     enable_console_output()  # 启用控制台输出以显示验证信息
 
     logger = get_logger(__name__)
-    logger.info("日志级别已设置为: %s", level)
-    logger.debug("这是一条 DEBUG 级别的测试消息")
-    logger.info("这是一条 INFO 级别的测试消息")
-    logger.warning("这是一条 WARNING 级别的测试消息")
-    logger.error("这是一条 ERROR 级别的测试消息")
+    logger.info(_("Log level has been set to: %s"), level)
+    logger.debug(_("This is a DEBUG level test message"))
+    logger.info(_("This is an INFO level test message"))
+    logger.warning(_("This is a WARNING level test message"))
+    logger.error(_("This is an ERROR level test message"))
 
-    sys.stdout.write(f"✓ 日志级别已成功设置为: {level}\n")
-    sys.stdout.write("✓ 日志系统初始化完成\n")
+    sys.stdout.write(_("✓ Log level successfully set to: {level}\n").format(level=level))
+    sys.stdout.write(_("✓ Logging system initialized\n"))
 
 
 def main() -> None:
     """主函数"""
+    # 首先初始化配置管理器
+    config_manager = ConfigManager()
+
+    # 初始化国际化系统
+    # 如果配置中没有设置语言（空字符串），则自动检测系统语言
+    configured_locale = config_manager.get_locale()
+    if configured_locale:
+        # 使用用户配置的语言
+        init_i18n(configured_locale)
+    else:
+        # 自动检测系统语言
+        init_i18n(None)
+        # 保存检测到的语言到配置中
+        detected_locale = get_locale()
+        config_manager.set_locale(detected_locale)
+
+    # 解析命令行参数（需要在初始化 i18n 后进行，以支持翻译）
     args = parse_args()
+
+    # 处理语言设置参数
+    if args.locale:
+        if set_locale(args.locale):
+            config_manager.set_locale(args.locale)
+            sys.stdout.write(_("✓ Language set to: {locale}\n").format(locale=args.locale))
+        else:
+            sys.stderr.write(_("✗ Unsupported language: {locale}\n").format(locale=args.locale))
+            sys.exit(1)
+        return
 
     if args.logs:
         show_logs()
@@ -162,9 +209,6 @@ def main() -> None:
         llm_config()
         return
 
-    # 初始化配置和日志系统
-    config_manager = ConfigManager()
-
     # 处理命令行参数设置的日志级别
     if args.log_level:
         set_log_level(config_manager, args.log_level)
@@ -177,10 +221,13 @@ def main() -> None:
     logger = get_logger(__name__)
 
     try:
+        # 延迟导入 IntelligentTerminal，确保在 i18n 初始化之后
+        from app.tui import IntelligentTerminal  # noqa: PLC0415
+
         app = IntelligentTerminal()
         app.run()
     except Exception:
-        logger.exception("智能 Shell 应用发生致命错误")
+        logger.exception(_("Fatal error in Intelligent Shell application"))
         raise
 
 

@@ -30,6 +30,7 @@ from backend.hermes.mcp_helpers import (
 )
 from config import ConfigManager
 from config.model import Backend
+from i18n.manager import _
 from log.manager import get_logger, log_exception
 from tool.command_processor import process_command
 from tool.validators import APIValidator, validate_oi_connection
@@ -213,7 +214,7 @@ class CommandInput(Input):
 
     def __init__(self) -> None:
         """初始化命令输入组件"""
-        super().__init__(placeholder="输入命令或问题...", id="command-input")
+        super().__init__(placeholder=_("Enter command or question..."), id="command-input")
 
 
 class IntelligentTerminal(App):
@@ -222,12 +223,12 @@ class IntelligentTerminal(App):
     CSS_PATH = "css/styles.tcss"
 
     BINDINGS: ClassVar[list[BindingType]] = [
-        Binding(key="ctrl+q", action="request_quit", description="退出"),
-        Binding(key="ctrl+s", action="settings", description="设置"),
-        Binding(key="ctrl+r", action="reset_conversation", description="重置对话"),
-        Binding(key="ctrl+t", action="choose_agent", description="选择智能体"),
-        Binding(key="ctrl+c", action="cancel", description="取消", priority=True),
-        Binding(key="tab", action="toggle_focus", description="切换焦点"),
+        Binding(key="ctrl+q", action="request_quit", description=_("Quit")),
+        Binding(key="ctrl+s", action="settings", description=_("Settings")),
+        Binding(key="ctrl+r", action="reset_conversation", description=_("Reset")),
+        Binding(key="ctrl+t", action="choose_agent", description=_("Agent")),
+        Binding(key="ctrl+c", action="cancel", description=_("Cancel"), priority=True),
+        Binding(key="tab", action="toggle_focus", description=_("Focus")),
     ]
 
     class SwitchToMCPConfirm(Message):
@@ -251,7 +252,7 @@ class IntelligentTerminal(App):
         super().__init__()
         # 设置应用标题
         self.title = "openEuler Intelligence"
-        self.sub_title = f"智能命令行工具 {__version__}"
+        self.sub_title = _("Intelligent CLI Assistant {version}").format(version=__version__)
         self.config_manager = ConfigManager()
         self.processing: bool = False
         # 添加保存任务的集合到类属性
@@ -367,7 +368,7 @@ class IntelligentTerminal(App):
         if interrupted_count > 0:
             # 显示中断消息
             output_container = self.query_one("#output-container")
-            interrupt_line = OutputLine("[已取消]")
+            interrupt_line = OutputLine(_("[Cancelled]"))
             output_container.mount(interrupt_line)
             # 异步滚动到底部
             scroll_task = asyncio.create_task(self._scroll_to_end())
@@ -571,7 +572,10 @@ class IntelligentTerminal(App):
             # 如果没有收到任何内容且应用仍在运行，显示错误信息
             if not received_any_content and hasattr(self, "is_running") and self.is_running:
                 output_container.mount(
-                    OutputLine("没有收到响应，请检查网络连接或稍后重试", command=False),
+                    OutputLine(
+                        _("No response received, please check network connection or try again later"),
+                        command=False,
+                    ),
                 )
 
         except asyncio.CancelledError:
@@ -677,14 +681,14 @@ class IntelligentTerminal(App):
         """检查各种超时条件，返回是否应该中断处理"""
         # 检查总体超时
         if current_time - stream_state["start_time"] > stream_state["timeout_seconds"]:
-            output_container.mount(OutputLine("请求超时，已停止处理", command=False))
+            output_container.mount(OutputLine(_("Request timeout, processing stopped"), command=False))
             return True
 
         # 检查无内容超时
         received_any_content = stream_state["received_any_content"]
         time_since_last_content = current_time - stream_state["last_content_time"]
         if received_any_content and time_since_last_content > stream_state["no_content_timeout"]:
-            output_container.mount(OutputLine("长时间无响应，已停止处理", command=False))
+            output_container.mount(OutputLine(_("No response for a long time, processing stopped"), command=False))
             return True
 
         return False
@@ -712,7 +716,7 @@ class IntelligentTerminal(App):
         )
 
         # 检查是否是 MCP 消息处理（返回值为 None 表示是 MCP 消息）
-        tool_name, _ = extract_mcp_tag(content)
+        tool_name, _cleaned_content = extract_mcp_tag(content)
         is_mcp_detected = processed_line is None and tool_name is not None
 
         # 只有当返回值不为None时才更新current_line
@@ -737,7 +741,7 @@ class IntelligentTerminal(App):
         """处理超时错误"""
         self.logger.warning("Command stream timed out")
         if hasattr(self, "is_running") and self.is_running:
-            output_container.mount(OutputLine("请求超时，请稍后重试", command=False))
+            output_container.mount(OutputLine(_("Request timeout, please try again later"), command=False))
         return stream_state["received_any_content"]
 
     def _handle_cancelled_error(self, output_container: Container, stream_state: dict) -> bool:
@@ -881,13 +885,13 @@ class IntelligentTerminal(App):
         # 处理 HermesAPIError 特殊情况
         if hasattr(error, "status_code") and hasattr(error, "message"):
             if error.status_code == 500:  # type: ignore[attr-defined]  # noqa: PLR2004
-                return f"服务端错误: {error.message}"  # type: ignore[attr-defined]
+                return _("Server error: {message}").format(message=error.message)  # type: ignore[attr-defined]
             if error.status_code >= 400:  # type: ignore[attr-defined]  # noqa: PLR2004
-                return f"请求失败: {error.message}"  # type: ignore[attr-defined]
+                return _("Request failed: {message}").format(message=error.message)  # type: ignore[attr-defined]
 
         # 定义错误匹配规则和对应的用户友好消息
         error_patterns = {
-            "网络连接异常中断，请检查网络连接后重试": [
+            _("Network connection interrupted, please check network and try again"): [
                 "remoteprotocolerror",
                 "server disconnected",
                 "peer closed connection",
@@ -895,11 +899,11 @@ class IntelligentTerminal(App):
                 "connection refused",
                 "broken pipe",
             ],
-            "请求超时，请稍后重试": [
+            _("Request timeout, please try again later"): [
                 "timeout",
                 "timed out",
             ],
-            "网络连接错误，请检查网络后重试": [
+            _("Network connection error, please check network and try again"): [
                 "network",
                 "connection",
                 "unreachable",
@@ -908,19 +912,19 @@ class IntelligentTerminal(App):
                 "httperror",
                 "requestserror",
             ],
-            "服务端响应异常，请稍后重试": [
+            _("Server response error, please try again later"): [
                 "http",
                 "status",
                 "response",
             ],
-            "数据格式错误，请稍后重试": [
+            _("Data format error, please try again later"): [
                 "json",
                 "decode",
                 "parse",
                 "invalid",
                 "malformed",
             ],
-            "认证失败，请检查配置": [
+            _("Authentication failed, please check configuration"): [
                 "auth",
                 "unauthorized",
                 "forbidden",
@@ -942,9 +946,9 @@ class IntelligentTerminal(App):
                 "requesterror",
             ]
         ):
-            return "服务端响应异常，请稍后重试"
+            return _("Server response error, please try again later")
 
-        return f"处理命令时出错: {error!s}"
+        return _("Error processing command: {error}").format(error=str(error))
 
     def _display_error_in_ui(self, error: BaseException) -> None:
         """在UI界面显示错误信息"""
@@ -1163,10 +1167,10 @@ class IntelligentTerminal(App):
                 )
                 if not success:
                     # 如果没有收到任何响应内容，显示默认消息
-                    output_container.mount(OutputLine("💡 MCP 响应已发送"))
+                    output_container.mount(OutputLine(_("💡 MCP response sent")))
             else:
                 self.logger.error("当前客户端不支持 MCP 响应功能")
-                output_container.mount(OutputLine("❌ 当前客户端不支持 MCP 响应功能"))
+                output_container.mount(OutputLine(_("❌ Current client does not support MCP response")))
 
         except Exception as e:
             self.logger.exception("发送 MCP 响应失败")
@@ -1174,7 +1178,9 @@ class IntelligentTerminal(App):
             if output_container is not None:
                 try:
                     error_message = self._format_error_message(e)
-                    output_container.mount(OutputLine(f"❌ 发送 MCP 响应失败: {error_message}"))
+                    output_container.mount(
+                        OutputLine(_("❌ Failed to send MCP response: {error}").format(error=error_message)),
+                    )
                 except Exception:
                     # 如果连显示错误信息都失败了，至少记录日志
                     self.logger.exception("无法显示错误信息")
@@ -1193,7 +1199,7 @@ class IntelligentTerminal(App):
         """处理 MCP 响应的流式回复"""
         if not isinstance(llm_client, HermesChatClient):
             self.logger.error("当前客户端不支持 MCP 响应功能")
-            output_container.mount(OutputLine("❌ 当前客户端不支持 MCP 响应功能"))
+            output_container.mount(OutputLine(_("❌ Current client does not support MCP response")))
             return False
 
         # 使用统一的流状态管理，与 _handle_command_stream 保持一致
@@ -1219,7 +1225,7 @@ class IntelligentTerminal(App):
                         break
 
                     # 判断是否为 LLM 输出内容
-                    tool_name, _ = extract_mcp_tag(content)
+                    tool_name, _cleaned_content = extract_mcp_tag(content)
                     is_llm_output = tool_name is None
 
                     # 处理内容
@@ -1239,10 +1245,12 @@ class IntelligentTerminal(App):
             return await asyncio.wait_for(_process_stream(), timeout=timeout_seconds)
 
         except TimeoutError:
-            output_container.mount(OutputLine(f"⏱️ MCP 响应超时 ({timeout_seconds}秒)"))
+            output_container.mount(
+                OutputLine(_("⏱️ MCP response timeout ({seconds} seconds)").format(seconds=timeout_seconds)),
+            )
             return stream_state["received_any_content"]
         except asyncio.CancelledError:
-            output_container.mount(OutputLine("🚫 MCP 响应被取消"))
+            output_container.mount(OutputLine(_("🚫 MCP response cancelled")))
             raise
 
     def _get_initial_agent(self) -> tuple[str, str]:
@@ -1325,8 +1333,8 @@ class IntelligentTerminal(App):
     def _show_config_validation_notification(self) -> None:
         """显示配置验证失败的通知"""
         self.notify(
-            "后端配置验证失败，请检查并修改配置",
-            title="配置错误",
+            _("Backend configuration validation failed, please check and modify"),
+            title=_("Configuration Error"),
             severity="error",
             timeout=1,
         )
@@ -1372,11 +1380,9 @@ class IntelligentTerminal(App):
         # 启动监控任务
         monitor_task = asyncio.create_task(monitor_screen_stack())
 
-        # 等待退出事件或超时（5分钟）
+        # 等待退出事件
         try:
-            await asyncio.wait_for(exit_event.wait(), timeout=300.0)
-        except TimeoutError:
-            self.logger.warning("等待设置页面退出超时")
+            await exit_event.wait()
         finally:
             # 取消监控任务
             if not monitor_task.done():

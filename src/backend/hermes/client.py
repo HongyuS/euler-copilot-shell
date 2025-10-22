@@ -10,6 +10,7 @@ from urllib.parse import urljoin
 import httpx
 
 from backend.base import LLMClientBase
+from i18n.manager import get_locale
 from log.manager import get_logger, log_exception
 
 from .constants import HTTP_OK
@@ -146,12 +147,17 @@ class HermesChatClient(LLMClientBase):
 
             # 创建聊天请求
             app = HermesApp(self.current_agent_id)
+
+            # 根据当前语言环境设置语言参数
+            current_locale = get_locale()
+            language = "zh" if current_locale.startswith("zh") else "en"
+
             request = HermesChatRequest(
                 app=app,
                 conversation_id=conversation_id,
                 question=prompt,
                 features=HermesFeatures(),
-                language="zh",
+                language=language,
             )
 
             # 直接传递异常，不在这里处理

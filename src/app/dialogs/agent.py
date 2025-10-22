@@ -14,6 +14,8 @@ from textual.containers import Container
 from textual.screen import ModalScreen
 from textual.widgets import Label, Static
 
+from i18n.manager import _
+
 
 class BackendRequiredDialog(ModalScreen):
     """后端要求提示对话框"""
@@ -22,9 +24,9 @@ class BackendRequiredDialog(ModalScreen):
         """构建后端要求提示对话框"""
         yield Container(
             Container(
-                Label("智能体功能提示", id="backend-dialog-title"),
-                Label("请选择 openEuler Intelligence 后端来使用智能体功能", id="backend-dialog-text"),
-                Label("按任意键关闭", id="backend-dialog-help"),
+                Label(_("智能体功能提示"), id="backend-dialog-title"),
+                Label(_("请选择 openEuler Intelligence 后端来使用智能体功能"), id="backend-dialog-text"),
+                Label(_("按任意键关闭"), id="backend-dialog-help"),
                 id="backend-dialog",
             ),
             id="backend-dialog-screen",
@@ -55,7 +57,7 @@ class AgentSelectionDialog(ModalScreen):
 
         """
         super().__init__()
-        self.current_agent = current_agent or ("", "智能问答")
+        self.current_agent = current_agent or ("", _("智能问答"))
         self.callback = callback
 
         # 重新排序智能体列表：智能问答永远第一，当前智能体（如果不是智能问答）排第二
@@ -108,9 +110,9 @@ class AgentSelectionDialog(ModalScreen):
 
         yield Container(
             Container(
-                Label("OS 智能助手", id="agent-dialog-title"),
+                Label(_("OS 智能助手"), id="agent-dialog-title"),
                 agent_content,
-                Label("使用上下键选择，回车确认，ESC取消 | ✓ 表示当前选中", id="agent-dialog-help"),
+                Label(_("使用上下键选择，回车确认，ESC取消 | ✓ 表示当前选中"), id="agent-dialog-help"),
                 id="agent-dialog",
             ),
             id="agent-dialog-screen",
@@ -125,7 +127,7 @@ class AgentSelectionDialog(ModalScreen):
             if self.agents and 0 <= self.selected_index < len(self.agents):
                 selected_agent = self.agents[self.selected_index]
             else:
-                selected_agent = ("", "智能问答")
+                selected_agent = ("", _("智能问答"))
             self.callback(selected_agent)
             self.app.pop_screen()
         elif event.key == "up" and self.selected_index > 0:
@@ -180,7 +182,7 @@ class AgentSelectionDialog(ModalScreen):
 
         # 如果没有智能体，添加默认选项
         if not agent_text_lines:
-            agent_text_lines.append("[white on green]► ✓ 智能问答[/white on green]")
+            agent_text_lines.append(f"[white on green]► ✓ {_('智能问答')}[/white on green]")
 
         # 更新 Static 组件的内容
         try:
@@ -200,10 +202,10 @@ class AgentSelectionDialog(ModalScreen):
         3. 其他智能体保持原有顺序
         """
         if not agents:
-            return [("", "智能问答")]
+            return [("", _("智能问答"))]
 
         # 查找智能问答和当前智能体
-        default_qa = ("", "智能问答")
+        default_qa = ("", _("智能问答"))
         current_agent = self.current_agent
 
         reordered = []

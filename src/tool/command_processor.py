@@ -14,6 +14,7 @@ import shutil
 from typing import TYPE_CHECKING
 
 from backend.hermes.mcp_helpers import is_mcp_message
+from i18n.manager import _
 from log.manager import get_logger
 
 if TYPE_CHECKING:
@@ -52,7 +53,7 @@ async def process_command(command: str, llm_client: LLMClientBase) -> AsyncGener
 
     tokens = command.split()
     if not tokens:
-        yield ("请输入有效命令或问题。", True)  # 作为LLM输出处理
+        yield (_("请输入有效命令或问题。"), True)  # 作为LLM输出处理
         return
 
     prog = tokens[0]
@@ -71,7 +72,7 @@ async def process_command(command: str, llm_client: LLMClientBase) -> AsyncGener
     logger.info("检测到系统命令: %s", prog)
     if not is_command_safe(command):
         logger.warning("命令被安全检查阻止: %s", command)
-        yield ("检测到不安全命令，已阻止执行。", True)
+        yield (_("检测到不安全命令，已阻止执行。"), True)
         return
 
     # 流式执行
@@ -131,8 +132,8 @@ async def _handle_subprocess_creation_error(
     llm_client: LLMClientBase,
 ) -> AsyncGenerator[tuple[str, bool], None]:
     """处理子进程创建失败的情况"""
-    yield ("[命令启动失败] 无法创建子进程", False)
-    query = f"无法启动命令 '{command}'，请分析可能原因并给出解决建议。"
+    yield (_("[命令启动失败] 无法创建子进程"), False)
+    query = _("无法启动命令 '{command}'，请分析可能原因并给出解决建议。").format(command=command)
     async for suggestion in llm_client.get_llm_response(query):
         is_mcp_message_flag = is_mcp_message(suggestion)
         yield (suggestion, not is_mcp_message_flag)
@@ -161,7 +162,7 @@ async def _execute_and_stream_output(
     success = returncode == 0
 
     if success:
-        yield (f"\n[命令完成] 退出码: {returncode}", False)
+        yield (_("\n[命令完成] 退出码: {returncode}").format(returncode=returncode), False)
         return
 
     # 处理命令失败的情况
@@ -179,15 +180,15 @@ async def _handle_command_failure(
     """处理命令执行失败的情况"""
     # 读取 stderr
     stderr_text = await _read_stderr(proc)
-    yield (f"[命令失败] 退出码: {returncode}", False)
+    yield (_("[命令失败] 退出码: {returncode}").format(returncode=returncode), False)
 
     # 获取 LLM 建议
     logger.info("命令执行失败(returncode=%s)，向 LLM 请求建议", returncode)
-    query = (
-        f"命令 '{command}' 以非零状态 {returncode} 退出。\n"
-        f"标准错误输出如下：\n{stderr_text}\n"
-        "请分析原因并提供解决建议。"
-    )
+    query = _(
+        "命令 '{command}' 以非零状态 {returncode} 退出。\n"
+        "标准错误输出如下：\n{stderr_text}\n"
+        "请分析原因并提供解决建议。",
+    ).format(command=command, returncode=returncode, stderr_text=stderr_text)
     async for suggestion in llm_client.get_llm_response(query):
         is_mcp_message_flag = is_mcp_message(suggestion)
         yield (suggestion, not is_mcp_message_flag)
@@ -202,7 +203,7 @@ async def _read_stderr(proc: asyncio.subprocess.Process) -> str:
         stderr_bytes = await proc.stderr.read()
         return stderr_bytes.decode(errors="replace")
     except (OSError, asyncio.CancelledError):
-        return "读取 stderr 失败"
+        return _("读取 stderr 失败")
 
 
 async def _handle_process_interruption(proc: asyncio.subprocess.Process, logger: logging.Logger) -> None:

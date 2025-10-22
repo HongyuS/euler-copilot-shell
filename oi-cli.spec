@@ -37,6 +37,9 @@ hidden_imports = [
 # 数据文件
 added_files = [
     (str(src_dir / "app" / "css" / "styles.tcss"), "app/css"),
+    # 国际化翻译文件
+    (str(src_dir / "i18n" / "locales" / "en_US" / "LC_MESSAGES" / "messages.mo"), "i18n/locales/en_US/LC_MESSAGES"),
+    (str(src_dir / "i18n" / "locales" / "zh_CN" / "LC_MESSAGES" / "messages.mo"), "i18n/locales/zh_CN/LC_MESSAGES"),
 ]
 
 a = Analysis(

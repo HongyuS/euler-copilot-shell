@@ -13,6 +13,7 @@ from app.dialogs import AgentSelectionDialog
 from backend.factory import BackendFactory
 from config.manager import ConfigManager
 from config.model import Backend
+from i18n.manager import _
 from log.manager import get_logger, log_exception, setup_logging
 
 if TYPE_CHECKING:
@@ -25,7 +26,7 @@ class AgentSelectorApp(App):
     CSS_PATH = Path(__file__).parent.parent / "app" / "css" / "styles.tcss"
 
     BINDINGS: ClassVar = [
-        ("escape", "quit", "退出"),
+        ("escape", "quit", _("退出")),
     ]
 
     def __init__(self, agent_list: list[tuple[str, str]], current_agent: tuple[str, str]) -> None:
@@ -63,7 +64,7 @@ async def get_agent_list(config_manager: ConfigManager, logger: Logger) -> list[
     llm_client = BackendFactory.create_client(config_manager)
 
     # 构建智能体列表 - 默认第一项为"智能问答"（无智能体）
-    agent_list = [("", "智能问答")]
+    agent_list = [("", _("智能问答"))]
 
     # 尝试获取可用智能体
     if not hasattr(llm_client, "get_available_agents"):
@@ -90,7 +91,7 @@ async def get_agent_list(config_manager: ConfigManager, logger: Logger) -> list[
 def get_current_agent(config_manager: ConfigManager, agent_list: list[tuple[str, str]]) -> tuple[str, str]:
     """获取当前默认智能体"""
     current_app_id = config_manager.get_default_app()
-    current_agent = ("", "智能问答")
+    current_agent = ("", _("智能问答"))
     for agent in agent_list:
         if agent[0] == current_app_id:
             current_agent = agent
@@ -119,13 +120,13 @@ def handle_agent_selection(
         # 保存选择到配置
         config_manager.set_default_app(selected_app_id)
 
-        sys.stdout.write(f"✓ 默认智能体已设置为: {selected_name}\n")
+        sys.stdout.write(_("✓ 默认智能体已设置为: {name}\n").format(name=selected_name))
         if selected_app_id:
-            sys.stdout.write(f"  App ID: {selected_app_id}\n")
+            sys.stdout.write(_("  App ID: {app_id}\n").format(app_id=selected_app_id))
         else:
-            sys.stdout.write("  已设置为智能问答模式（无智能体）\n")
+            sys.stdout.write(_("  已设置为智能问答模式（无智能体）\n"))
     else:
-        sys.stdout.write("已取消选择\n")
+        sys.stdout.write(_("已取消选择\n"))
 
 
 async def select_agent() -> None:
@@ -139,9 +140,9 @@ async def select_agent() -> None:
 
     # 检查是否使用 eulerintelli 后端
     if config_manager.get_backend() != Backend.EULERINTELLI:
-        sys.stderr.write("错误: 智能体功能需要使用 openEuler Intelligence 后端\n")
-        sys.stderr.write("请先运行以下命令切换后端：\n")
-        sys.stderr.write("  oi  # 然后按下 Ctrl+S 进入设置界面切换到 openEuler Intelligence 后端\n")
+        sys.stderr.write(_("错误: 智能体功能需要使用 openEuler Intelligence 后端\n"))
+        sys.stderr.write(_("请先运行以下命令切换后端：\n"))
+        sys.stderr.write(_("  oi  # 然后按下 Ctrl+S 进入设置界面切换到 openEuler Intelligence 后端\n"))
         sys.exit(1)
 
     try:
@@ -159,5 +160,5 @@ async def select_agent() -> None:
 
     except (OSError, ValueError, RuntimeError) as e:
         log_exception(logger, "智能体选择功能发生错误", e)
-        sys.stderr.write(f"错误: {e}\n")
+        sys.stderr.write(_("错误: {error}\n").format(error=str(e)))
         sys.exit(1)

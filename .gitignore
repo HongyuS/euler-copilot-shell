@@ -20,3 +20,6 @@
 
 # Cython
 *.c
+
+# Compiled i18n files
+**/*.mo

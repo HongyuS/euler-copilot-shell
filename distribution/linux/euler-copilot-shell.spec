@@ -4,7 +4,7 @@
 
 Name:           euler-copilot-shell
 Version:        0.10.2
-Release:        1%{?dist}
+Release:        1%{?dev_timestamp:.dev%{dev_timestamp}}%{?dist}
 Summary:        openEuler Intelligence 智能命令行工具集
 License:        MulanPSL-2.0
 URL:            https://gitee.com/openeuler/euler-copilot-shell
@@ -58,6 +58,9 @@ uv pip install .
 
 # 安装 PyInstaller（通过 uv 保证环境一致）
 uv pip install pyinstaller
+
+# 编译国际化翻译文件
+./scripts/tools/i18n-manager.sh compile
 
 # 使用虚拟环境中的 PyInstaller 创建单一可执行文件
 pyinstaller --noconfirm \
