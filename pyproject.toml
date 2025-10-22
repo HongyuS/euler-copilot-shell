@@ -48,6 +48,7 @@ packages = [
     "src/log",
     "src/tool",
 ]
+artifacts = ["src/i18n/locales/*/LC_MESSAGES/*.mo"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/main.py" = "main.py"
@@ -55,7 +56,7 @@ packages = [
 
 [tool.hatch.build.targets.wheel.package-data]
 app = ["css/*.tcss"]
-i18n = ["locales/*/LC_MESSAGES/*.mo", "locales/*.pot"]
+i18n = ["locales/*.pot", "locales/*/LC_MESSAGES/*.po"]
 
 [tool.hatch.build.targets.sdist]
 include = ["LICENSE", "MANIFEST.in", "README.md", "requirements.txt", "src"]
