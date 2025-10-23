@@ -11,7 +11,7 @@ from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
-from app.dialogs import ExitDialog, LLMConfigDialog
+from app.dialogs import ExitDialog, UserConfigDialog
 from backend.hermes import HermesChatClient
 from backend.openai import OpenAIClient
 from config import Backend, ConfigManager
@@ -40,10 +40,6 @@ class SettingsScreen(ModalScreen):
         self.selected_model = self.config_manager.get_model()
         # 添加保存任务的集合
         self.background_tasks: set[asyncio.Task] = set()
-
-        # MCP 工具授权相关状态
-        self.auto_execute_status = False  # 默认为手动确认
-        self.mcp_status_loaded = False  # 是否已成功加载状态
 
         # 验证相关状态
         self.is_validated = False
@@ -79,12 +75,6 @@ class SettingsScreen(ModalScreen):
 
     def on_mount(self) -> None:
         """组件挂载时加载可用模型"""
-        if self.backend == Backend.EULERINTELLI:
-            task = asyncio.create_task(self.load_mcp_status())
-            # 保存任务引用
-            self.background_tasks.add(task)
-            task.add_done_callback(self.background_tasks.discard)
-
         # 启动配置验证
         self._schedule_validation()
 
@@ -151,54 +141,16 @@ class SettingsScreen(ModalScreen):
         # EULERINTELLI 后端
         return [
             Horizontal(
-                Label(_("MCP 工具授权:"), classes="settings-label"),
+                Label(_("用户设置:"), classes="settings-label"),
                 Button(
-                    _("自动执行") if self.auto_execute_status else _("手动确认"),
-                    id="mcp-btn",
-                    classes="settings-button",
-                    disabled=not self.mcp_status_loaded,
-                ),
-                id="mcp-section",
-                classes="settings-option",
-            ),
-            Horizontal(
-                Label(_("LLM 配置:"), classes="settings-label"),
-                Button(
-                    _("配置模型"),
-                    id="llm-config-btn",
+                    _("更改用户设置"),
+                    id="user-config-btn",
                     classes="settings-button",
                 ),
-                id="llm-config-section",
+                id="user-config-section",
                 classes="settings-option",
             ),
         ]
-
-    async def load_mcp_status(self) -> None:
-        """异步加载 MCP 工具授权状态"""
-        try:
-            # 只有 EULERINTELLI 后端才支持 MCP 状态
-            if self.backend != Backend.EULERINTELLI:
-                return
-
-            # 从 Hermes 客户端获取自动执行状态
-            if hasattr(self.llm_client, "get_auto_execute_status"):
-                self.auto_execute_status = await self.llm_client.get_auto_execute_status()  # type: ignore[attr-defined]
-                self.mcp_status_loaded = True
-            else:
-                self.auto_execute_status = False
-                self.mcp_status_loaded = False
-
-            # 更新 MCP 按钮文本和状态
-            mcp_btn = self.query_one("#mcp-btn", Button)
-            mcp_btn.label = _("自动执行") if self.auto_execute_status else _("手动确认")
-            mcp_btn.disabled = not self.mcp_status_loaded
-
-        except (OSError, ValueError, RuntimeError):
-            self.auto_execute_status = False
-            self.mcp_status_loaded = False
-            mcp_btn = self.query_one("#mcp-btn", Button)
-            mcp_btn.label = _("手动确认")
-            mcp_btn.disabled = True
 
     @on(Input.Changed, "#base-url, #api-key, #model-input")
     def on_config_changed(self) -> None:
@@ -215,10 +167,6 @@ class SettingsScreen(ModalScreen):
             self._update_llm_client()
         else:  # EULERINTELLI
             self._update_llm_client()
-            # 重新加载 MCP 状态
-            task = asyncio.create_task(self.load_mcp_status())
-            self.background_tasks.add(task)
-            task.add_done_callback(self.background_tasks.discard)
 
         # 重新验证配置
         self._schedule_validation()
@@ -250,21 +198,10 @@ class SettingsScreen(ModalScreen):
         # 切换后端后重新验证配置
         self._schedule_validation()
 
-    @on(Button.Pressed, "#mcp-btn")
-    def toggle_mcp_authorization(self) -> None:
-        """切换 MCP 工具授权模式"""
-        if not self.mcp_status_loaded:
-            return
-
-        # 创建切换任务
-        task = asyncio.create_task(self._toggle_mcp_authorization_async())
-        self.background_tasks.add(task)
-        task.add_done_callback(self.background_tasks.discard)
-
-    @on(Button.Pressed, "#llm-config-btn")
-    def open_llm_config(self) -> None:
-        """打开 LLM 配置对话框"""
-        dialog = LLMConfigDialog(self.config_manager, self.llm_client)
+    @on(Button.Pressed, "#user-config-btn")
+    def open_user_config(self) -> None:
+        """打开用户配置对话框"""
+        dialog = UserConfigDialog(self.config_manager, self.llm_client)
         self.app.push_screen(dialog)
 
     @on(Button.Pressed, "#save-btn")
@@ -402,7 +339,7 @@ class SettingsScreen(ModalScreen):
         spacer = self.query_one("#spacer")
 
         # 移除所有后端特定的组件
-        for section_id in ["#model-section", "#mcp-section", "#llm-config-section"]:
+        for section_id in ["#model-section", "#user-config-section"]:
             sections = self.query(section_id)
             for section in sections:
                 section.remove()
@@ -413,12 +350,6 @@ class SettingsScreen(ModalScreen):
                 container.mount(widget, before=spacer)
             else:
                 container.mount(widget)
-
-        # 如果是 EULERINTELLI 后端，需要重新加载 MCP 状态
-        if self.backend == Backend.EULERINTELLI:
-            task = asyncio.create_task(self.load_mcp_status())
-            self.background_tasks.add(task)
-            task.add_done_callback(self.background_tasks.discard)
 
     async def _validate_configuration(self) -> None:
         """验证当前配置"""
@@ -511,40 +442,3 @@ class SettingsScreen(ModalScreen):
             # 恢复智能体状态
             if current_agent_id:
                 self.llm_client.set_current_agent(current_agent_id)
-
-    async def _toggle_mcp_authorization_async(self) -> None:
-        """异步切换 MCP 工具授权模式"""
-        try:
-            # 检查客户端是否支持 MCP 操作
-            if (
-                not hasattr(self.llm_client, "enable_auto_execute")
-                or not hasattr(self.llm_client, "disable_auto_execute")
-            ):
-                return
-
-            # 先禁用按钮防止重复点击
-            mcp_btn = self.query_one("#mcp-btn", Button)
-            mcp_btn.disabled = True
-            mcp_btn.label = _("切换中...")
-
-            # 根据当前状态调用相应的方法
-            if self.auto_execute_status:
-                # 当前是自动执行，切换为手动确认
-                await self.llm_client.disable_auto_execute()  # type: ignore[attr-defined]
-            else:
-                # 当前是手动确认，切换为自动执行
-                await self.llm_client.enable_auto_execute()  # type: ignore[attr-defined]
-
-            # 重新获取状态以确保同步
-            if hasattr(self.llm_client, "get_auto_execute_status"):
-                self.auto_execute_status = await self.llm_client.get_auto_execute_status()  # type: ignore[attr-defined]
-
-            # 更新按钮状态
-            mcp_btn.label = _("自动执行") if self.auto_execute_status else _("手动确认")
-            mcp_btn.disabled = False
-
-        except (OSError, ValueError, RuntimeError):
-            # 发生错误时恢复按钮状态
-            mcp_btn = self.query_one("#mcp-btn", Button)
-            mcp_btn.label = _("自动执行") if self.auto_execute_status else _("手动确认")
-            mcp_btn.disabled = False

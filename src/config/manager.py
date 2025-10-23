@@ -205,21 +205,12 @@ class ConfigManager:
         self._save_settings()
 
     def get_llm_chat_model(self) -> str:
-        """获取基础模型的 llmId"""
-        return self.data.eulerintelli.llm.chat
+        """获取 Chat 模型的 llmId"""
+        return self.data.eulerintelli.llm_chat
 
     def set_llm_chat_model(self, llm_id: str) -> None:
-        """更新基础模型的 llmId 并保存"""
-        self.data.eulerintelli.llm.chat = llm_id
-        self._save_settings()
-
-    def get_llm_function_model(self) -> str:
-        """获取工具调用模型的 llmId"""
-        return self.data.eulerintelli.llm.function
-
-    def set_llm_function_model(self, llm_id: str) -> None:
-        """更新工具调用模型的 llmId 并保存"""
-        self.data.eulerintelli.llm.function = llm_id
+        """更新 Chat 模型的 llmId 并保存"""
+        self.data.eulerintelli.llm_chat = llm_id
         self._save_settings()
 
     def get_locale(self) -> str:

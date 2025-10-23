@@ -486,18 +486,18 @@ BackendRequiredDialog {
     height: 3;
 }
 
-/* LLM 配置对话框样式 */
-LLMConfigDialog {
+/* 用户配置对话框样式 */
+UserConfigDialog {
     align: center middle;
 }
 
-#llm-dialog-screen {
+#user-dialog-screen {
     align: center middle;
     width: 70%;
     height: 80%;
 }
 
-#llm-dialog {
+#user-dialog {
     background: $surface;
     border: solid #4963b1;
     padding-left: 1;
@@ -508,9 +508,50 @@ LLMConfigDialog {
 }
 
 /* 标签页容器 */
-#llm-tabs {
+#user-tabs {
     height: 1fr;
     margin: 1 0;
+}
+
+/* 常规设置表单样式 */
+.general-settings-form {
+    padding: 2;
+    width: 100%;
+    height: auto;
+}
+
+.form-label {
+    color: #888888;
+    padding: 1 0;
+    width: auto;
+}
+
+.form-input {
+    width: 100%;
+    margin-bottom: 2;
+}
+
+.mcp-toggle-container {
+    height: 3;
+    margin-bottom: 2;
+}
+
+.form-button {
+    width: auto;
+    min-width: 20;
+}
+
+.form-buttons {
+    height: 3;
+    align: center middle;
+    margin-top: 2;
+}
+
+.form-buttons > Button {
+    margin: 0 1;
+    width: auto;
+    min-height: 3;
+    height: 3;
 }
 
 /* 模型列表容器 */
@@ -568,7 +609,7 @@ LLMConfigDialog {
 }
 
 /* 帮助文本 */
-#llm-dialog-help {
+#user-dialog-help {
     text-align: center;
     color: #888888;
     text-style: italic;
