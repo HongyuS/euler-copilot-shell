@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
     from types import TracebackType
 
+    from .models import ModelInfo
+
 
 class LLMClientBase(ABC):
     """LLM 客户端基类"""
@@ -35,12 +37,12 @@ class LLMClientBase(ABC):
         """
 
     @abstractmethod
-    async def get_available_models(self) -> list[str]:
+    async def get_available_models(self) -> list[ModelInfo]:
         """
-        获取当前 LLM 服务中可用的模型，返回名称列表
+        获取当前 LLM 服务中可用的模型，返回模型信息列表
 
         Returns:
-            list[str]: 可用的模型名称列表
+            list[ModelInfo]: 可用的模型信息列表
 
         """
 

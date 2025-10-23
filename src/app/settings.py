@@ -112,6 +112,7 @@ class SettingsScreen(ModalScreen):
                         ),
                     ]
                     if self.backend == Backend.OPENAI
+                    # EULERINTELLI 后端
                     else [
                         Horizontal(
                             Label(_("MCP 工具授权:"), classes="settings-label"),

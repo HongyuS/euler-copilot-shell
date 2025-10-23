@@ -10,6 +10,7 @@ from urllib.parse import urljoin
 import httpx
 
 from backend.hermes.constants import HTTP_OK
+from backend.models import ModelInfo
 from log.manager import get_logger, log_api_request, log_exception
 
 if TYPE_CHECKING:
@@ -24,19 +25,26 @@ class HermesModelManager:
         self.logger = get_logger(__name__)
         self.http_manager = http_manager
 
-    async def get_available_models(self) -> list[str]:
+    async def get_available_models(self) -> list[ModelInfo]:
         """
-        获取当前 LLM 服务中可用的模型，返回名称列表
+        获取当前 LLM 服务中可用的模型，返回模型信息列表
 
-        通过调用 /api/llm 接口获取可用的大模型列表。
+        通过调用 /api/llm/provider 接口获取可用的大模型列表。
         如果调用失败或没有返回，使用空列表，后端接口会自动使用默认模型。
+
+        返回的 ModelInfo 包含以下字段：
+        - model_name: 模型名称
+        - llm_id: LLM ID
+        - llm_description: LLM 描述
+        - llm_type: LLM 类型列表
+        - max_tokens: 最大 token 数
         """
         start_time = time.time()
         self.logger.info("开始请求 Hermes 模型列表 API")
 
         try:
             client = await self.http_manager.get_client()
-            llm_url = urljoin(self.http_manager.base_url, "/api/llm")
+            llm_url = urljoin(self.http_manager.base_url, "/api/llm/provider")
 
             headers = self.http_manager.build_headers()
             response = await client.get(llm_url, headers=headers)
@@ -84,14 +92,29 @@ class HermesModelManager:
                 self.logger.warning("Hermes 模型列表 API result字段不是数组，返回空列表")
                 return []
 
-            # 提取模型名称
+            # 解析模型信息
             models = []
             for llm_info in result:
-                if isinstance(llm_info, dict):
-                    # 优先使用 modelName，如果没有则使用 llmId
-                    model_name = llm_info.get("modelName") or llm_info.get("llmId")
-                    if model_name:
-                        models.append(model_name)
+                if not isinstance(llm_info, dict):
+                    continue
+
+                # modelName 是前端显示所必需的字段
+                model_name = llm_info.get("modelName")
+                if not model_name:
+                    continue
+
+                # 解析并验证 llmType 字段
+                llm_types = ModelInfo.parse_llm_types(llm_info.get("llmType"))
+
+                # 构建 ModelInfo 对象
+                model_info = ModelInfo(
+                    model_name=model_name,
+                    llm_id=llm_info.get("llmId"),
+                    llm_description=llm_info.get("llmDescription"),
+                    llm_type=llm_types,
+                    max_tokens=llm_info.get("maxTokens"),
+                )
+                models.append(model_info)
 
             # 记录成功的API请求
             log_api_request(

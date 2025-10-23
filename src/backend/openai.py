@@ -10,6 +10,7 @@ import httpx
 from openai import AsyncOpenAI, OpenAIError
 
 from backend.base import LLMClientBase
+from backend.models import ModelInfo
 from log.manager import get_logger, log_api_request, log_exception
 
 if TYPE_CHECKING:
@@ -176,19 +177,23 @@ class OpenAIClient(LLMClientBase):
         self._conversation_history.clear()
         self.logger.info("OpenAI 客户端对话历史记录已重置")
 
-    async def get_available_models(self) -> list[str]:
+    async def get_available_models(self) -> list[ModelInfo]:
         """
-        获取当前 LLM 服务中可用的模型，返回名称列表
+        获取当前 LLM 服务中可用的模型，返回模型信息列表
 
         调用 LLM 服务的模型列表接口，并解析返回结果提取模型名称。
         如果服务不支持模型列表接口，返回空列表。
+
+        对于 OpenAI 后端，只返回基础的 model_name 字段，其他 Hermes 特有字段为 None。
         """
         start_time = time.time()
         self.logger.info("开始请求 OpenAI 模型列表 API")
 
         try:
             models_response = await self.client.models.list()
-            models = [model.id async for model in models_response]
+            model_names = [model.id async for model in models_response]
+            # 将模型名称转换为 ModelInfo 对象
+            models = [ModelInfo(model_name=name) for name in model_names]
             # 记录成功的API请求
             duration = time.time() - start_time
             log_api_request(
