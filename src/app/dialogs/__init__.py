@@ -2,5 +2,6 @@
 
 from .agent import AgentSelectionDialog, BackendRequiredDialog
 from .common import ExitDialog
+from .llm import LLMConfigDialog
 
-__all__ = ["AgentSelectionDialog", "BackendRequiredDialog", "ExitDialog"]
+__all__ = ["AgentSelectionDialog", "BackendRequiredDialog", "ExitDialog", "LLMConfigDialog"]

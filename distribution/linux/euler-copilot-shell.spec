@@ -3,7 +3,7 @@
 %global debug_package %{nil}
 
 Name:           euler-copilot-shell
-Version:        0.10.2
+Version:        2.0.0
 Release:        1%{?dev_timestamp:.dev%{dev_timestamp}}%{?dist}
 Summary:        openEuler Intelligence 智能命令行工具集
 License:        MulanPSL-2.0

@@ -485,3 +485,99 @@ BackendRequiredDialog {
     min-height: 3;
     height: 3;
 }
+
+/* LLM 配置对话框样式 */
+LLMConfigDialog {
+    align: center middle;
+}
+
+#llm-dialog-screen {
+    align: center middle;
+    width: 70%;
+    height: 80%;
+}
+
+#llm-dialog {
+    background: $surface;
+    border: solid #4963b1;
+    padding-left: 1;
+    padding-right: 1;
+    padding-bottom: 1;
+    width: 100%;
+    height: 100%;
+}
+
+/* 标签页容器 */
+#llm-tabs {
+    height: 1fr;
+    margin: 1 0;
+}
+
+/* 模型列表容器 */
+.llm-model-list {
+    height: 1fr;
+    overflow-y: auto;
+    scrollbar-size: 1 1;
+    border: solid #688efd;
+    padding: 1;
+    margin-bottom: 1;
+}
+
+/* 模型项样式 */
+.llm-model-item {
+    padding: 0 1;
+    color: #ffffff;
+}
+
+/* 选中的模型 */
+.llm-model-selected {
+    color: #4caf50;
+    text-style: bold;
+}
+
+/* 光标所在的模型 */
+.llm-model-cursor {
+    background: rgba(104, 142, 253, 0.3);
+}
+
+/* 模型详情容器 */
+.llm-model-detail {
+    border: solid #888888;
+    padding: 1;
+    background: rgba(73, 99, 177, 0.1);
+}
+
+/* 详情行 */
+.llm-detail-row {
+    height: auto;
+    padding: 0;
+    margin: 0;
+}
+
+/* 详情标签 */
+.llm-detail-label {
+    color: #888888;
+    width: auto;
+    padding-right: 1;
+}
+
+/* 详情值 */
+.llm-detail-value {
+    color: #ffffff;
+    width: 1fr;
+}
+
+/* 帮助文本 */
+#llm-dialog-help {
+    text-align: center;
+    color: #888888;
+    text-style: italic;
+    padding-top: 1;
+}
+
+/* 加载状态 */
+.llm-loading, .llm-error, .llm-empty {
+    text-align: center;
+    color: #888888;
+    padding: 2;
+}

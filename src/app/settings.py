@@ -11,7 +11,7 @@ from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
-from app.dialogs import ExitDialog
+from app.dialogs import ExitDialog, LLMConfigDialog
 from backend.hermes import HermesChatClient
 from backend.openai import OpenAIClient
 from config import Backend, ConfigManager
@@ -61,71 +61,8 @@ class SettingsScreen(ModalScreen):
         yield Container(
             Container(
                 Label(_("设置"), id="settings-title"),
-                # 后端选择
-                Horizontal(
-                    Label(_("后端:"), classes="settings-label"),
-                    Button(
-                        f"{self.backend.get_display_name()}",
-                        id="backend-btn",
-                        classes="settings-button",
-                    ),
-                    classes="settings-option",
-                ),
-                # Base URL 输入
-                Horizontal(
-                    Label(_("Base URL:"), classes="settings-label"),
-                    Input(
-                        value=self.config_manager.get_base_url()
-                        if self.backend == Backend.OPENAI
-                        else self.config_manager.get_eulerintelli_url(),
-                        classes="settings-input",
-                        id="base-url",
-                    ),
-                    classes="settings-option",
-                ),
-                # API Key 输入
-                Horizontal(
-                    Label(_("API Key:"), classes="settings-label"),
-                    Input(
-                        value=self.config_manager.get_api_key()
-                        if self.backend == Backend.OPENAI
-                        else self.config_manager.get_eulerintelli_key(),
-                        classes="settings-input",
-                        id="api-key",
-                        placeholder=_("API 访问密钥，可选"),
-                    ),
-                    classes="settings-option",
-                ),
-                # 模型选择（仅 OpenAI 后端显示）
-                *(
-                    [
-                        Horizontal(
-                            Label(_("模型:"), classes="settings-label"),
-                            Input(
-                                value=self.selected_model,
-                                classes="settings-input",
-                                id="model-input",
-                                placeholder=_("模型名称，可选"),
-                            ),
-                            id="model-section",
-                            classes="settings-option",
-                        ),
-                    ]
-                    if self.backend == Backend.OPENAI
-                    else [
-                        Horizontal(
-                            Label(_("MCP 工具授权:"), classes="settings-label"),
-                            Button(
-                                _("自动执行") if self.auto_execute_status else _("手动确认"),
-                                id="mcp-btn",
-                                classes="settings-button",
-                                disabled=not self.mcp_status_loaded,
-                            ),
-                            id="mcp-section",
-                            classes="settings-option",
-                        ),
-                    ]
-                ),
+                *self._create_common_widgets(),
+                *self._create_backend_widgets(),
                 # 添加一个空白区域，确保操作按钮始终可见
                 Static("", id="spacer"),
                 # 操作按钮
@@ -153,6 +90,88 @@ class SettingsScreen(ModalScreen):
 
         # 确保操作按钮始终可见
         self._ensure_buttons_visible()
+
+    def _create_common_widgets(self) -> list:
+        """创建通用的 UI 组件（所有后端共享）"""
+        return [
+            # 后端选择
+            Horizontal(
+                Label(_("后端:"), classes="settings-label"),
+                Button(
+                    f"{self.backend.get_display_name()}",
+                    id="backend-btn",
+                    classes="settings-button",
+                ),
+                classes="settings-option",
+            ),
+            # Base URL 输入
+            Horizontal(
+                Label(_("Base URL:"), classes="settings-label"),
+                Input(
+                    value=self.config_manager.get_base_url()
+                    if self.backend == Backend.OPENAI
+                    else self.config_manager.get_eulerintelli_url(),
+                    classes="settings-input",
+                    id="base-url",
+                ),
+                classes="settings-option",
+            ),
+            # API Key 输入
+            Horizontal(
+                Label(_("API Key:"), classes="settings-label"),
+                Input(
+                    value=self.config_manager.get_api_key()
+                    if self.backend == Backend.OPENAI
+                    else self.config_manager.get_eulerintelli_key(),
+                    classes="settings-input",
+                    id="api-key",
+                    placeholder=_("API 访问密钥，可选"),
+                ),
+                classes="settings-option",
+            ),
+        ]
+
+    def _create_backend_widgets(self) -> list:
+        """创建后端特定的 UI 组件"""
+        if self.backend == Backend.OPENAI:
+            return [
+                Horizontal(
+                    Label(_("模型:"), classes="settings-label"),
+                    Input(
+                        value=self.selected_model,
+                        classes="settings-input",
+                        id="model-input",
+                        placeholder=_("模型名称，可选"),
+                    ),
+                    id="model-section",
+                    classes="settings-option",
+                ),
+            ]
+
+        # EULERINTELLI 后端
+        return [
+            Horizontal(
+                Label(_("MCP 工具授权:"), classes="settings-label"),
+                Button(
+                    _("自动执行") if self.auto_execute_status else _("手动确认"),
+                    id="mcp-btn",
+                    classes="settings-button",
+                    disabled=not self.mcp_status_loaded,
+                ),
+                id="mcp-section",
+                classes="settings-option",
+            ),
+            Horizontal(
+                Label(_("LLM 配置:"), classes="settings-label"),
+                Button(
+                    _("配置模型"),
+                    id="llm-config-btn",
+                    classes="settings-button",
+                ),
+                id="llm-config-section",
+                classes="settings-option",
+            ),
+        ]
 
     async def load_mcp_status(self) -> None:
         """异步加载 MCP 工具授权状态"""
@@ -207,90 +226,23 @@ class SettingsScreen(ModalScreen):
     @on(Button.Pressed, "#backend-btn")
     def toggle_backend(self) -> None:
         """切换后端"""
-        current = self.backend
-        new = Backend.EULERINTELLI if current == Backend.OPENAI else Backend.OPENAI
-        self.backend = new
+        # 切换后端类型
+        self.backend = (
+            Backend.EULERINTELLI if self.backend == Backend.OPENAI else Backend.OPENAI
+        )
 
-        # 更新按钮文本
+        # 更新后端按钮文本
         backend_btn = self.query_one("#backend-btn", Button)
-        backend_btn.label = new.get_display_name()
+        backend_btn.label = self.backend.get_display_name()
 
         # 更新 URL 和 API Key
-        base_url = self.query_one("#base-url", Input)
-        api_key = self.query_one("#api-key", Input)
+        self._load_config_inputs()
 
-        if new == Backend.OPENAI:
-            base_url.value = self.config_manager.get_base_url()
-            api_key.value = self.config_manager.get_api_key()
+        # 更新 LLM 客户端
+        self._update_llm_client()
 
-            # 创建新的 OpenAI 客户端
-            self._update_llm_client()
-
-            # 移除 MCP 工具授权部分
-            mcp_section = self.query("#mcp-section")
-            if mcp_section:
-                mcp_section[0].remove()
-
-            # 添加模型选择部分
-            if not self.query("#model-section"):
-                container = self.query_one("#settings-container")
-                spacer = self.query_one("#spacer")
-                model_section = Horizontal(
-                    Label(_("模型:"), classes="settings-label"),
-                    Input(
-                        value=self.selected_model,
-                        classes="settings-input",
-                        id="model-input",
-                        placeholder=_("模型名称，可选"),
-                    ),
-                    id="model-section",
-                    classes="settings-option",
-                )
-
-                # 在 spacer 前面添加 model_section
-                if spacer:
-                    container.mount(model_section, before=spacer)
-                else:
-                    container.mount(model_section)
-        else:
-            base_url.value = self.config_manager.get_eulerintelli_url()
-            api_key.value = self.config_manager.get_eulerintelli_key()
-
-            # 创建新的 Hermes 客户端
-            self._update_llm_client()
-
-            # 移除模型选择部分
-            model_section = self.query("#model-section")
-            if model_section:
-                model_section[0].remove()
-
-            # 添加 MCP 工具授权部分
-            if not self.query("#mcp-section"):
-                container = self.query_one("#settings-container")
-                spacer = self.query_one("#spacer")
-                mcp_section = Horizontal(
-                    Label(_("MCP 工具授权:"), classes="settings-label"),
-                    Button(
-                        _("自动执行") if self.auto_execute_status else _("手动确认"),
-                        id="mcp-btn",
-                        classes="settings-button",
-                        disabled=not self.mcp_status_loaded,
-                    ),
-                    id="mcp-section",
-                    classes="settings-option",
-                )
-
-                # 在spacer前面添加mcp_section
-                if spacer:
-                    container.mount(mcp_section, before=spacer)
-                else:
-                    container.mount(mcp_section)
-
-                # 重新加载 MCP 状态
-                task = asyncio.create_task(self.load_mcp_status())
-                # 保存任务引用
-                self.background_tasks.add(task)
-                task.add_done_callback(self.background_tasks.discard)
+        # 替换后端特定的 UI 组件
+        self._replace_backend_widgets()
 
         # 确保按钮可见
         self._ensure_buttons_visible()
@@ -308,6 +260,12 @@ class SettingsScreen(ModalScreen):
         task = asyncio.create_task(self._toggle_mcp_authorization_async())
         self.background_tasks.add(task)
         task.add_done_callback(self.background_tasks.discard)
+
+    @on(Button.Pressed, "#llm-config-btn")
+    def open_llm_config(self) -> None:
+        """打开 LLM 配置对话框"""
+        dialog = LLMConfigDialog(self.config_manager, self.llm_client)
+        self.app.push_screen(dialog)
 
     @on(Button.Pressed, "#save-btn")
     def save_settings(self) -> None:
@@ -425,6 +383,42 @@ class SettingsScreen(ModalScreen):
         task = asyncio.create_task(scroll_to_buttons())
         self.background_tasks.add(task)
         task.add_done_callback(self.background_tasks.discard)
+
+    def _load_config_inputs(self) -> None:
+        """根据当前后端载入配置输入框的值"""
+        base_url = self.query_one("#base-url", Input)
+        api_key = self.query_one("#api-key", Input)
+
+        if self.backend == Backend.OPENAI:
+            base_url.value = self.config_manager.get_base_url()
+            api_key.value = self.config_manager.get_api_key()
+        else:  # EULERINTELLI
+            base_url.value = self.config_manager.get_eulerintelli_url()
+            api_key.value = self.config_manager.get_eulerintelli_key()
+
+    def _replace_backend_widgets(self) -> None:
+        """替换后端特定的 UI 组件"""
+        container = self.query_one("#settings-container")
+        spacer = self.query_one("#spacer")
+
+        # 移除所有后端特定的组件
+        for section_id in ["#model-section", "#mcp-section", "#llm-config-section"]:
+            sections = self.query(section_id)
+            for section in sections:
+                section.remove()
+
+        # 添加新的后端特定组件
+        for widget in self._create_backend_widgets():
+            if spacer:
+                container.mount(widget, before=spacer)
+            else:
+                container.mount(widget)
+
+        # 如果是 EULERINTELLI 后端，需要重新加载 MCP 状态
+        if self.backend == Backend.EULERINTELLI:
+            task = asyncio.create_task(self.load_mcp_status())
+            self.background_tasks.add(task)
+            task.add_done_callback(self.background_tasks.discard)
 
     async def _validate_configuration(self) -> None:
         """验证当前配置"""

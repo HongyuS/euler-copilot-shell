@@ -51,12 +51,36 @@ class OpenAIConfig:
 
 
 @dataclass
+class LLMConfig:
+    """LLM 模型配置"""
+
+    chat: str = field(default="")  # 基础模型的 llmId
+    function: str = field(default="")  # 工具调用模型的 llmId
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "LLMConfig":
+        """从字典初始化配置"""
+        return cls(
+            chat=d.get("chat", ""),
+            function=d.get("function", ""),
+        )
+
+    def to_dict(self) -> dict:
+        """转换为字典"""
+        return {
+            "chat": self.chat,
+            "function": self.function,
+        }
+
+
+@dataclass
 class HermesConfig:
     """Hermes 后端配置"""
 
     base_url: str = field(default="http://127.0.0.1:8002")
     api_key: str = field(default="")
     default_app: str = field(default="")
+    llm: LLMConfig = field(default_factory=LLMConfig)
 
     @classmethod
     def from_dict(cls, d: dict) -> "HermesConfig":
@@ -65,6 +89,7 @@ class HermesConfig:
             base_url=d.get("base_url", cls.base_url),
             api_key=d.get("api_key", cls.api_key),
             default_app=d.get("default_app", cls.default_app),
+            llm=LLMConfig.from_dict(d.get("llm", {})),
         )
 
     def to_dict(self) -> dict:
@@ -73,6 +98,7 @@ class HermesConfig:
             "base_url": self.base_url,
             "api_key": self.api_key,
             "default_app": self.default_app,
+            "llm": self.llm.to_dict(),
         }
 
 

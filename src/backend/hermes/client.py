@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from backend.mcp_handler import MCPEventHandler
+    from backend.models import ModelInfo
 
     from .models import HermesAgent
 
@@ -172,11 +173,11 @@ class HermesChatClient(LLMClientBase):
             log_exception(self.logger, "Hermes 流式聊天请求失败", e)
             raise
 
-    async def get_available_models(self) -> list[str]:
+    async def get_available_models(self) -> list[ModelInfo]:
         """
-        获取当前 LLM 服务中可用的模型，返回名称列表
+        获取当前 LLM 服务中可用的模型，返回模型信息列表
 
-        通过调用 /api/llm 接口获取可用的大模型列表。
+        通过调用 /api/llm/provider 接口获取可用的大模型列表。
         如果调用失败或没有返回，使用空列表，后端接口会自动使用默认模型。
         """
         return await self.model_manager.get_available_models()
