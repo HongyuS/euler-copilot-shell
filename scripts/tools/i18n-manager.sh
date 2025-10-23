@@ -93,7 +93,7 @@ extract() {
         --output="$POT_FILE" \
         --from-code=UTF-8 \
         --package-name=oi-cli \
-        --package-version=0.10.2 \
+        --package-version=2.0.0 \
         --msgid-bugs-address=contact@openeuler.org \
         --copyright-holder="openEuler Intelligence Project" \
         --add-comments=Translators \
