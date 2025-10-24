@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, ClassVar
 from textual import on
 from textual.containers import Container, Horizontal
 from textual.screen import ModalScreen
-from textual.widgets import Button, Input, Label, Static, TabbedContent, TabPane
+from textual.widgets import Button, Label, Static, TabbedContent, TabPane
 
 from backend import HermesChatClient
 from backend.models import LLMType, ModelInfo
@@ -132,19 +132,37 @@ class UserConfigDialog(ModalScreen):
         # 先挂载表单容器到 tab_pane
         tab_pane.mount(form_container)
 
-        # 用户名输入
-        form_container.mount(
-            Horizontal(
-                Label(_("用户名:"), classes="settings-label"),
-                Input(
-                    placeholder=_("请输入用户名"),
-                    value=self.username,
-                    id="username-input",
-                    classes="settings-input",
-                ),
-                classes="settings-option",
+        # 用户名和用户类型显示（用户类型在右侧）
+        user_row = Horizontal(classes="settings-option")
+        form_container.mount(user_row)
+
+        # 左侧：标签
+        user_row.mount(Label(_("用户名:"), classes="settings-label"))
+
+        # 右侧：值容器（包含用户名和徽章）
+        value_container = Horizontal(classes="settings-value-container")
+        user_row.mount(value_container)
+
+        # 用户名
+        value_container.mount(
+            Static(
+                self.username if self.username else _("未登录"),
+                id="username-display",
+                classes="settings-value",
             ),
         )
+
+        # 用户类型徽章
+        if self.username:
+            user_type_text = _("管理员") if self.is_admin else _("普通用户")
+            user_type_class = "user-type-admin" if self.is_admin else "user-type-user"
+            value_container.mount(
+                Static(
+                    user_type_text,
+                    id="user-type-display",
+                    classes=f"user-type-badge {user_type_class}",
+                ),
+            )
 
         # MCP 工具授权设置（仅当支持时显示）
         if self.mcp_status_loaded:
@@ -165,10 +183,7 @@ class UserConfigDialog(ModalScreen):
         tab_pane.mount(button_container)
 
         # 创建按钮并挂载到按钮容器
-        save_btn = Button(_("保存"), id="save-user-settings-btn", variant="primary")
-        # 如果用户名为空，禁用保存按钮
-        save_btn.disabled = not self.username
-        button_container.mount(save_btn)
+        button_container.mount(Button(_("保存"), id="save-user-settings-btn", variant="primary"))
         button_container.mount(Button(_("取消"), id="cancel-general-btn", variant="default"))
 
     def _render_chat_llm_tab(self) -> None:
@@ -310,35 +325,18 @@ class UserConfigDialog(ModalScreen):
         elif tab_id == "llm-tab":
             self.current_tab = "llm"
 
-    @on(Input.Changed, "#username-input")
-    def on_username_changed(self, event: Input.Changed) -> None:
-        """用户名输入框内容变化时，更新保存按钮的状态"""
-        username = event.value.strip()
-        # 同步更新本地状态
-        self.username = username
-        # 更新保存按钮的禁用状态
-        save_btn = self.query_one("#save-user-settings-btn", Button)
-        save_btn.disabled = not username
-
     @on(Button.Pressed, "#save-user-settings-btn")
     async def on_save_user_settings(self) -> None:
-        """保存用户设置（用户名和自动执行状态）"""
-        username_input = self.query_one("#username-input", Input)
-        new_username = username_input.value.strip()
-
-        if not new_username:
-            return
-
-        # 调用后端 API 保存用户信息
-        if hasattr(self.llm_client, "update_user_info"):
-            success = await self.llm_client.update_user_info(  # type: ignore[attr-defined]
-                user_name=new_username,
+        """保存用户设置（MCP 自动执行状态）"""
+        # 调用后端 API 保存 MCP 自动执行状态
+        if isinstance(self.llm_client, HermesChatClient):
+            await self.llm_client.update_user_info(
+                user_name=self.username,
                 auto_execute=self.auto_execute_status,
             )
 
-            if success:
-                # 更新本地状态
-                self.username = new_username
+        # 保存成功后关闭对话框
+        self.app.pop_screen()
 
     @on(Button.Pressed, "#cancel-general-btn")
     def on_cancel_general(self) -> None:
@@ -403,8 +401,8 @@ class UserConfigDialog(ModalScreen):
         # 保存已激活的模型到配置
         self.config_manager.set_llm_chat_model(self.activated_chat_model)
         self.saved_chat_model = self.activated_chat_model
-        # 刷新显示以更新已保存状态
-        self._render_chat_llm_tab()
+        # 关闭对话框
+        self.app.pop_screen()
 
     def action_cancel(self) -> None:
         """取消并关闭对话框"""

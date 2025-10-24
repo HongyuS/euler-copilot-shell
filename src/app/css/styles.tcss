@@ -60,7 +60,7 @@ SettingsScreen {
 
 #settings-screen {
     align: center middle;
-    width: 80%;
+    width: 85%;
     height: 95%;
     color: #ffffff;
 }
@@ -95,10 +95,46 @@ SettingsScreen {
     margin-top: 1;
 }
 
-/* 设置值样式 */
+/* 设置值样式 (可编辑类型) */
 .settings-input {
     width: 80%;
     content-align: left middle;
+}
+
+/* 设置值容器（用于包含值和徽章） */
+.settings-value-container {
+    margin-left: 1;
+    background: $surface;
+    width: 80%;
+    height: 3;
+    align: left middle;
+}
+
+/* 设置值样式 (只读类型) */
+.settings-value {
+    margin-left: 1;
+    width: auto;
+    height: 3;
+}
+
+/* 用户类型徽章样式 */
+.user-type-badge {
+    width: 20%;
+    height: 3;
+    text-style: bold;
+    margin-top: 1;
+    padding: 0 1;
+    dock: right;
+}
+
+/* 管理员徽章颜色 */
+.user-type-admin {
+    color: $warning;
+}
+
+/* 普通用户徽章颜色 */
+.user-type-user {
+    color: $primary;
 }
 
 /* 设置按钮样式 */

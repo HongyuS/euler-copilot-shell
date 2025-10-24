@@ -143,7 +143,7 @@ class HermesChatClient(LLMClientBase):
         self.logger.warning("用户信息加载失败")
         return False
 
-    def get_user_id(self) -> int | None:
+    def get_user_id(self) -> int | str | None:
         """获取用户ID（从内存缓存）"""
         if self._user_info is None:
             return None

@@ -37,7 +37,7 @@ class HermesUserManager:
             dict[str, Any] | None: 用户信息字典，如果请求失败返回 None
                 返回数据格式:
                 {
-                    "id": int,            # 用户ID
+                    "id": int | str,      # 用户ID
                     "userName": str,      # 用户名
                     "isAdmin": bool,      # 是否管理员
                     "autoExecute": bool   # 是否自动执行
