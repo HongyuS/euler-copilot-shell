@@ -19,8 +19,7 @@ from app.mcp_widgets import MCPConfirmResult, MCPConfirmWidget, MCPParameterResu
 from app.settings import SettingsScreen
 from app.tui_header import OIHeader
 from app.tui_mcp_handler import TUIMCPEventHandler
-from backend.factory import BackendFactory
-from backend.hermes import HermesChatClient
+from backend import BackendFactory, HermesChatClient, OpenAIClient
 from backend.hermes.mcp_helpers import (
     MCPTags,
     extract_mcp_tag,
@@ -40,7 +39,7 @@ if TYPE_CHECKING:
     from textual.events import Mount
     from textual.visual import VisualType
 
-    from backend.base import LLMClientBase
+    from backend import LLMClientBase
 
 
 class ContentChunkParams(NamedTuple):
@@ -422,11 +421,20 @@ class IntelligentTerminal(App):
         return self._llm_client
 
     def refresh_llm_client(self) -> None:
-        """重新创建 LLM 客户端实例，用于后端/URL/API Key 变更后刷新连接"""
+        """重新创建 LLM 客户端实例，用于后端/URL/API Key/模型 变更后刷新连接"""
         # 保存当前智能体状态以便恢复
         current_agent_id = self.current_agent[0] if self.current_agent else ""
 
+        # 保存 OpenAI 客户端的对话历史
+        conversation_history = None
+        if isinstance(self._llm_client, OpenAIClient):
+            conversation_history = self._llm_client.conversation_history
+
         self._llm_client = BackendFactory.create_client(self.config_manager)
+
+        # 恢复 OpenAI 客户端的对话历史
+        if conversation_history is not None and isinstance(self._llm_client, OpenAIClient):
+            self._llm_client.conversation_history = conversation_history
 
         # 恢复智能体状态到新的客户端
         if current_agent_id and isinstance(self._llm_client, HermesChatClient):

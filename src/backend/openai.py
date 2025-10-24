@@ -48,7 +48,7 @@ class OpenAIClient(LLMClientBase):
         self.logger.debug("OpenAIClient SSL 验证状态: %s", self.verify_ssl)
 
         # 添加历史记录管理
-        self._conversation_history: list[ChatCompletionMessageParam] = []
+        self.conversation_history: list[ChatCompletionMessageParam] = []
 
         # 用于中断的任务跟踪
         self._current_task: asyncio.Task | None = None
@@ -67,13 +67,13 @@ class OpenAIClient(LLMClientBase):
 
         # 添加用户消息到历史记录
         user_message: ChatCompletionMessageParam = {"role": "user", "content": prompt}
-        self._conversation_history.append(user_message)
+        self.conversation_history.append(user_message)
 
         try:
             # 使用完整的对话历史记录
             response = await self.client.chat.completions.create(
                 model=self.model,
-                messages=self._conversation_history,
+                messages=self.conversation_history,
                 stream=True,
             )
 
@@ -87,7 +87,7 @@ class OpenAIClient(LLMClientBase):
                 duration,
                 model=self.model,
                 stream=True,
-                history_length=len(self._conversation_history),
+                history_length=len(self.conversation_history),
             )
 
             # 收集助手的完整回复
@@ -102,11 +102,11 @@ class OpenAIClient(LLMClientBase):
                 self.logger.info("OpenAI 流式响应被中断")
                 # 如果被中断，移除刚添加的用户消息
                 if (
-                    self._conversation_history
-                    and len(self._conversation_history) > 0
-                    and self._conversation_history[-1].get("content") == prompt
+                    self.conversation_history
+                    and len(self.conversation_history) > 0
+                    and self.conversation_history[-1].get("content") == prompt
                 ):
-                    self._conversation_history.pop()
+                    self.conversation_history.pop()
                 raise
 
             # 将助手回复添加到历史记录
@@ -115,8 +115,8 @@ class OpenAIClient(LLMClientBase):
                     "role": "assistant",
                     "content": assistant_response,
                 }
-                self._conversation_history.append(assistant_message)
-                self.logger.info("对话历史记录已更新，当前消息数: %d", len(self._conversation_history))
+                self.conversation_history.append(assistant_message)
+                self.logger.info("对话历史记录已更新，当前消息数: %d", len(self.conversation_history))
 
         except asyncio.CancelledError:
             # 重新抛出取消异常
@@ -124,11 +124,11 @@ class OpenAIClient(LLMClientBase):
         except OpenAIError as e:
             # 如果请求失败，移除刚添加的用户消息
             if (
-                self._conversation_history
-                and len(self._conversation_history) > 0
-                and self._conversation_history[-1].get("content") == prompt
+                self.conversation_history
+                and len(self.conversation_history) > 0
+                and self.conversation_history[-1].get("content") == prompt
             ):
-                self._conversation_history.pop()
+                self.conversation_history.pop()
 
             duration = time.time() - start_time
             log_exception(self.logger, "OpenAI 流式聊天 API 请求失败", e)
@@ -174,7 +174,7 @@ class OpenAIClient(LLMClientBase):
 
         清空历史记录，开始新的对话会话。
         """
-        self._conversation_history.clear()
+        self.conversation_history.clear()
         self.logger.info("OpenAI 客户端对话历史记录已重置")
 
     async def get_available_models(self) -> list[ModelInfo]:

@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import AsyncGenerator
 
-    from backend.base import LLMClientBase
+    from backend import LLMClientBase
 
 # 定义危险命令黑名单
 BLACKLIST = ["rm", "sudo", "shutdown", "reboot", "mkfs"]

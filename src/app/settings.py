@@ -12,8 +12,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
 from app.dialogs import ExitDialog, UserConfigDialog
-from backend.hermes import HermesChatClient
-from backend.openai import OpenAIClient
+from backend import HermesChatClient, OpenAIClient
 from config import Backend, ConfigManager
 from i18n.manager import _
 from log import get_logger
@@ -23,7 +22,7 @@ if TYPE_CHECKING:
     from textual.app import ComposeResult
     from textual.events import Key
 
-    from backend.base import LLMClientBase
+    from backend import LLMClientBase
 
 
 class SettingsScreen(ModalScreen):
@@ -81,77 +80,6 @@ class SettingsScreen(ModalScreen):
         # 确保操作按钮始终可见
         self._ensure_buttons_visible()
 
-    def _create_common_widgets(self) -> list:
-        """创建通用的 UI 组件（所有后端共享）"""
-        return [
-            # 后端选择
-            Horizontal(
-                Label(_("后端:"), classes="settings-label"),
-                Button(
-                    f"{self.backend.get_display_name()}",
-                    id="backend-btn",
-                    classes="settings-button",
-                ),
-                classes="settings-option",
-            ),
-            # Base URL 输入
-            Horizontal(
-                Label(_("Base URL:"), classes="settings-label"),
-                Input(
-                    value=self.config_manager.get_base_url()
-                    if self.backend == Backend.OPENAI
-                    else self.config_manager.get_eulerintelli_url(),
-                    classes="settings-input",
-                    id="base-url",
-                ),
-                classes="settings-option",
-            ),
-            # API Key 输入
-            Horizontal(
-                Label(_("API Key:"), classes="settings-label"),
-                Input(
-                    value=self.config_manager.get_api_key()
-                    if self.backend == Backend.OPENAI
-                    else self.config_manager.get_eulerintelli_key(),
-                    classes="settings-input",
-                    id="api-key",
-                    placeholder=_("API 访问密钥，可选"),
-                ),
-                classes="settings-option",
-            ),
-        ]
-
-    def _create_backend_widgets(self) -> list:
-        """创建后端特定的 UI 组件"""
-        if self.backend == Backend.OPENAI:
-            return [
-                Horizontal(
-                    Label(_("模型:"), classes="settings-label"),
-                    Input(
-                        value=self.selected_model,
-                        classes="settings-input",
-                        id="model-input",
-                        placeholder=_("模型名称，可选"),
-                    ),
-                    id="model-section",
-                    classes="settings-option",
-                ),
-            ]
-
-        # EULERINTELLI 后端
-        return [
-            Horizontal(
-                Label(_("用户设置:"), classes="settings-label"),
-                Button(
-                    _("更改用户设置"),
-                    id="user-config-btn",
-                    classes="settings-button",
-                ),
-                id="user-config-section",
-                classes="settings-option",
-            ),
-        ]
-
     @on(Input.Changed, "#base-url, #api-key, #model-input")
     def on_config_changed(self) -> None:
         """当 Base URL、API Key 或模型改变时更新客户端并验证配置"""
@@ -208,16 +136,123 @@ class SettingsScreen(ModalScreen):
     def save_settings(self) -> None:
         """保存设置"""
         # 取消所有后台任务
-        for task in self.background_tasks:
-            if not task.done():
-                task.cancel()
-        self.background_tasks.clear()
+        self._cancel_background_tasks()
 
         # 检查验证状态
         if not self.is_validated:
             return
 
-        # 仅在真正修改了后端/URL/API Key 时才重建 LLM 客户端
+        # 获取旧配置
+        old_backend, old_base, old_key = self._get_old_config()
+
+        # 保存新配置
+        base_url, api_key = self._save_new_config()
+
+        # 判断是否需要刷新客户端
+        need_refresh = self._should_refresh_client(old_backend, old_base, old_key, base_url, api_key)
+
+        # 刷新客户端
+        if need_refresh:
+            self._refresh_app_client()
+
+        self.app.pop_screen()
+
+    @on(Button.Pressed, "#cancel-btn")
+    def cancel_settings(self) -> None:
+        """取消设置"""
+        self._cancel_background_tasks()
+        self.app.pop_screen()
+
+    def on_key(self, event: Key) -> None:
+        """处理键盘事件"""
+        if event.key == "escape":
+            self._cancel_background_tasks()
+            # ESC 键退出设置页面，等效于取消
+            self.app.pop_screen()
+        if event.key == "ctrl+q":
+            self.app.push_screen(ExitDialog())
+            event.prevent_default()
+            event.stop()
+
+    def _create_common_widgets(self) -> list:
+        """创建通用的 UI 组件（所有后端共享）"""
+        return [
+            # 后端选择
+            Horizontal(
+                Label(_("后端:"), classes="settings-label"),
+                Button(
+                    f"{self.backend.get_display_name()}",
+                    id="backend-btn",
+                    classes="settings-button",
+                ),
+                classes="settings-option",
+            ),
+            # Base URL 输入
+            Horizontal(
+                Label(_("Base URL:"), classes="settings-label"),
+                Input(
+                    value=self.config_manager.get_base_url()
+                    if self.backend == Backend.OPENAI
+                    else self.config_manager.get_eulerintelli_url(),
+                    classes="settings-input",
+                    id="base-url",
+                ),
+                classes="settings-option",
+            ),
+            # API Key 输入
+            Horizontal(
+                Label(_("API Key:"), classes="settings-label"),
+                Input(
+                    value=self.config_manager.get_api_key()
+                    if self.backend == Backend.OPENAI
+                    else self.config_manager.get_eulerintelli_key(),
+                    classes="settings-input",
+                    id="api-key",
+                    placeholder=_("API 访问密钥，可选"),
+                ),
+                classes="settings-option"),
+        ]
+
+    def _create_backend_widgets(self) -> list:
+        """创建后端特定的 UI 组件"""
+        if self.backend == Backend.OPENAI:
+            return [
+                Horizontal(
+                    Label(_("模型:"), classes="settings-label"),
+                    Input(
+                        value=self.selected_model,
+                        classes="settings-input",
+                        id="model-input",
+                        placeholder=_("模型名称，可选"),
+                    ),
+                    id="model-section",
+                    classes="settings-option",
+                ),
+            ]
+
+        # EULERINTELLI 后端
+        return [
+            Horizontal(
+                Label(_("用户设置:"), classes="settings-label"),
+                Button(
+                    _("更改用户设置"),
+                    id="user-config-btn",
+                    classes="settings-button",
+                ),
+                id="user-config-section",
+                classes="settings-option",
+            ),
+        ]
+
+    def _cancel_background_tasks(self) -> None:
+        """取消所有后台任务"""
+        for task in self.background_tasks:
+            if not task.done():
+                task.cancel()
+        self.background_tasks.clear()
+
+    def _get_old_config(self) -> tuple[Backend, str, str]:
+        """获取旧配置"""
         old_backend = self.config_manager.get_backend()
 
         if old_backend == Backend.OPENAI:
@@ -227,67 +262,67 @@ class SettingsScreen(ModalScreen):
             old_base = self.config_manager.get_eulerintelli_url()
             old_key = self.config_manager.get_eulerintelli_key()
 
-        # 先保存新的配置到 ConfigManager
+        return old_backend, old_base, old_key
+
+    def _save_new_config(self) -> tuple[str, str]:
+        """保存新配置并返回 base_url 和 api_key"""
         self.config_manager.set_backend(self.backend)
 
         base_url = self.query_one("#base-url", Input).value
         api_key = self.query_one("#api-key", Input).value
 
         if self.backend == Backend.OPENAI:
-            # 获取模型输入值
-            try:
-                model_input = self.query_one("#model-input", Input)
-                self.selected_model = model_input.value.strip()
-            except NoMatches:
-                # 如果模型输入框不存在，保持当前选择的模型
-                pass
-
-            self.config_manager.set_base_url(base_url)
-            self.config_manager.set_api_key(api_key)
-            self.config_manager.set_model(self.selected_model)
+            self._save_openai_config(base_url, api_key)
         else:  # eulerintelli
             self.config_manager.set_eulerintelli_url(base_url)
             self.config_manager.set_eulerintelli_key(api_key)
 
-        # 判断是否需要刷新 LLM 客户端（只有后端、URL 或 API Key 发生变化时）
-        need_refresh = False
+        return base_url, api_key
+
+    def _save_openai_config(self, base_url: str, api_key: str) -> None:
+        """保存 OpenAI 配置"""
+        # 获取模型输入值
+        try:
+            model_input = self.query_one("#model-input", Input)
+            self.selected_model = model_input.value.strip()
+        except NoMatches:
+            # 如果模型输入框不存在，保持当前选择的模型
+            pass
+
+        self.config_manager.set_base_url(base_url)
+        self.config_manager.set_api_key(api_key)
+        self.config_manager.set_model(self.selected_model)
+
+    def _should_refresh_client(
+        self,
+        old_backend: Backend,
+        old_base: str,
+        old_key: str,
+        new_base: str,
+        new_key: str,
+    ) -> bool:
+        """判断是否需要刷新客户端"""
+        # 后端类型变化
         if old_backend != self.backend:
-            need_refresh = True
-        elif old_base != base_url or old_key != api_key:
-            # 同一后端，比较 URL 和 Key
-            need_refresh = True
+            return True
 
+        # 同一后端，URL 或 Key 变化
+        if old_base != new_base or old_key != new_key:
+            return True
+
+        # OpenAI 后端，检查模型是否变化
+        if self.backend == Backend.OPENAI:
+            old_model = self.config_manager.get_model()
+            if old_model != self.selected_model:
+                return True
+
+        return False
+
+    def _refresh_app_client(self) -> None:
+        """刷新应用客户端"""
         refresh_method = getattr(self.app, "refresh_llm_client", None)
-        if need_refresh and refresh_method:
+        if refresh_method:
             refresh_method()
-
-        self.app.pop_screen()
-
-    @on(Button.Pressed, "#cancel-btn")
-    def cancel_settings(self) -> None:
-        """取消设置"""
-        # 取消所有后台任务
-        for task in self.background_tasks:
-            if not task.done():
-                task.cancel()
-        self.background_tasks.clear()
-
-        self.app.pop_screen()
-
-    def on_key(self, event: Key) -> None:
-        """处理键盘事件"""
-        if event.key == "escape":
-            # 取消所有后台任务
-            for task in self.background_tasks:
-                if not task.done():
-                    task.cancel()
-            self.background_tasks.clear()
-            # ESC 键退出设置页面，等效于取消
-            self.app.pop_screen()
-        if event.key == "ctrl+q":
-            self.app.push_screen(ExitDialog())
-            event.prevent_default()
-            event.stop()
 
     def _schedule_validation(self) -> None:
         """调度验证任务，带防抖机制"""
