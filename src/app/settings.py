@@ -217,6 +217,17 @@ class SettingsScreen(ModalScreen):
         if not self.is_validated:
             return
 
+        # 仅在真正修改了后端/URL/API Key 时才重建 LLM 客户端
+        old_backend = self.config_manager.get_backend()
+
+        if old_backend == Backend.OPENAI:
+            old_base = self.config_manager.get_base_url()
+            old_key = self.config_manager.get_api_key()
+        else:
+            old_base = self.config_manager.get_eulerintelli_url()
+            old_key = self.config_manager.get_eulerintelli_key()
+
+        # 先保存新的配置到 ConfigManager
         self.config_manager.set_backend(self.backend)
 
         base_url = self.query_one("#base-url", Input).value
@@ -238,9 +249,16 @@ class SettingsScreen(ModalScreen):
             self.config_manager.set_eulerintelli_url(base_url)
             self.config_manager.set_eulerintelli_key(api_key)
 
-        # 通知主应用刷新客户端
+        # 判断是否需要刷新 LLM 客户端（只有后端、URL 或 API Key 发生变化时）
+        need_refresh = False
+        if old_backend != self.backend:
+            need_refresh = True
+        elif old_base != base_url or old_key != api_key:
+            # 同一后端，比较 URL 和 Key
+            need_refresh = True
+
         refresh_method = getattr(self.app, "refresh_llm_client", None)
-        if refresh_method:
+        if need_refresh and refresh_method:
             refresh_method()
 
         self.app.pop_screen()
