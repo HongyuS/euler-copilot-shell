@@ -331,7 +331,6 @@ class UserConfigDialog(ModalScreen):
         # 调用后端 API 保存 MCP 自动执行状态
         if isinstance(self.llm_client, HermesChatClient):
             await self.llm_client.update_user_info(
-                user_name=self.username,
                 auto_execute=self.auto_execute_status,
             )
 

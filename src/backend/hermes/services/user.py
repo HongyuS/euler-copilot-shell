@@ -31,16 +31,17 @@ class HermesUserManager:
         获取用户信息
 
         通过调用 GET /api/user 接口获取当前用户信息，
-        包括用户标识、用户名、权限、自动执行设置等。
+        包括用户标识、用户名、权限、个人令牌、自动执行设置等。
 
         Returns:
             dict[str, Any] | None: 用户信息字典，如果请求失败返回 None
                 返回数据格式:
                 {
-                    "id": int | str,      # 用户ID
-                    "userName": str,      # 用户名
-                    "isAdmin": bool,      # 是否管理员
-                    "autoExecute": bool   # 是否自动执行
+                    "userId": str,         # 用户ID
+                    "userName": str,       # 用户名
+                    "isAdmin": bool,       # 是否管理员
+                    "personalToken": str,  # 个人令牌
+                    "autoExecute": bool    # 是否自动执行
                 }
 
         """
@@ -84,7 +85,7 @@ class HermesUserManager:
             user_info = data["result"]
             self.logger.info(
                 "获取用户信息成功 - 用户ID: %s, 用户名: %s, 自动执行: %s, 管理员: %s",
-                user_info.get("id", "未知"),
+                user_info.get("userId", "未知"),
                 user_info.get("userName", "未知"),
                 user_info.get("autoExecute", False),
                 user_info.get("isAdmin", False),
@@ -107,15 +108,13 @@ class HermesUserManager:
         else:
             return user_info
 
-    async def update_user_info(self, *, user_name: str, auto_execute: bool = False) -> bool:
+    async def update_user_info(self, *, auto_execute: bool = False) -> bool:
         """
         更新用户信息
 
-        通过调用 POST /api/user 接口更新当前用户的信息。
-        同时更新用户名和自动执行设置。
+        通过调用 POST /api/user 接口更新当前用户的自动执行设置。
 
         Args:
-            user_name: 用户名
             auto_execute: 是否启用自动执行
 
         Returns:
@@ -124,8 +123,7 @@ class HermesUserManager:
         """
         start_time = time.time()
         self.logger.info(
-            "开始请求 Hermes 用户信息更新 API - user_name: %s, auto_execute: %s",
-            user_name,
+            "开始请求 Hermes 用户信息更新 API - auto_execute: %s",
             auto_execute,
         )
 
@@ -140,7 +138,6 @@ class HermesUserManager:
 
             # 构建请求体
             request_data: dict[str, Any] = {
-                "userName": user_name,
                 "autoExecute": auto_execute,
             }
 
@@ -198,7 +195,7 @@ class HermesUserManager:
             return False
 
         # 检查必要字段是否存在
-        required_fields = ["id", "userName", "isAdmin", "autoExecute"]
+        required_fields = ["userId", "userName", "isAdmin", "autoExecute"]
         for field in required_fields:
             if field not in result:
                 self.logger.warning("用户信息缺少必要字段: %s", field)

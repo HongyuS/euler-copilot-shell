@@ -60,7 +60,6 @@ class HermesChatClient(LLMClientBase):
 
         # 用户信息缓存（在初始化时加载）
         self._user_info: dict[str, Any] | None = None
-        self._user_info_loaded: bool = False
 
         self.logger.info("Hermes 客户端初始化成功 - URL: %s", base_url)
 
@@ -125,17 +124,16 @@ class HermesChatClient(LLMClientBase):
             bool: 是否成功加载用户信息
 
         """
-        if self._user_info_loaded:
+        if self._user_info is not None:
             return True
 
         self.logger.info("开始加载用户信息...")
         self._user_info = await self.user_manager.get_user_info()
 
         if self._user_info is not None:
-            self._user_info_loaded = True
             self.logger.info(
                 "用户信息加载成功 - ID: %s, 用户名: %s",
-                self._user_info.get("id"),
+                self._user_info.get("userId"),
                 self._user_info.get("userName"),
             )
             return True
@@ -143,11 +141,11 @@ class HermesChatClient(LLMClientBase):
         self.logger.warning("用户信息加载失败")
         return False
 
-    def get_user_id(self) -> int | str | None:
+    def get_user_id(self) -> str | None:
         """获取用户ID（从内存缓存）"""
         if self._user_info is None:
             return None
-        return self._user_info.get("id")
+        return self._user_info.get("userId")
 
     def get_user_name(self) -> str:
         """获取用户名（从内存缓存）"""
@@ -167,14 +165,13 @@ class HermesChatClient(LLMClientBase):
             return False
         return self._user_info.get("isAdmin", False)
 
-    async def update_user_info(self, *, user_name: str, auto_execute: bool) -> bool:
+    async def update_user_info(self, *, auto_execute: bool) -> bool:
         """
         更新用户信息
 
         更新成功后会自动更新内存中的缓存。
 
         Args:
-            user_name: 用户名
             auto_execute: 是否启用自动执行
 
         Returns:
@@ -182,13 +179,11 @@ class HermesChatClient(LLMClientBase):
 
         """
         success = await self.user_manager.update_user_info(
-            user_name=user_name,
             auto_execute=auto_execute,
         )
 
         if success and self._user_info is not None:
             # 更新内存缓存
-            self._user_info["userName"] = user_name
             self._user_info["autoExecute"] = auto_execute
             self.logger.info("已更新内存中的用户信息缓存")
 
