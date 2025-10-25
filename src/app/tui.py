@@ -445,7 +445,8 @@ class IntelligentTerminal(App):
             mcp_handler = TUIMCPEventHandler(self, self._llm_client)
             self._llm_client.set_mcp_handler(mcp_handler)
 
-            task = asyncio.create_task(self._llm_client.ensure_user_info_loaded())
+            # 创建异步任务加载用户信息并同步 token
+            task = asyncio.create_task(self._load_user_info_and_sync_token())
             self.background_tasks.add(task)
             task.add_done_callback(self.background_tasks.discard)
 
@@ -1026,6 +1027,38 @@ class IntelligentTerminal(App):
         output_container.scroll_end(animate=False)
         # 等待一个小的延迟，确保UI有时间更新
         await asyncio.sleep(0.01)
+
+    async def _load_user_info_and_sync_token(self) -> None:
+        """加载用户信息并同步 personalToken 到配置"""
+        if not isinstance(self._llm_client, HermesChatClient):
+            return
+
+        try:
+            # 加载用户信息
+            success = await self._llm_client.ensure_user_info_loaded()
+            if not success:
+                self.logger.warning("加载用户信息失败，无法同步 personalToken")
+                return
+
+            # 获取 personalToken
+            personal_token = self._llm_client.get_personal_token()
+            if not personal_token:
+                self.logger.info("服务器未返回 personalToken，跳过同步")
+                return
+
+            # 获取当前配置中的 personalToken
+            current_token = self.config_manager.get_eulerintelli_key()
+
+            # 如果 personalToken 不一致，更新配置
+            if personal_token != current_token:
+                self.logger.info("检测到 personalToken 变更，正在同步到配置...")
+                self.config_manager.set_eulerintelli_key(personal_token)
+                self.logger.info("PersonalToken 已同步到配置文件")
+            else:
+                self.logger.info("PersonalToken 与配置一致，无需同步")
+
+        except (OSError, ValueError, RuntimeError) as e:
+            log_exception(self.logger, "同步 personalToken 时发生错误", e)
 
     async def _cleanup_llm_client(self) -> None:
         """异步清理 LLM 客户端"""

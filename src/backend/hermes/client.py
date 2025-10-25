@@ -141,6 +141,18 @@ class HermesChatClient(LLMClientBase):
         self.logger.warning("用户信息加载失败")
         return False
 
+    def get_personal_token(self) -> str:
+        """
+        获取个人令牌（从内存缓存）
+
+        Returns:
+            str: 个人令牌，如果未加载则返回空字符串
+
+        """
+        if self._user_info is None:
+            return ""
+        return self._user_info.get("personalToken", "")
+
     def get_user_id(self) -> str | None:
         """获取用户ID（从内存缓存）"""
         if self._user_info is None:
