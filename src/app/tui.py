@@ -1086,7 +1086,7 @@ class IntelligentTerminal(App):
             llm_client = self.get_llm_client()
 
             # 构建智能体列表 - 默认第一项为"智能问答"（无智能体）
-            agent_list = [("", "智能问答")]
+            agent_list = [("", _("智能问答"))]
 
             # 尝试获取可用智能体
             if hasattr(llm_client, "get_available_agents"):
@@ -1112,7 +1112,7 @@ class IntelligentTerminal(App):
         except (OSError, ValueError, RuntimeError) as e:
             log_exception(self.logger, "显示智能体选择对话框失败", e)
             # 即使出错也显示默认选项
-            agent_list = [("", "智能问答")]
+            agent_list = [("", _("智能问答"))]
             try:
                 llm_client = self.get_llm_client()
                 await self._display_agent_dialog(agent_list, llm_client)
@@ -1306,7 +1306,7 @@ class IntelligentTerminal(App):
             # 这里先返回 ID 和 ID 作为临时方案，后续在智能体列表加载后更新名称
             return (default_app, default_app)
         # 如果没有配置默认智能体，使用智能问答
-        return ("", "智能问答")
+        return ("", _("智能问答"))
 
     def _reinitialize_agent_state(self) -> None:
         """重新初始化智能体状态，用于后端切换时"""
@@ -1450,7 +1450,7 @@ class IntelligentTerminal(App):
             llm_client = self.get_llm_client()
             if hasattr(llm_client, "get_available_agents"):
                 available_agents = await llm_client.get_available_agents()  # type: ignore[attr-defined]
-                app_id, _ = self.current_agent
+                app_id, _name = self.current_agent
 
                 # 查找匹配的智能体
                 agent_found = False
@@ -1468,7 +1468,7 @@ class IntelligentTerminal(App):
                 if not agent_found and app_id:
                     self.logger.warning("配置的默认智能体 '%s' 不存在，回退到智能问答并清理配置", app_id)
                     # 回退到智能问答
-                    self.current_agent = ("", "智能问答")
+                    self.current_agent = ("", _("智能问答"))
                     # 清理配置中的无效ID
                     self.config_manager.set_default_app("")
                     # 确保客户端也切换到智能问答
