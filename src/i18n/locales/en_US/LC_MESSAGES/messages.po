@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: oi-cli\n"
 "Report-Msgid-Bugs-To: contact@openeuler.org\n"
-"POT-Creation-Date: 2025-10-21 10:54+0800\n"
+"POT-Creation-Date: 2025-10-25 14:40+0800\n"
 "PO-Revision-Date: 2025-10-20 19:28+0800\n"
 "Last-Translator: openEuler Intelligence Team\n"
 "Language-Team: English\n"
@@ -214,6 +214,14 @@ msgstr "Authentication failed, please check configuration"
 msgid "Error processing command: {error}"
 msgstr "Processing command failed with error: {error}"
 
+#: src/app/tui.py:1044 src/app/tui.py:1070 src/app/tui.py:1264
+#: src/app/tui.py:1426 src/app/dialogs/agent.py:60 src/app/dialogs/agent.py:130
+#: src/app/dialogs/agent.py:185 src/app/dialogs/agent.py:205
+#: src/app/dialogs/agent.py:208 src/tool/oi_select_agent.py:67
+#: src/tool/oi_select_agent.py:94
+msgid "智能问答"
+msgstr "Smart Chat"
+
 #: src/app/tui.py:1170
 msgid "💡 MCP response sent"
 msgstr "💡 MCP response sent"
@@ -263,13 +271,6 @@ msgstr "Please select openEuler Intelligence backend to use agent features"
 #: src/app/dialogs/agent.py:29
 msgid "按任意键关闭"
 msgstr "Press any key to close"
-
-#: src/app/dialogs/agent.py:60 src/app/dialogs/agent.py:130
-#: src/app/dialogs/agent.py:185 src/app/dialogs/agent.py:205
-#: src/app/dialogs/agent.py:208 src/tool/oi_select_agent.py:67
-#: src/tool/oi_select_agent.py:94
-msgid "智能问答"
-msgstr "Smart Chat"
 
 #: src/app/dialogs/agent.py:113
 msgid "OS 智能助手"
@@ -321,11 +322,11 @@ msgstr "Name"
 msgid "说明"
 msgstr "Description"
 
-#: src/main.py:28
+#: src/main.py:27
 msgid "openEuler Intelligence - Intelligent command-line tool"
 msgstr "openEuler Intelligence - Command-line Client"
 
-#: src/main.py:29
+#: src/main.py:28
 msgid ""
 "\n"
 "For more information and documentation, please visit:\n"
@@ -337,33 +338,33 @@ msgstr ""
 "  https://gitee.com/openeuler/euler-copilot-shell/tree/master/docs\n"
 "        "
 
-#: src/main.py:39
+#: src/main.py:38
 msgid "General Options"
 msgstr "General Options"
 
-#: src/main.py:40
+#: src/main.py:39
 msgid "Show help and version information"
 msgstr "Show help and version information"
 
-#: src/main.py:46
+#: src/main.py:45
 msgid "Show this help message and exit"
 msgstr "Show this help message and exit"
 
-#: src/main.py:53
+#: src/main.py:52
 msgid "Show program version number and exit"
 msgstr "Show program version number and exit"
 
-#: src/main.py:58
+#: src/main.py:57
 msgid "Backend Configuration Options"
 msgstr "Backend Configuration Options"
 
-#: src/main.py:59
+#: src/main.py:58
 msgid ""
 "For initializing and configuring openEuler Intelligence backend services"
 msgstr ""
 "For initializing and configuring openEuler Intelligence backend services"
 
-#: src/main.py:65
+#: src/main.py:64
 msgid ""
 "Initialize openEuler Intelligence backend\n"
 " * Initialization requires administrator privileges and network connection"
@@ -371,7 +372,7 @@ msgstr ""
 "Initialize openEuler Intelligence backend\n"
 " * Initialization requires administrator privileges and network connection"
 
-#: src/main.py:73
+#: src/main.py:72
 msgid ""
 "Change openEuler Intelligence LLM settings (requires valid local backend "
 "service)\n"
@@ -381,98 +382,98 @@ msgstr ""
 "service)\n"
 " * Configuration editing requires administrator privileges"
 
-#: src/main.py:80
+#: src/main.py:79
 msgid "Application Configuration Options"
 msgstr "Application Configuration Options"
 
-#: src/main.py:81
+#: src/main.py:80
 msgid "For configuring application frontend behavior and preferences"
 msgstr "For configuring application frontend behavior and preferences"
 
-#: src/main.py:86
+#: src/main.py:85
 msgid "Select default agent"
 msgstr "Select default agent"
 
-#: src/main.py:91
+#: src/main.py:90
 msgid "Language Settings"
 msgstr "Language Settings"
 
-#: src/main.py:92
+#: src/main.py:91
 msgid "For configuring application display language"
 msgstr "For configuring application display language"
 
-#: src/main.py:100
+#: src/main.py:99
 #, python-brace-format
 msgid "Set display language (available: {locales})"
 msgstr "Set display language (available: {locales})"
 
-#: src/main.py:105
+#: src/main.py:104
 msgid "Log Management Options"
 msgstr "Log Management Options"
 
-#: src/main.py:106
+#: src/main.py:105
 msgid "For viewing and configuring log output"
 msgstr "For viewing and configuring log output"
 
-#: src/main.py:111
+#: src/main.py:110
 msgid "Show latest log content (up to 1000 lines)"
 msgstr "Show latest log content (up to 1000 lines)"
 
-#: src/main.py:117
+#: src/main.py:116
 msgid "Set log level (available: DEBUG, INFO, WARNING, ERROR)"
 msgstr "Set log level (available: DEBUG, INFO, WARNING, ERROR)"
 
-#: src/main.py:140
+#: src/main.py:139
 #, python-brace-format
 msgid "Failed to retrieve logs: {error}\n"
 msgstr "Failed to retrieve logs: {error}\n"
 
-#: src/main.py:147
+#: src/main.py:146
 #, python-brace-format
 msgid "Invalid log level: {level}\n"
 msgstr "Invalid log level: {level}\n"
 
-#: src/main.py:156
+#: src/main.py:155
 #, python-format
 msgid "Log level has been set to: %s"
 msgstr "Log level has been set to: %s"
 
-#: src/main.py:157
+#: src/main.py:156
 msgid "This is a DEBUG level test message"
 msgstr "This is a DEBUG level test message"
 
-#: src/main.py:158
+#: src/main.py:157
 msgid "This is an INFO level test message"
 msgstr "This is an INFO level test message"
 
-#: src/main.py:159
+#: src/main.py:158
 msgid "This is a WARNING level test message"
 msgstr "This is a WARNING level test message"
 
-#: src/main.py:160
+#: src/main.py:159
 msgid "This is an ERROR level test message"
 msgstr "This is an ERROR level test message"
 
-#: src/main.py:162
+#: src/main.py:161
 #, python-brace-format
 msgid "✓ Log level successfully set to: {level}\n"
 msgstr "✓ Log level successfully set to: {level}\n"
 
-#: src/main.py:163
+#: src/main.py:162
 msgid "✓ Logging system initialized\n"
 msgstr "✓ Logging system initialized\n"
 
-#: src/main.py:191
+#: src/main.py:190
 #, python-brace-format
 msgid "✓ Language set to: {locale}\n"
 msgstr "✓ Language set to: {locale}\n"
 
-#: src/main.py:193
+#: src/main.py:192
 #, python-brace-format
 msgid "✗ Unsupported language: {locale}\n"
 msgstr "✗ Unsupported language: {locale}\n"
 
-#: src/main.py:228
+#: src/main.py:230
 msgid "Fatal error in Intelligent Shell application"
 msgstr "Fatal error in Intelligent Shell application"
 
@@ -520,7 +521,9 @@ msgstr "Error: {error}\n"
 
 #: src/tool/oi_llm_config.py:77
 msgid "需要管理员权限才能修改 openEuler Intelligence 配置文件"
-msgstr "Administrator privileges are required to modify openEuler Intelligence configuration files"
+msgstr ""
+"Administrator privileges are required to modify openEuler Intelligence "
+"configuration files"
 
 #: src/tool/oi_llm_config.py:84
 #, python-brace-format
@@ -549,13 +552,16 @@ msgstr "Error occurred when accessing configuration file: {error}"
 #: src/tool/oi_llm_config.py:127
 #, python-brace-format
 msgid "权限不足：无法访问配置文件 {filename}，请以管理员身份运行"
-msgstr "Insufficient permissions: Cannot access configuration file {filename}, please run as administrator"
+msgstr ""
+"Insufficient permissions: Cannot access configuration file {filename}, "
+"please run as administrator"
 
 #: src/tool/validators.py:135 src/tool/validators.py:584
 #: src/tool/validators.py:647
 #, python-brace-format
 msgid "连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}"
-msgstr "Connection timeout - Unable to connect to {endpoint} within {timeout} seconds"
+msgstr ""
+"Connection timeout - Unable to connect to {endpoint} within {timeout} seconds"
 
 #: src/tool/validators.py:140
 #, python-brace-format
@@ -676,7 +682,8 @@ msgstr "OpenAI Embedding configuration validation failed: {error}"
 #: src/tool/validators.py:598
 #, python-brace-format
 msgid "OpenAI Embedding 配置验证成功 - 维度: {dimension}"
-msgstr "OpenAI Embedding configuration validation successful - Dimension: {dimension}"
+msgstr ""
+"OpenAI Embedding configuration validation successful - Dimension: {dimension}"
 
 #: src/tool/validators.py:606
 msgid "OpenAI Embedding 响应为空"
@@ -685,7 +692,8 @@ msgstr "OpenAI Embedding response is empty"
 #: src/tool/validators.py:634
 #, python-brace-format
 msgid "MindIE Embedding 配置验证成功 - 维度: {dimension}"
-msgstr "MindIE Embedding configuration validation successful - Dimension: {dimension}"
+msgstr ""
+"MindIE Embedding configuration validation successful - Dimension: {dimension}"
 
 #: src/tool/validators.py:644
 msgid "MindIE Embedding 响应格式不正确"
@@ -762,7 +770,9 @@ msgstr "[Command start failed] Unable to create subprocess"
 #: src/tool/command_processor.py:136
 #, python-brace-format
 msgid "无法启动命令 '{command}'，请分析可能原因并给出解决建议。"
-msgstr "Unable to start command '{command}', please analyze possible causes and provide solutions."
+msgstr ""
+"Unable to start command '{command}', please analyze possible causes and "
+"provide solutions."
 
 #: src/tool/command_processor.py:165
 #, python-brace-format

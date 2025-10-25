@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: oi-cli 0.10.2\n"
 "Report-Msgid-Bugs-To: contact@openeuler.org\n"
-"POT-Creation-Date: 2025-10-21 10:54+0800\n"
+"POT-Creation-Date: 2025-10-25 14:40+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -213,6 +213,14 @@ msgstr ""
 msgid "Error processing command: {error}"
 msgstr ""
 
+#: src/app/tui.py:1044 src/app/tui.py:1070 src/app/tui.py:1264
+#: src/app/tui.py:1426 src/app/dialogs/agent.py:60 src/app/dialogs/agent.py:130
+#: src/app/dialogs/agent.py:185 src/app/dialogs/agent.py:205
+#: src/app/dialogs/agent.py:208 src/tool/oi_select_agent.py:67
+#: src/tool/oi_select_agent.py:94
+msgid "智能问答"
+msgstr ""
+
 #: src/app/tui.py:1170
 msgid "💡 MCP response sent"
 msgstr ""
@@ -263,13 +271,6 @@ msgstr ""
 msgid "按任意键关闭"
 msgstr ""
 
-#: src/app/dialogs/agent.py:60 src/app/dialogs/agent.py:130
-#: src/app/dialogs/agent.py:185 src/app/dialogs/agent.py:205
-#: src/app/dialogs/agent.py:208 src/tool/oi_select_agent.py:67
-#: src/tool/oi_select_agent.py:94
-msgid "智能问答"
-msgstr ""
-
 #: src/app/dialogs/agent.py:113
 msgid "OS 智能助手"
 msgstr ""
@@ -318,11 +319,11 @@ msgstr ""
 msgid "说明"
 msgstr ""
 
-#: src/main.py:28
+#: src/main.py:27
 msgid "openEuler Intelligence - Intelligent command-line tool"
 msgstr ""
 
-#: src/main.py:29
+#: src/main.py:28
 msgid ""
 "\n"
 "For more information and documentation, please visit:\n"
@@ -330,136 +331,136 @@ msgid ""
 "        "
 msgstr ""
 
-#: src/main.py:39
+#: src/main.py:38
 msgid "General Options"
 msgstr ""
 
-#: src/main.py:40
+#: src/main.py:39
 msgid "Show help and version information"
 msgstr ""
 
-#: src/main.py:46
+#: src/main.py:45
 msgid "Show this help message and exit"
 msgstr ""
 
-#: src/main.py:53
+#: src/main.py:52
 msgid "Show program version number and exit"
 msgstr ""
 
-#: src/main.py:58
+#: src/main.py:57
 msgid "Backend Configuration Options"
 msgstr ""
 
-#: src/main.py:59
+#: src/main.py:58
 msgid ""
 "For initializing and configuring openEuler Intelligence backend services"
 msgstr ""
 
-#: src/main.py:65
+#: src/main.py:64
 msgid ""
 "Initialize openEuler Intelligence backend\n"
 " * Initialization requires administrator privileges and network connection"
 msgstr ""
 
-#: src/main.py:73
+#: src/main.py:72
 msgid ""
 "Change openEuler Intelligence LLM settings (requires valid local backend "
 "service)\n"
 " * Configuration editing requires administrator privileges"
 msgstr ""
 
-#: src/main.py:80
+#: src/main.py:79
 msgid "Application Configuration Options"
 msgstr ""
 
-#: src/main.py:81
+#: src/main.py:80
 msgid "For configuring application frontend behavior and preferences"
 msgstr ""
 
-#: src/main.py:86
+#: src/main.py:85
 msgid "Select default agent"
 msgstr ""
 
-#: src/main.py:91
+#: src/main.py:90
 msgid "Language Settings"
 msgstr ""
 
-#: src/main.py:92
+#: src/main.py:91
 msgid "For configuring application display language"
 msgstr ""
 
-#: src/main.py:100
+#: src/main.py:99
 #, python-brace-format
 msgid "Set display language (available: {locales})"
 msgstr ""
 
-#: src/main.py:105
+#: src/main.py:104
 msgid "Log Management Options"
 msgstr ""
 
-#: src/main.py:106
+#: src/main.py:105
 msgid "For viewing and configuring log output"
 msgstr ""
 
-#: src/main.py:111
+#: src/main.py:110
 msgid "Show latest log content (up to 1000 lines)"
 msgstr ""
 
-#: src/main.py:117
+#: src/main.py:116
 msgid "Set log level (available: DEBUG, INFO, WARNING, ERROR)"
 msgstr ""
 
-#: src/main.py:140
+#: src/main.py:139
 #, python-brace-format
 msgid "Failed to retrieve logs: {error}\n"
 msgstr ""
 
-#: src/main.py:147
+#: src/main.py:146
 #, python-brace-format
 msgid "Invalid log level: {level}\n"
 msgstr ""
 
-#: src/main.py:156
+#: src/main.py:155
 #, python-format
 msgid "Log level has been set to: %s"
 msgstr ""
 
-#: src/main.py:157
+#: src/main.py:156
 msgid "This is a DEBUG level test message"
 msgstr ""
 
-#: src/main.py:158
+#: src/main.py:157
 msgid "This is an INFO level test message"
 msgstr ""
 
-#: src/main.py:159
+#: src/main.py:158
 msgid "This is a WARNING level test message"
 msgstr ""
 
-#: src/main.py:160
+#: src/main.py:159
 msgid "This is an ERROR level test message"
 msgstr ""
 
-#: src/main.py:162
+#: src/main.py:161
 #, python-brace-format
 msgid "✓ Log level successfully set to: {level}\n"
 msgstr ""
 
-#: src/main.py:163
+#: src/main.py:162
 msgid "✓ Logging system initialized\n"
 msgstr ""
 
-#: src/main.py:191
+#: src/main.py:190
 #, python-brace-format
 msgid "✓ Language set to: {locale}\n"
 msgstr ""
 
-#: src/main.py:193
+#: src/main.py:192
 #, python-brace-format
 msgid "✗ Unsupported language: {locale}\n"
 msgstr ""
 
-#: src/main.py:228
+#: src/main.py:230
 msgid "Fatal error in Intelligent Shell application"
 msgstr ""
 
