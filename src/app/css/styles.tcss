@@ -62,6 +62,8 @@ SettingsScreen {
     align: center middle;
     width: 85%;
     height: 95%;
+    max-width: 120;
+    max-height: 50;
     color: #ffffff;
 }
 
@@ -122,7 +124,9 @@ SettingsScreen {
     width: 20%;
     height: 3;
     text-style: bold;
+    text-align: right;
     margin-top: 1;
+    margin-right: 1;
     padding: 0 1;
     dock: right;
 }
@@ -531,6 +535,8 @@ UserConfigDialog {
     align: center middle;
     width: 80%;
     height: 80%;
+    max-width: 100;
+    max-height: 40;
 }
 
 #user-dialog {
@@ -620,6 +626,10 @@ UserConfigDialog {
     margin: 1 0;
     background: rgba(73, 99, 177, 0.1);
     height: auto;
+    max-height: 15;
+    overflow-y: auto;
+    scrollbar-size: 1 1;
+    dock: bottom;
 }
 
 /* 详情行 */
@@ -634,6 +644,8 @@ UserConfigDialog {
     color: #888888;
     width: auto;
     padding-right: 1;
+    margin-top: 1;
+    text-align: right;
 }
 
 /* 详情值 */
@@ -659,7 +671,7 @@ UserConfigDialog {
 }
 
 /* 大模型设置帮助文本 */
-#llm-dialog-help {
+.llm-dialog-help {
     text-align: center;
     color: #888888;
     padding: 0 1;
