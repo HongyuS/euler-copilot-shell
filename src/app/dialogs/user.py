@@ -228,6 +228,10 @@ class UserConfigDialog(ModalScreen):
         else:
             # 渲染模型列表
             model_list_container = Container(id=f"{tab_id}-list", classes="llm-model-list")
+
+            # 将容器挂载到父容器
+            content_container.mount(model_list_container)
+            # 向容器添加子组件
             for i, model in enumerate(models):
                 is_saved = model.llm_id == self.saved_chat_model  # 已保存的
                 is_activated = model.llm_id == activated_llm_id  # 已激活的（用空格确认）
@@ -245,13 +249,12 @@ class UserConfigDialog(ModalScreen):
                 model_item = Static(model.model_name, classes=classes)
                 model_list_container.mount(model_item)
 
-            content_container.mount(model_list_container)
-
             # 显示当前光标所指模型的详细信息
             if 0 <= cursor_index < len(models):
                 current_model = models[cursor_index]
-                detail_container = self._create_model_detail(current_model)
+                detail_container = Container(classes="llm-model-detail")
                 content_container.mount(detail_container)
+                self._populate_model_detail(detail_container, current_model)
 
         # 添加帮助文本
         tab_pane.mount(
@@ -261,19 +264,15 @@ class UserConfigDialog(ModalScreen):
             ),
         )
 
-    def _create_model_detail(self, model: ModelInfo) -> Container:
+    def _populate_model_detail(self, detail_container: Container, model: ModelInfo) -> None:
         """
-        创建模型详情容器
+        填充模型详情到已挂载的容器中
 
         Args:
+            detail_container: 已挂载的详情容器
             model: 模型信息
 
-        Returns:
-            包含模型详情的容器
-
         """
-        detail_container = Container(classes="llm-model-detail")
-
         # 模型描述
         if model.llm_description:
             detail_container.mount(
@@ -304,8 +303,6 @@ class UserConfigDialog(ModalScreen):
                     classes="llm-detail-row",
                 ),
             )
-
-        return detail_container
 
     def _update_cursor_positions(self) -> None:
         """根据已保存的配置更新光标位置"""
