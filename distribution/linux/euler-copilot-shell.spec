@@ -12,9 +12,8 @@ Source0:        %{name}-%{version}.tar.gz
 
 ExclusiveArch:  x86_64 aarch64 riscv64 loongarch64
 
-BuildRequires:  python3-devel
-BuildRequires:  python3-virtualenv
-BuildRequires:  python3-pip
+BuildRequires:  python3-devel python3-virtualenv python3-pip
+BuildRequires:  gettext
 
 %description
 openEuler Intelligence 智能命令行工具集，包含智能 Shell 命令行程序和部署安装工具。
