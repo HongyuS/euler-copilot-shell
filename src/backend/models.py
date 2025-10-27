@@ -35,16 +35,19 @@ class ModelInfo:
     模型信息数据类
 
     该类用于统一表示不同后端（OpenAI、Hermes）返回的模型信息。
-    所有后端都需要提供 modelName 字段，其他字段为可选。
+
+    注意：
+    - model_name: 仅用于后端调用大模型 API 时使用，CLI 前端不需要关心
+    - llm_id: CLI 前端使用的模型标识符，用于显示和配置保存
     """
 
     # 通用字段（所有后端都支持）
     model_name: str
-    """模型名称，用于标识和选择模型"""
+    """模型名称，仅用于后端调用大模型 API"""
 
     # Hermes 特有字段
     llm_id: str | None = None
-    """LLM ID，Hermes 后端的模型唯一标识"""
+    """LLM ID，CLI 前端使用的模型唯一标识符（用于显示和配置）"""
 
     llm_description: str | None = None
     """LLM 描述，Hermes 后端的模型说明"""
@@ -56,8 +59,8 @@ class ModelInfo:
     """模型支持的最大 token 数，Hermes 后端提供"""
 
     def __str__(self) -> str:
-        """返回模型的字符串表示"""
-        return self.model_name
+        """返回模型的字符串表示（优先使用 llm_id）"""
+        return self.llm_id or self.model_name
 
     def __repr__(self) -> str:
         """返回模型的详细表示"""

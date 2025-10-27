@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from textual import on
 from textual.containers import Container, Horizontal
@@ -15,6 +15,7 @@ from i18n.manager import _
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
+    from textual.events import Key
 
     from backend import LLMClientBase
     from config.manager import ConfigManager
@@ -22,14 +23,6 @@ if TYPE_CHECKING:
 
 class UserConfigDialog(ModalScreen):
     """用户配置对话框"""
-
-    BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
-        ("up", "previous_model", _("上一个模型")),
-        ("down", "next_model", _("下一个模型")),
-        ("space", "activate_model", _("激活模型")),
-        ("enter", "save_llm_settings", _("保存大模型设置")),
-        ("escape", "cancel", _("取消")),
-    ]
 
     def __init__(
         self,
@@ -213,7 +206,7 @@ class UserConfigDialog(ModalScreen):
         tab_pane.remove_children()
 
         # 创建内容容器
-        content_container = Container(id=f"{tab_id}-content", classes="llm-tab-content")
+        content_container = Container(classes="llm-tab-content")
         tab_pane.mount(content_container)
 
         if not self.models_loaded:
@@ -227,7 +220,11 @@ class UserConfigDialog(ModalScreen):
 
         else:
             # 渲染模型列表
-            model_list_container = Container(id=f"{tab_id}-list", classes="llm-model-list")
+            model_list_container = Container(classes="llm-model-list")
+
+            # 将容器挂载到父容器
+            content_container.mount(model_list_container)
+            # 向容器添加子组件
             for i, model in enumerate(models):
                 is_saved = model.llm_id == self.saved_chat_model  # 已保存的
                 is_activated = model.llm_id == activated_llm_id  # 已激活的（用空格确认）
@@ -242,38 +239,33 @@ class UserConfigDialog(ModalScreen):
                 if is_cursor:
                     classes += " llm-model-cursor"
 
-                model_item = Static(model.model_name, classes=classes)
+                model_item = Static(model.llm_id or "", classes=classes)
                 model_list_container.mount(model_item)
-
-            content_container.mount(model_list_container)
 
             # 显示当前光标所指模型的详细信息
             if 0 <= cursor_index < len(models):
                 current_model = models[cursor_index]
-                detail_container = self._create_model_detail(current_model)
+                detail_container = Container(classes="llm-model-detail")
                 content_container.mount(detail_container)
+                self._populate_model_detail(detail_container, current_model)
 
         # 添加帮助文本
         tab_pane.mount(
             Static(
                 _("↑↓: 选择模型  空格: 激活  回车: 保存  ESC: 取消"),
-                id="llm-dialog-help",
+                classes="llm-dialog-help",
             ),
         )
 
-    def _create_model_detail(self, model: ModelInfo) -> Container:
+    def _populate_model_detail(self, detail_container: Container, model: ModelInfo) -> None:
         """
-        创建模型详情容器
+        填充模型详情到已挂载的容器中
 
         Args:
+            detail_container: 已挂载的详情容器
             model: 模型信息
 
-        Returns:
-            包含模型详情的容器
-
         """
-        detail_container = Container(classes="llm-model-detail")
-
         # 模型描述
         if model.llm_description:
             detail_container.mount(
@@ -305,8 +297,6 @@ class UserConfigDialog(ModalScreen):
                 ),
             )
 
-        return detail_container
-
     def _update_cursor_positions(self) -> None:
         """根据已保存的配置更新光标位置"""
         # 基础模型光标
@@ -316,13 +306,41 @@ class UserConfigDialog(ModalScreen):
                     self.chat_cursor = i
                     break
 
+    def on_key(self, event: Key) -> None:
+        """处理按键事件"""
+        # ESC 键在任何情况下都可以取消并关闭对话框
+        if event.key == "escape":
+            self.action_cancel()
+            event.prevent_default()
+            event.stop()
+            return
+
+        # 以下按键仅在大模型设置标签页且有可用模型时生效
+        if self.current_tab == "llm" and self.chat_models:
+            if event.key == "up":
+                self.action_previous_model()
+                event.prevent_default()
+                event.stop()
+            elif event.key == "down":
+                self.action_next_model()
+                event.prevent_default()
+                event.stop()
+            elif event.key == "space":
+                self.action_activate_model()
+                event.prevent_default()
+                event.stop()
+            elif event.key == "enter":
+                self.action_save_llm_settings()
+                event.prevent_default()
+                event.stop()
+
     @on(TabbedContent.TabActivated)
     def on_tab_changed(self, event: TabbedContent.TabActivated) -> None:
         """标签页切换事件"""
-        tab_id = event.tab.id
-        if tab_id == "general-tab":
+        pane_id = event.pane.id if event.pane else None
+        if pane_id == "general-tab":
             self.current_tab = "general"
-        elif tab_id == "llm-tab":
+        elif pane_id == "llm-tab":
             self.current_tab = "llm"
 
     @on(Button.Pressed, "#save-user-settings-btn")
@@ -356,47 +374,23 @@ class UserConfigDialog(ModalScreen):
         mcp_btn.label = _("自动执行") if self.auto_execute_status else _("手动确认")
 
     def action_previous_model(self) -> None:
-        """选择上一个模型（仅在大模型设置标签页生效）"""
-        if not self.models_loaded or self.current_tab != "llm":
-            return
-
-        if not self.chat_models:
-            return
-
+        """选择上一个模型"""
         self.chat_cursor = max(0, self.chat_cursor - 1)
         self._render_chat_llm_tab()
 
     def action_next_model(self) -> None:
-        """选择下一个模型（仅在大模型设置标签页生效）"""
-        if not self.models_loaded or self.current_tab != "llm":
-            return
-
-        if not self.chat_models:
-            return
-
+        """选择下一个模型"""
         self.chat_cursor = min(len(self.chat_models) - 1, self.chat_cursor + 1)
         self._render_chat_llm_tab()
 
     def action_activate_model(self) -> None:
         """激活当前光标所在的模型（用空格键），等待保存"""
-        if not self.models_loaded or self.current_tab != "llm":
-            return
-
-        if not self.chat_models:
-            return
-
         if 0 <= self.chat_cursor < len(self.chat_models):
             self.activated_chat_model = self.chat_models[self.chat_cursor].llm_id or ""
             self._render_chat_llm_tab()
 
     def action_save_llm_settings(self) -> None:
         """保存大模型设置（用回车键）"""
-        if not self.models_loaded or self.current_tab != "llm":
-            return
-
-        if not self.chat_models:
-            return
-
         # 保存已激活的模型到配置
         self.config_manager.set_llm_chat_model(self.activated_chat_model)
         self.saved_chat_model = self.activated_chat_model

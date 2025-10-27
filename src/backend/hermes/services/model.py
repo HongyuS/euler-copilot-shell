@@ -98,9 +98,8 @@ class HermesModelManager:
                 if not isinstance(llm_info, dict):
                     continue
 
-                # modelName 是前端显示所必需的字段
-                model_name = llm_info.get("modelName")
-                if not model_name:
+                llm_id = llm_info.get("llmId")
+                if not llm_id:
                     continue
 
                 # 解析并验证 llmType 字段
@@ -108,8 +107,8 @@ class HermesModelManager:
 
                 # 构建 ModelInfo 对象
                 model_info = ModelInfo(
-                    model_name=model_name,
-                    llm_id=llm_info.get("llmId"),
+                    model_name=llm_info.get("modelName") or llm_id,
+                    llm_id=llm_id,
                     llm_description=llm_info.get("llmDescription"),
                     llm_type=llm_types,
                     max_tokens=llm_info.get("maxTokens"),
