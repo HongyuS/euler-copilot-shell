@@ -12,7 +12,6 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
 from app.dialogs import ExitDialog, UserConfigDialog
-from backend import HermesChatClient, OpenAIClient
 from config import Backend, ConfigManager
 from i18n.manager import _
 from log import get_logger
@@ -82,7 +81,7 @@ class SettingsScreen(ModalScreen):
 
     @on(Input.Changed, "#base-url, #api-key, #model-input")
     def on_config_changed(self) -> None:
-        """当 Base URL、API Key 或模型改变时更新客户端并验证配置"""
+        """当 Base URL、API Key 或模型改变时验证配置"""
         if self.backend == Backend.OPENAI:
             # 获取当前模型输入值
             try:
@@ -91,10 +90,6 @@ class SettingsScreen(ModalScreen):
             except NoMatches:
                 # 如果模型输入框不存在，跳过
                 pass
-
-            self._update_llm_client()
-        else:  # EULERINTELLI
-            self._update_llm_client()
 
         # 重新验证配置
         self._schedule_validation()
@@ -111,11 +106,8 @@ class SettingsScreen(ModalScreen):
         backend_btn = self.query_one("#backend-btn", Button)
         backend_btn.label = self.backend.get_display_name()
 
-        # 更新 URL 和 API Key
+        # 更新配置输入框的值
         self._load_config_inputs()
-
-        # 更新 LLM 客户端
-        self._update_llm_client()
 
         # 替换后端特定的 UI 组件
         self._replace_backend_widgets()
@@ -463,35 +455,3 @@ class SettingsScreen(ModalScreen):
             save_btn.disabled = False
         else:
             save_btn.disabled = True
-
-    def _update_llm_client(self) -> None:
-        """根据当前UI中的配置更新LLM客户端"""
-        base_url_input = self.query_one("#base-url", Input)
-        api_key_input = self.query_one("#api-key", Input)
-
-        # 保存当前智能体状态（如果是Hermes客户端）
-        current_agent_id = ""
-        if isinstance(self.llm_client, HermesChatClient):
-            current_agent_id = getattr(self.llm_client, "current_agent_id", "")
-
-        if self.backend == Backend.OPENAI:
-            # 获取模型输入值，如果输入框不存在则使用当前选择的模型
-            try:
-                model_input = self.query_one("#model-input", Input)
-                model = model_input.value.strip()
-            except NoMatches:
-                model = self.selected_model
-
-            self.llm_client = OpenAIClient(
-                base_url=base_url_input.value,
-                model=model,
-                api_key=api_key_input.value,
-            )
-        else:  # EULERINTELLI
-            self.llm_client = HermesChatClient(
-                base_url=base_url_input.value,
-                auth_token=api_key_input.value,
-            )
-            # 恢复智能体状态
-            if current_agent_id:
-                self.llm_client.set_current_agent(current_agent_id)

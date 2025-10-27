@@ -32,7 +32,7 @@ from config.model import Backend
 from i18n.manager import _
 from log.manager import get_logger, log_exception
 from tool.command_processor import process_command
-from tool.validators import APIValidator, validate_oi_connection
+from tool.validators import APIValidator
 
 if TYPE_CHECKING:
     from textual.events import Key as KeyEvent
@@ -445,13 +445,10 @@ class IntelligentTerminal(App):
             mcp_handler = TUIMCPEventHandler(self, self._llm_client)
             self._llm_client.set_mcp_handler(mcp_handler)
 
-            # 创建异步任务加载用户信息并同步 token
-            task = asyncio.create_task(self._load_user_info_and_sync_token())
+            # 创建异步任务加载用户信息并同步 personalToken
+            task = asyncio.create_task(self._ensure_hermes_user_info())
             self.background_tasks.add(task)
             task.add_done_callback(self.background_tasks.discard)
-
-        # 后端切换时重新初始化智能体状态
-        self._reinitialize_agent_state()
 
     def exit(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
         """退出应用前取消所有后台任务"""
@@ -1028,8 +1025,8 @@ class IntelligentTerminal(App):
         # 等待一个小的延迟，确保UI有时间更新
         await asyncio.sleep(0.01)
 
-    async def _load_user_info_and_sync_token(self) -> None:
-        """加载用户信息并同步 personalToken 到配置"""
+    async def _ensure_hermes_user_info(self) -> None:
+        """确保 Hermes 用户信息已加载并同步 personalToken 到配置"""
         if not isinstance(self._llm_client, HermesChatClient):
             return
 
@@ -1037,7 +1034,7 @@ class IntelligentTerminal(App):
             # 加载用户信息
             success = await self._llm_client.ensure_user_info_loaded()
             if not success:
-                self.logger.warning("加载用户信息失败，无法同步 personalToken")
+                self.logger.warning("加载用户信息失败")
                 return
 
             # 获取 personalToken
@@ -1058,7 +1055,7 @@ class IntelligentTerminal(App):
                 self.logger.info("PersonalToken 与配置一致，无需同步")
 
         except (OSError, ValueError, RuntimeError) as e:
-            log_exception(self.logger, "同步 personalToken 时发生错误", e)
+            log_exception(self.logger, "加载用户信息或同步 personalToken 时发生错误", e)
 
     async def _cleanup_llm_client(self) -> None:
         """异步清理 LLM 客户端"""
@@ -1346,10 +1343,9 @@ class IntelligentTerminal(App):
     async def _validate_backend_configuration(self, backend: Backend) -> bool:
         """验证后端配置"""
         try:
-            validator = APIValidator()
-
             if backend == Backend.OPENAI:
                 # 验证 OpenAI 配置
+                validator = APIValidator()
                 base_url = self.config_manager.get_base_url()
                 api_key = self.config_manager.get_api_key()
                 model = self.config_manager.get_model()
@@ -1362,11 +1358,11 @@ class IntelligentTerminal(App):
                 return valid
 
             if backend == Backend.EULERINTELLI:
-                # 验证 openEuler Intelligence 配置
-                base_url = self.config_manager.get_eulerintelli_url()
-                api_key = self.config_manager.get_eulerintelli_key()
-                valid, _ = await validate_oi_connection(base_url, api_key)
-                return valid
+                # 验证 Hermes 配置
+                llm_client = self.get_llm_client()
+                if isinstance(llm_client, HermesChatClient):
+                    return await llm_client.ensure_user_info_loaded()
+                return False
 
         except Exception:
             self.logger.exception("验证后端配置时发生错误")
