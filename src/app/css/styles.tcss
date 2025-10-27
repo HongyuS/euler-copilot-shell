@@ -60,7 +60,7 @@ SettingsScreen {
 
 #settings-screen {
     align: center middle;
-    width: 80%;
+    width: 85%;
     height: 95%;
     color: #ffffff;
 }
@@ -95,10 +95,46 @@ SettingsScreen {
     margin-top: 1;
 }
 
-/* 设置值样式 */
+/* 设置值样式 (可编辑类型) */
 .settings-input {
     width: 80%;
     content-align: left middle;
+}
+
+/* 设置值容器（用于包含值和徽章） */
+.settings-value-container {
+    margin-left: 1;
+    background: $surface;
+    width: 80%;
+    height: 3;
+    align: left middle;
+}
+
+/* 设置值样式 (只读类型) */
+.settings-value {
+    margin-left: 1;
+    width: auto;
+    height: 3;
+}
+
+/* 用户类型徽章样式 */
+.user-type-badge {
+    width: 20%;
+    height: 3;
+    text-style: bold;
+    margin-top: 1;
+    padding: 0 1;
+    dock: right;
+}
+
+/* 管理员徽章颜色 */
+.user-type-admin {
+    color: $warning;
+}
+
+/* 普通用户徽章颜色 */
+.user-type-user {
+    color: $primary;
 }
 
 /* 设置按钮样式 */
@@ -486,41 +522,72 @@ BackendRequiredDialog {
     height: 3;
 }
 
-/* LLM 配置对话框样式 */
-LLMConfigDialog {
+/* 用户配置对话框样式 */
+UserConfigDialog {
     align: center middle;
 }
 
-#llm-dialog-screen {
+#user-dialog-screen {
     align: center middle;
-    width: 70%;
+    width: 80%;
     height: 80%;
 }
 
-#llm-dialog {
-    background: $surface;
+#user-dialog {
     border: solid #4963b1;
     padding-left: 1;
     padding-right: 1;
-    padding-bottom: 1;
+    padding-bottom: 0;
     width: 100%;
     height: 100%;
 }
 
 /* 标签页容器 */
-#llm-tabs {
+#user-tabs {
     height: 1fr;
     margin: 1 0;
 }
 
+/* 标签页面板 */
+#general-tab, #llm-tab {
+    layout: vertical;
+}
+
+/* 大模型设置标签页内容容器 */
+.llm-tab-content {
+    height: 1fr;
+    width: 100%;
+}
+
+/* 常规设置表单样式 */
+.general-settings-form {
+    padding: 2;
+    width: 100%;
+    height: 1fr;
+}
+
+.form-buttons {
+    height: 3;
+    align: center middle;
+    margin-top: 2;
+}
+
+.form-buttons > Button {
+    margin: 0 1;
+    width: auto;
+    min-height: 3;
+    height: 3;
+}
+
 /* 模型列表容器 */
 .llm-model-list {
-    height: 1fr;
+    height: auto;
+    max-height: 1fr;
     overflow-y: auto;
     scrollbar-size: 1 1;
     border: solid #688efd;
     padding: 1;
-    margin-bottom: 1;
+    margin: 1 0;
 }
 
 /* 模型项样式 */
@@ -529,8 +596,14 @@ LLMConfigDialog {
     color: #ffffff;
 }
 
-/* 选中的模型 */
-.llm-model-selected {
+/* 已保存的模型（当前配置中保存的） */
+.llm-model-saved {
+    color: #888888;
+    text-style: italic;
+}
+
+/* 已激活的模型（用空格确认，等待保存） */
+.llm-model-activated {
     color: #4caf50;
     text-style: bold;
 }
@@ -544,7 +617,9 @@ LLMConfigDialog {
 .llm-model-detail {
     border: solid #888888;
     padding: 1;
+    margin: 1 0;
     background: rgba(73, 99, 177, 0.1);
+    height: auto;
 }
 
 /* 详情行 */
@@ -567,12 +642,30 @@ LLMConfigDialog {
     width: 1fr;
 }
 
-/* 帮助文本 */
+/* 常规设置按钮区域 */
+#general-buttons {
+    height: auto;
+    min-height: 3;
+    align: center middle;
+    padding: 0;
+    dock: bottom;
+}
+
+#general-buttons > Button {
+    margin: 0 1;
+    width: auto;
+    min-height: 3;
+    height: 3;
+}
+
+/* 大模型设置帮助文本 */
 #llm-dialog-help {
     text-align: center;
     color: #888888;
-    text-style: italic;
-    padding-top: 1;
+    padding: 0 1;
+    height: auto;
+    min-height: 1;
+    dock: bottom;
 }
 
 /* 加载状态 */

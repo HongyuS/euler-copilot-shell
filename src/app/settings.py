@@ -11,9 +11,7 @@ from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
-from app.dialogs import ExitDialog, LLMConfigDialog
-from backend.hermes import HermesChatClient
-from backend.openai import OpenAIClient
+from app.dialogs import ExitDialog, UserConfigDialog
 from config import Backend, ConfigManager
 from i18n.manager import _
 from log import get_logger
@@ -23,7 +21,7 @@ if TYPE_CHECKING:
     from textual.app import ComposeResult
     from textual.events import Key
 
-    from backend.base import LLMClientBase
+    from backend import LLMClientBase
 
 
 class SettingsScreen(ModalScreen):
@@ -40,10 +38,6 @@ class SettingsScreen(ModalScreen):
         self.selected_model = self.config_manager.get_model()
         # 添加保存任务的集合
         self.background_tasks: set[asyncio.Task] = set()
-
-        # MCP 工具授权相关状态
-        self.auto_execute_status = False  # 默认为手动确认
-        self.mcp_status_loaded = False  # 是否已成功加载状态
 
         # 验证相关状态
         self.is_validated = False
@@ -79,17 +73,98 @@ class SettingsScreen(ModalScreen):
 
     def on_mount(self) -> None:
         """组件挂载时加载可用模型"""
-        if self.backend == Backend.EULERINTELLI:
-            task = asyncio.create_task(self.load_mcp_status())
-            # 保存任务引用
-            self.background_tasks.add(task)
-            task.add_done_callback(self.background_tasks.discard)
-
         # 启动配置验证
         self._schedule_validation()
 
         # 确保操作按钮始终可见
         self._ensure_buttons_visible()
+
+    @on(Input.Changed, "#base-url, #api-key, #model-input")
+    def on_config_changed(self) -> None:
+        """当 Base URL、API Key 或模型改变时验证配置"""
+        if self.backend == Backend.OPENAI:
+            # 获取当前模型输入值
+            try:
+                model_input = self.query_one("#model-input", Input)
+                self.selected_model = model_input.value
+            except NoMatches:
+                # 如果模型输入框不存在，跳过
+                pass
+
+        # 重新验证配置
+        self._schedule_validation()
+
+    @on(Button.Pressed, "#backend-btn")
+    def toggle_backend(self) -> None:
+        """切换后端"""
+        # 切换后端类型
+        self.backend = (
+            Backend.EULERINTELLI if self.backend == Backend.OPENAI else Backend.OPENAI
+        )
+
+        # 更新后端按钮文本
+        backend_btn = self.query_one("#backend-btn", Button)
+        backend_btn.label = self.backend.get_display_name()
+
+        # 更新配置输入框的值
+        self._load_config_inputs()
+
+        # 替换后端特定的 UI 组件
+        self._replace_backend_widgets()
+
+        # 确保按钮可见
+        self._ensure_buttons_visible()
+
+        # 切换后端后重新验证配置
+        self._schedule_validation()
+
+    @on(Button.Pressed, "#user-config-btn")
+    def open_user_config(self) -> None:
+        """打开用户配置对话框"""
+        dialog = UserConfigDialog(self.config_manager, self.llm_client)
+        self.app.push_screen(dialog)
+
+    @on(Button.Pressed, "#save-btn")
+    def save_settings(self) -> None:
+        """保存设置"""
+        # 取消所有后台任务
+        self._cancel_background_tasks()
+
+        # 检查验证状态
+        if not self.is_validated:
+            return
+
+        # 获取旧配置
+        old_backend, old_base, old_key = self._get_old_config()
+
+        # 保存新配置
+        base_url, api_key = self._save_new_config()
+
+        # 判断是否需要刷新客户端
+        need_refresh = self._should_refresh_client(old_backend, old_base, old_key, base_url, api_key)
+
+        # 刷新客户端
+        if need_refresh:
+            self._refresh_app_client()
+
+        self.app.pop_screen()
+
+    @on(Button.Pressed, "#cancel-btn")
+    def cancel_settings(self) -> None:
+        """取消设置"""
+        self._cancel_background_tasks()
+        self.app.pop_screen()
+
+    def on_key(self, event: Key) -> None:
+        """处理键盘事件"""
+        if event.key == "escape":
+            self._cancel_background_tasks()
+            # ESC 键退出设置页面，等效于取消
+            self.app.pop_screen()
+        if event.key == "ctrl+q":
+            self.app.push_screen(ExitDialog())
+            event.prevent_default()
+            event.stop()
 
     def _create_common_widgets(self) -> list:
         """创建通用的 UI 组件（所有后端共享）"""
@@ -127,8 +202,7 @@ class SettingsScreen(ModalScreen):
                     id="api-key",
                     placeholder=_("API 访问密钥，可选"),
                 ),
-                classes="settings-option",
-            ),
+                classes="settings-option"),
         ]
 
     def _create_backend_widgets(self) -> list:
@@ -151,188 +225,96 @@ class SettingsScreen(ModalScreen):
         # EULERINTELLI 后端
         return [
             Horizontal(
-                Label(_("MCP 工具授权:"), classes="settings-label"),
+                Label(_("用户设置:"), classes="settings-label"),
                 Button(
-                    _("自动执行") if self.auto_execute_status else _("手动确认"),
-                    id="mcp-btn",
-                    classes="settings-button",
-                    disabled=not self.mcp_status_loaded,
-                ),
-                id="mcp-section",
-                classes="settings-option",
-            ),
-            Horizontal(
-                Label(_("LLM 配置:"), classes="settings-label"),
-                Button(
-                    _("配置模型"),
-                    id="llm-config-btn",
+                    _("更改用户设置"),
+                    id="user-config-btn",
                     classes="settings-button",
                 ),
-                id="llm-config-section",
+                id="user-config-section",
                 classes="settings-option",
             ),
         ]
 
-    async def load_mcp_status(self) -> None:
-        """异步加载 MCP 工具授权状态"""
-        try:
-            # 只有 EULERINTELLI 后端才支持 MCP 状态
-            if self.backend != Backend.EULERINTELLI:
-                return
-
-            # 从 Hermes 客户端获取自动执行状态
-            if hasattr(self.llm_client, "get_auto_execute_status"):
-                self.auto_execute_status = await self.llm_client.get_auto_execute_status()  # type: ignore[attr-defined]
-                self.mcp_status_loaded = True
-            else:
-                self.auto_execute_status = False
-                self.mcp_status_loaded = False
-
-            # 更新 MCP 按钮文本和状态
-            mcp_btn = self.query_one("#mcp-btn", Button)
-            mcp_btn.label = _("自动执行") if self.auto_execute_status else _("手动确认")
-            mcp_btn.disabled = not self.mcp_status_loaded
-
-        except (OSError, ValueError, RuntimeError):
-            self.auto_execute_status = False
-            self.mcp_status_loaded = False
-            mcp_btn = self.query_one("#mcp-btn", Button)
-            mcp_btn.label = _("手动确认")
-            mcp_btn.disabled = True
-
-    @on(Input.Changed, "#base-url, #api-key, #model-input")
-    def on_config_changed(self) -> None:
-        """当 Base URL、API Key 或模型改变时更新客户端并验证配置"""
-        if self.backend == Backend.OPENAI:
-            # 获取当前模型输入值
-            try:
-                model_input = self.query_one("#model-input", Input)
-                self.selected_model = model_input.value
-            except NoMatches:
-                # 如果模型输入框不存在，跳过
-                pass
-
-            self._update_llm_client()
-        else:  # EULERINTELLI
-            self._update_llm_client()
-            # 重新加载 MCP 状态
-            task = asyncio.create_task(self.load_mcp_status())
-            self.background_tasks.add(task)
-            task.add_done_callback(self.background_tasks.discard)
-
-        # 重新验证配置
-        self._schedule_validation()
-
-    @on(Button.Pressed, "#backend-btn")
-    def toggle_backend(self) -> None:
-        """切换后端"""
-        # 切换后端类型
-        self.backend = (
-            Backend.EULERINTELLI if self.backend == Backend.OPENAI else Backend.OPENAI
-        )
-
-        # 更新后端按钮文本
-        backend_btn = self.query_one("#backend-btn", Button)
-        backend_btn.label = self.backend.get_display_name()
-
-        # 更新 URL 和 API Key
-        self._load_config_inputs()
-
-        # 更新 LLM 客户端
-        self._update_llm_client()
-
-        # 替换后端特定的 UI 组件
-        self._replace_backend_widgets()
-
-        # 确保按钮可见
-        self._ensure_buttons_visible()
-
-        # 切换后端后重新验证配置
-        self._schedule_validation()
-
-    @on(Button.Pressed, "#mcp-btn")
-    def toggle_mcp_authorization(self) -> None:
-        """切换 MCP 工具授权模式"""
-        if not self.mcp_status_loaded:
-            return
-
-        # 创建切换任务
-        task = asyncio.create_task(self._toggle_mcp_authorization_async())
-        self.background_tasks.add(task)
-        task.add_done_callback(self.background_tasks.discard)
-
-    @on(Button.Pressed, "#llm-config-btn")
-    def open_llm_config(self) -> None:
-        """打开 LLM 配置对话框"""
-        dialog = LLMConfigDialog(self.config_manager, self.llm_client)
-        self.app.push_screen(dialog)
-
-    @on(Button.Pressed, "#save-btn")
-    def save_settings(self) -> None:
-        """保存设置"""
-        # 取消所有后台任务
+    def _cancel_background_tasks(self) -> None:
+        """取消所有后台任务"""
         for task in self.background_tasks:
             if not task.done():
                 task.cancel()
         self.background_tasks.clear()
 
-        # 检查验证状态
-        if not self.is_validated:
-            return
+    def _get_old_config(self) -> tuple[Backend, str, str]:
+        """获取旧配置"""
+        old_backend = self.config_manager.get_backend()
 
+        if old_backend == Backend.OPENAI:
+            old_base = self.config_manager.get_base_url()
+            old_key = self.config_manager.get_api_key()
+        else:
+            old_base = self.config_manager.get_eulerintelli_url()
+            old_key = self.config_manager.get_eulerintelli_key()
+
+        return old_backend, old_base, old_key
+
+    def _save_new_config(self) -> tuple[str, str]:
+        """保存新配置并返回 base_url 和 api_key"""
         self.config_manager.set_backend(self.backend)
 
         base_url = self.query_one("#base-url", Input).value
         api_key = self.query_one("#api-key", Input).value
 
         if self.backend == Backend.OPENAI:
-            # 获取模型输入值
-            try:
-                model_input = self.query_one("#model-input", Input)
-                self.selected_model = model_input.value.strip()
-            except NoMatches:
-                # 如果模型输入框不存在，保持当前选择的模型
-                pass
-
-            self.config_manager.set_base_url(base_url)
-            self.config_manager.set_api_key(api_key)
-            self.config_manager.set_model(self.selected_model)
+            self._save_openai_config(base_url, api_key)
         else:  # eulerintelli
             self.config_manager.set_eulerintelli_url(base_url)
             self.config_manager.set_eulerintelli_key(api_key)
 
-        # 通知主应用刷新客户端
+        return base_url, api_key
+
+    def _save_openai_config(self, base_url: str, api_key: str) -> None:
+        """保存 OpenAI 配置"""
+        # 获取模型输入值
+        try:
+            model_input = self.query_one("#model-input", Input)
+            self.selected_model = model_input.value.strip()
+        except NoMatches:
+            # 如果模型输入框不存在，保持当前选择的模型
+            pass
+
+        self.config_manager.set_base_url(base_url)
+        self.config_manager.set_api_key(api_key)
+        self.config_manager.set_model(self.selected_model)
+
+    def _should_refresh_client(
+        self,
+        old_backend: Backend,
+        old_base: str,
+        old_key: str,
+        new_base: str,
+        new_key: str,
+    ) -> bool:
+        """判断是否需要刷新客户端"""
+        # 后端类型变化
+        if old_backend != self.backend:
+            return True
+
+        # 同一后端，URL 或 Key 变化
+        if old_base != new_base or old_key != new_key:
+            return True
+
+        # OpenAI 后端，检查模型是否变化
+        if self.backend == Backend.OPENAI:
+            old_model = self.config_manager.get_model()
+            if old_model != self.selected_model:
+                return True
+
+        return False
+
+    def _refresh_app_client(self) -> None:
+        """刷新应用客户端"""
         refresh_method = getattr(self.app, "refresh_llm_client", None)
         if refresh_method:
             refresh_method()
-
-        self.app.pop_screen()
-
-    @on(Button.Pressed, "#cancel-btn")
-    def cancel_settings(self) -> None:
-        """取消设置"""
-        # 取消所有后台任务
-        for task in self.background_tasks:
-            if not task.done():
-                task.cancel()
-        self.background_tasks.clear()
-
-        self.app.pop_screen()
-
-    def on_key(self, event: Key) -> None:
-        """处理键盘事件"""
-        if event.key == "escape":
-            # 取消所有后台任务
-            for task in self.background_tasks:
-                if not task.done():
-                    task.cancel()
-            self.background_tasks.clear()
-            # ESC 键退出设置页面，等效于取消
-            self.app.pop_screen()
-        if event.key == "ctrl+q":
-            self.app.push_screen(ExitDialog())
-            event.prevent_default()
-            event.stop()
 
     def _schedule_validation(self) -> None:
         """调度验证任务，带防抖机制"""
@@ -402,7 +384,7 @@ class SettingsScreen(ModalScreen):
         spacer = self.query_one("#spacer")
 
         # 移除所有后端特定的组件
-        for section_id in ["#model-section", "#mcp-section", "#llm-config-section"]:
+        for section_id in ["#model-section", "#user-config-section"]:
             sections = self.query(section_id)
             for section in sections:
                 section.remove()
@@ -413,12 +395,6 @@ class SettingsScreen(ModalScreen):
                 container.mount(widget, before=spacer)
             else:
                 container.mount(widget)
-
-        # 如果是 EULERINTELLI 后端，需要重新加载 MCP 状态
-        if self.backend == Backend.EULERINTELLI:
-            task = asyncio.create_task(self.load_mcp_status())
-            self.background_tasks.add(task)
-            task.add_done_callback(self.background_tasks.discard)
 
     async def _validate_configuration(self) -> None:
         """验证当前配置"""
@@ -479,72 +455,3 @@ class SettingsScreen(ModalScreen):
             save_btn.disabled = False
         else:
             save_btn.disabled = True
-
-    def _update_llm_client(self) -> None:
-        """根据当前UI中的配置更新LLM客户端"""
-        base_url_input = self.query_one("#base-url", Input)
-        api_key_input = self.query_one("#api-key", Input)
-
-        # 保存当前智能体状态（如果是Hermes客户端）
-        current_agent_id = ""
-        if isinstance(self.llm_client, HermesChatClient):
-            current_agent_id = getattr(self.llm_client, "current_agent_id", "")
-
-        if self.backend == Backend.OPENAI:
-            # 获取模型输入值，如果输入框不存在则使用当前选择的模型
-            try:
-                model_input = self.query_one("#model-input", Input)
-                model = model_input.value.strip()
-            except NoMatches:
-                model = self.selected_model
-
-            self.llm_client = OpenAIClient(
-                base_url=base_url_input.value,
-                model=model,
-                api_key=api_key_input.value,
-            )
-        else:  # EULERINTELLI
-            self.llm_client = HermesChatClient(
-                base_url=base_url_input.value,
-                auth_token=api_key_input.value,
-            )
-            # 恢复智能体状态
-            if current_agent_id:
-                self.llm_client.set_current_agent(current_agent_id)
-
-    async def _toggle_mcp_authorization_async(self) -> None:
-        """异步切换 MCP 工具授权模式"""
-        try:
-            # 检查客户端是否支持 MCP 操作
-            if (
-                not hasattr(self.llm_client, "enable_auto_execute")
-                or not hasattr(self.llm_client, "disable_auto_execute")
-            ):
-                return
-
-            # 先禁用按钮防止重复点击
-            mcp_btn = self.query_one("#mcp-btn", Button)
-            mcp_btn.disabled = True
-            mcp_btn.label = _("切换中...")
-
-            # 根据当前状态调用相应的方法
-            if self.auto_execute_status:
-                # 当前是自动执行，切换为手动确认
-                await self.llm_client.disable_auto_execute()  # type: ignore[attr-defined]
-            else:
-                # 当前是手动确认，切换为自动执行
-                await self.llm_client.enable_auto_execute()  # type: ignore[attr-defined]
-
-            # 重新获取状态以确保同步
-            if hasattr(self.llm_client, "get_auto_execute_status"):
-                self.auto_execute_status = await self.llm_client.get_auto_execute_status()  # type: ignore[attr-defined]
-
-            # 更新按钮状态
-            mcp_btn.label = _("自动执行") if self.auto_execute_status else _("手动确认")
-            mcp_btn.disabled = False
-
-        except (OSError, ValueError, RuntimeError):
-            # 发生错误时恢复按钮状态
-            mcp_btn = self.query_one("#mcp-btn", Button)
-            mcp_btn.label = _("自动执行") if self.auto_execute_status else _("手动确认")
-            mcp_btn.disabled = False

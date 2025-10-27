@@ -10,7 +10,7 @@ from textual.app import App, ComposeResult
 from textual.containers import Container
 
 from app.dialogs import AgentSelectionDialog
-from backend.factory import BackendFactory
+from backend import BackendFactory
 from config.manager import ConfigManager
 from config.model import Backend
 from i18n.manager import _

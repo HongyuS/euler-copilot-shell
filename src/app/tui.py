@@ -19,8 +19,7 @@ from app.mcp_widgets import MCPConfirmResult, MCPConfirmWidget, MCPParameterResu
 from app.settings import SettingsScreen
 from app.tui_header import OIHeader
 from app.tui_mcp_handler import TUIMCPEventHandler
-from backend.factory import BackendFactory
-from backend.hermes import HermesChatClient
+from backend import BackendFactory, HermesChatClient, OpenAIClient
 from backend.hermes.mcp_helpers import (
     MCPTags,
     extract_mcp_tag,
@@ -33,14 +32,14 @@ from config.model import Backend
 from i18n.manager import _
 from log.manager import get_logger, log_exception
 from tool.command_processor import process_command
-from tool.validators import APIValidator, validate_oi_connection
+from tool.validators import APIValidator
 
 if TYPE_CHECKING:
     from textual.events import Key as KeyEvent
     from textual.events import Mount
     from textual.visual import VisualType
 
-    from backend.base import LLMClientBase
+    from backend import LLMClientBase
 
 
 class ContentChunkParams(NamedTuple):
@@ -422,23 +421,34 @@ class IntelligentTerminal(App):
         return self._llm_client
 
     def refresh_llm_client(self) -> None:
-        """刷新 LLM 客户端实例，用于配置更改后重新创建客户端"""
-        # 保存当前智能体状态
+        """重新创建 LLM 客户端实例，用于后端/URL/API Key/模型 变更后刷新连接"""
+        # 保存当前智能体状态以便恢复
         current_agent_id = self.current_agent[0] if self.current_agent else ""
 
+        # 保存 OpenAI 客户端的对话历史
+        conversation_history = None
+        if isinstance(self._llm_client, OpenAIClient):
+            conversation_history = self._llm_client.conversation_history
+
         self._llm_client = BackendFactory.create_client(self.config_manager)
+
+        # 恢复 OpenAI 客户端的对话历史
+        if conversation_history is not None and isinstance(self._llm_client, OpenAIClient):
+            self._llm_client.conversation_history = conversation_history
 
         # 恢复智能体状态到新的客户端
         if current_agent_id and isinstance(self._llm_client, HermesChatClient):
             self._llm_client.set_current_agent(current_agent_id)
 
-        # 为 Hermes 客户端设置 MCP 事件处理器
+        # 为 Hermes 客户端设置 MCP 事件处理器并加载用户信息
         if isinstance(self._llm_client, HermesChatClient):
             mcp_handler = TUIMCPEventHandler(self, self._llm_client)
             self._llm_client.set_mcp_handler(mcp_handler)
 
-        # 后端切换时重新初始化智能体状态
-        self._reinitialize_agent_state()
+            # 创建异步任务加载用户信息并同步 personalToken
+            task = asyncio.create_task(self._ensure_hermes_user_info())
+            self.background_tasks.add(task)
+            task.add_done_callback(self.background_tasks.discard)
 
     def exit(self, *args, **kwargs) -> None:  # noqa: ANN002, ANN003
         """退出应用前取消所有后台任务"""
@@ -1015,6 +1025,38 @@ class IntelligentTerminal(App):
         # 等待一个小的延迟，确保UI有时间更新
         await asyncio.sleep(0.01)
 
+    async def _ensure_hermes_user_info(self) -> None:
+        """确保 Hermes 用户信息已加载并同步 personalToken 到配置"""
+        if not isinstance(self._llm_client, HermesChatClient):
+            return
+
+        try:
+            # 加载用户信息
+            success = await self._llm_client.ensure_user_info_loaded()
+            if not success:
+                self.logger.warning("加载用户信息失败")
+                return
+
+            # 获取 personalToken
+            personal_token = self._llm_client.get_personal_token()
+            if not personal_token:
+                self.logger.info("服务器未返回 personalToken，跳过同步")
+                return
+
+            # 获取当前配置中的 personalToken
+            current_token = self.config_manager.get_eulerintelli_key()
+
+            # 如果 personalToken 不一致，更新配置
+            if personal_token != current_token:
+                self.logger.info("检测到 personalToken 变更，正在同步到配置...")
+                self.config_manager.set_eulerintelli_key(personal_token)
+                self.logger.info("PersonalToken 已同步到配置文件")
+            else:
+                self.logger.info("PersonalToken 与配置一致，无需同步")
+
+        except (OSError, ValueError, RuntimeError) as e:
+            log_exception(self.logger, "加载用户信息或同步 personalToken 时发生错误", e)
+
     async def _cleanup_llm_client(self) -> None:
         """异步清理 LLM 客户端"""
         if self._llm_client is not None:
@@ -1041,7 +1083,7 @@ class IntelligentTerminal(App):
             llm_client = self.get_llm_client()
 
             # 构建智能体列表 - 默认第一项为"智能问答"（无智能体）
-            agent_list = [("", "智能问答")]
+            agent_list = [("", _("智能问答"))]
 
             # 尝试获取可用智能体
             if hasattr(llm_client, "get_available_agents"):
@@ -1067,7 +1109,7 @@ class IntelligentTerminal(App):
         except (OSError, ValueError, RuntimeError) as e:
             log_exception(self.logger, "显示智能体选择对话框失败", e)
             # 即使出错也显示默认选项
-            agent_list = [("", "智能问答")]
+            agent_list = [("", _("智能问答"))]
             try:
                 llm_client = self.get_llm_client()
                 await self._display_agent_dialog(agent_list, llm_client)
@@ -1261,7 +1303,7 @@ class IntelligentTerminal(App):
             # 这里先返回 ID 和 ID 作为临时方案，后续在智能体列表加载后更新名称
             return (default_app, default_app)
         # 如果没有配置默认智能体，使用智能问答
-        return ("", "智能问答")
+        return ("", _("智能问答"))
 
     def _reinitialize_agent_state(self) -> None:
         """重新初始化智能体状态，用于后端切换时"""
@@ -1301,10 +1343,9 @@ class IntelligentTerminal(App):
     async def _validate_backend_configuration(self, backend: Backend) -> bool:
         """验证后端配置"""
         try:
-            validator = APIValidator()
-
             if backend == Backend.OPENAI:
                 # 验证 OpenAI 配置
+                validator = APIValidator()
                 base_url = self.config_manager.get_base_url()
                 api_key = self.config_manager.get_api_key()
                 model = self.config_manager.get_model()
@@ -1317,11 +1358,11 @@ class IntelligentTerminal(App):
                 return valid
 
             if backend == Backend.EULERINTELLI:
-                # 验证 openEuler Intelligence 配置
-                base_url = self.config_manager.get_eulerintelli_url()
-                api_key = self.config_manager.get_eulerintelli_key()
-                valid, _ = await validate_oi_connection(base_url, api_key)
-                return valid
+                # 验证 Hermes 配置
+                llm_client = self.get_llm_client()
+                if isinstance(llm_client, HermesChatClient):
+                    return await llm_client.ensure_user_info_loaded()
+                return False
 
         except Exception:
             self.logger.exception("验证后端配置时发生错误")
@@ -1405,7 +1446,7 @@ class IntelligentTerminal(App):
             llm_client = self.get_llm_client()
             if hasattr(llm_client, "get_available_agents"):
                 available_agents = await llm_client.get_available_agents()  # type: ignore[attr-defined]
-                app_id, _ = self.current_agent
+                app_id, _name = self.current_agent
 
                 # 查找匹配的智能体
                 agent_found = False
@@ -1423,7 +1464,7 @@ class IntelligentTerminal(App):
                 if not agent_found and app_id:
                     self.logger.warning("配置的默认智能体 '%s' 不存在，回退到智能问答并清理配置", app_id)
                     # 回退到智能问答
-                    self.current_agent = ("", "智能问答")
+                    self.current_agent = ("", _("智能问答"))
                     # 清理配置中的无效ID
                     self.config_manager.set_default_app("")
                     # 确保客户端也切换到智能问答

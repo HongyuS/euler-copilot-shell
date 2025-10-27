@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Any, Self
 from urllib.parse import urljoin
 
 import httpx
@@ -58,6 +58,9 @@ class HermesChatClient(LLMClientBase):
         # MCP 事件处理器（可选）
         self._mcp_handler: MCPEventHandler | None = None
 
+        # 用户信息缓存（在初始化时加载）
+        self._user_info: dict[str, Any] | None = None
+
         self.logger.info("Hermes 客户端初始化成功 - URL: %s", base_url)
 
     @property
@@ -109,6 +112,94 @@ class HermesChatClient(LLMClientBase):
         """
         self.current_agent_id = agent_id
         self.logger.info("设置当前智能体ID: %s", agent_id or "无智能体")
+
+    async def ensure_user_info_loaded(self) -> bool:
+        """
+        确保用户信息已加载
+
+        在 Hermes 后端初始化时调用，加载并缓存用户信息。
+        后续可以直接通过 get_user_xxx 方法从内存获取，无需重复请求。
+
+        Returns:
+            bool: 是否成功加载用户信息
+
+        """
+        if self._user_info is not None:
+            return True
+
+        self.logger.info("开始加载用户信息...")
+        self._user_info = await self.user_manager.get_user_info()
+
+        if self._user_info is not None:
+            self.logger.info(
+                "用户信息加载成功 - ID: %s, 用户名: %s",
+                self._user_info.get("userId"),
+                self._user_info.get("userName"),
+            )
+            return True
+
+        self.logger.warning("用户信息加载失败")
+        return False
+
+    def get_personal_token(self) -> str:
+        """
+        获取个人令牌（从内存缓存）
+
+        Returns:
+            str: 个人令牌，如果未加载则返回空字符串
+
+        """
+        if self._user_info is None:
+            return ""
+        return self._user_info.get("personalToken", "")
+
+    def get_user_id(self) -> str | None:
+        """获取用户ID（从内存缓存）"""
+        if self._user_info is None:
+            return None
+        return self._user_info.get("userId")
+
+    def get_user_name(self) -> str:
+        """获取用户名（从内存缓存）"""
+        if self._user_info is None:
+            return ""
+        return self._user_info.get("userName", "")
+
+    def get_auto_execute_status(self) -> bool:
+        """获取自动执行状态（从内存缓存）"""
+        if self._user_info is None:
+            return False
+        return self._user_info.get("autoExecute", False)
+
+    def is_admin(self) -> bool:
+        """获取管理员状态（从内存缓存）"""
+        if self._user_info is None:
+            return False
+        return self._user_info.get("isAdmin", False)
+
+    async def update_user_info(self, *, auto_execute: bool) -> bool:
+        """
+        更新用户信息
+
+        更新成功后会自动更新内存中的缓存。
+
+        Args:
+            auto_execute: 是否启用自动执行
+
+        Returns:
+            bool: 更新是否成功
+
+        """
+        success = await self.user_manager.update_user_info(
+            auto_execute=auto_execute,
+        )
+
+        if success and self._user_info is not None:
+            # 更新内存缓存
+            self._user_info["autoExecute"] = auto_execute
+            self.logger.info("已更新内存中的用户信息缓存")
+
+        return success
 
     def reset_conversation(self) -> None:
         """重置会话，下次聊天时会创建新的会话"""
@@ -249,46 +340,6 @@ class HermesChatClient(LLMClientBase):
             duration = time.time() - start_time
             log_exception(self.logger, "MCP 响应请求失败", e)
             raise
-
-    async def get_auto_execute_status(self) -> bool:
-        """
-        获取用户自动执行状态
-
-        这是一个便捷方法，从用户信息中提取自动执行状态。
-        默认情况下返回 False。
-
-        Returns:
-            bool: 自动执行状态，默认为 False
-
-        """
-        user_info = await self.user_manager.get_user_info()
-        if user_info is None:
-            self.logger.warning("无法获取用户信息，自动执行状态默认为 False")
-            return False
-
-        auto_execute = user_info.get("auto_execute", False)
-        self.logger.debug("当前自动执行状态: %s", auto_execute)
-        return auto_execute
-
-    async def enable_auto_execute(self) -> None:
-        """
-        启用自动执行
-
-        Returns:
-            bool: 更新是否成功
-
-        """
-        await self.user_manager.update_auto_execute(auto_execute=True)
-
-    async def disable_auto_execute(self) -> None:
-        """
-        禁用自动执行
-
-        Returns:
-            bool: 更新是否成功
-
-        """
-        await self.user_manager.update_auto_execute(auto_execute=False)
 
     async def interrupt(self) -> None:
         """
