@@ -361,17 +361,16 @@ async def process_mcp_config(api_client: ApiClient, config_path: str) -> str:
 async def query_mcp_server(api_client: ApiClient, mcp_id: str) -> dict[str, Any] | None:
     """查询MCP服务状态"""
     logger.debug("查询MCP服务状态: %s", mcp_id)
-    response = await api_client.request("GET", "/api/mcp")
+    response = await api_client.request("GET", "/api/mcp/"+mcp_id)
 
     if response.get("code") != HTTP_OK:
         msg = f"查询MCP服务失败: {response.get('message', '未知错误')}"
         raise RuntimeError(msg)
 
-    services = response.get("result", {}).get("services", [])
-    for service in services:
-        if service.get("mcpserviceId") == mcp_id:
-            logger.debug("MCP服务 %s 状态: %s", mcp_id, service.get("status"))
-            return service
+    service = response.get("result", {})
+    if service.get("serviceId") == mcp_id:
+        logger.debug("MCP服务 %s 状态: %s", mcp_id, service.get("status"))
+        return service
 
     return None
 
@@ -483,9 +482,7 @@ async def create_agent(api_client: ApiClient, config_path: str) -> None:
     await install_mcp_server(api_client, service_id)
     mcp_server = await wait_for_mcp_service(api_client, service_id)
 
-    # 激活服务（如果未激活）
-    if not mcp_server.get("isActive"):
-        await activate_mcp_server(api_client, service_id)
+    await activate_mcp_server(api_client, service_id)
 
     # 创建应用数据
     app_name = mcp_server.get("name", f"agent_{service_id[:6]}")[:20]
