@@ -98,8 +98,8 @@ class HermesChatRequest:
     def __init__(
         self,
         app: HermesApp,
-        conversation_id: str,
         question: str,
+        conversation_id: str = "",
         features: HermesFeatures | None = None,
         language: str = "zh_cn",
     ) -> None:
@@ -112,10 +112,15 @@ class HermesChatRequest:
 
     def to_dict(self) -> dict[str, Any]:
         """转换为请求字典格式"""
-        return {
+        request_dict = {
             "app": self.app.to_dict(),
-            "conversationId": self.conversation_id,
             "features": self.features.to_dict(),
             "language": self.language,
             "question": self.question,
         }
+
+        # 只有当 conversation_id 不为空时才添加到请求中
+        if self.conversation_id:
+            request_dict["conversationId"] = self.conversation_id
+
+        return request_dict

@@ -233,9 +233,12 @@ class HermesChatClient(LLMClientBase):
         start_time = time.time()
 
         try:
-            # 确保有会话 ID
-            conversation_id = await self.conversation_manager.ensure_conversation()
-            self.logger.info("使用会话ID: %s", conversation_id)
+            # 获取当前会话ID（可能为空）
+            conversation_id = self.conversation_manager.get_conversation_id()
+            if conversation_id:
+                self.logger.info("使用现有会话ID: %s", conversation_id)
+            else:
+                self.logger.info("没有会话ID，后端将自动创建新会话")
 
             # 创建聊天请求
             app = HermesApp(self.current_agent_id)
@@ -246,8 +249,8 @@ class HermesChatClient(LLMClientBase):
 
             request = HermesChatRequest(
                 app=app,
-                conversation_id=conversation_id,
                 question=prompt,
+                conversation_id=conversation_id,
                 features=HermesFeatures(),
                 language=language,
             )
@@ -429,8 +432,9 @@ class HermesChatClient(LLMClientBase):
                 event_count += 1
                 self.logger.info("解析到事件 #%d - 类型: %s", event_count, event.event_type)
 
-                # 处理任务ID
+                # 处理任务ID和会话ID
                 self._handle_task_id(event)
+                self._handle_conversation_id(event)
 
                 # 处理特殊事件类型
                 should_break, break_message = self.stream_processor.handle_special_events(event)
@@ -480,6 +484,13 @@ class HermesChatClient(LLMClientBase):
         if task_id and not self.current_task_id:
             self.current_task_id = task_id
             self.logger.debug("设置当前任务ID: %s", task_id)
+
+    def _handle_conversation_id(self, event: HermesStreamEvent) -> None:
+        """处理事件中的会话ID"""
+        conversation_id = event.get_conversation_id()
+        if conversation_id:
+            # 通过 conversation_manager 存储会话ID
+            self.conversation_manager.set_conversation_id(conversation_id)
 
     def _cleanup_task_id(self, context: str) -> None:
         """清理任务ID"""
