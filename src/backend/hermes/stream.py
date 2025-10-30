@@ -93,16 +93,16 @@ class HermesStreamEvent:
         """判断是否为 MCP 步骤相关事件"""
         return self.event_type in MCPEventTypes.ALL_STEP_EVENTS
 
-    def is_flow_event(self) -> bool:
+    def is_executor_event(self) -> bool:
         """判断是否为流相关事件"""
-        flow_events = {
-            "flow.start",
-            "flow.stop",
-            "flow.failed",
-            "flow.success",
-            "flow.cancel",
+        executor_events = {
+            "executor.start",
+            "executor.stop",
+            "executor.failed",
+            "executor.success",
+            "executor.cancel",
         }
-        return self.event_type in flow_events
+        return self.event_type in executor_events
 
 
 class HermesStreamProcessor:
@@ -151,8 +151,8 @@ class HermesStreamProcessor:
 
     def format_mcp_status(self, event: HermesStreamEvent) -> str | None:
         """格式化 MCP 状态信息为可读文本"""
-        # 忽略 flow 事件
-        if event.is_flow_event():
+        # 忽略 executor 事件
+        if event.is_executor_event():
             return None
 
         # 只处理 step 事件
