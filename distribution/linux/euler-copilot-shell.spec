@@ -4,7 +4,7 @@
 
 Name:           euler-copilot-shell
 Version:        0.10.2
-Release:        2%{?dev_timestamp:.dev%{dev_timestamp}}%{?dist}
+Release:        3%{?dev_timestamp:.dev%{dev_timestamp}}%{?dist}
 Summary:        openEuler Intelligence 智能命令行工具集
 License:        MulanPSL-2.0
 URL:            https://gitee.com/openeuler/euler-copilot-shell
@@ -134,6 +134,9 @@ rm -f /usr/lib/openeuler-intelligence/scripts/5-resource/env.*
 fi
 
 %changelog
+* Wed Oct 29 2025 openEuler <contact@openeuler.org> - 0.10.2-3
+- Fix issue where failing to fetch mcp when creating agent with oi-manager
+
 * Sat Oct 25 2025 openEuler <contact@openeuler.org> - 0.10.2-2
 - Add internationalization support (currently supports English and Simplified Chinese)
 - Fix issue where settings page may reopen multiple times
