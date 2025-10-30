@@ -58,22 +58,6 @@ class HermesMessage:
         return {"role": self.role, "content": self.content}
 
 
-class HermesFeatures:
-    """Hermes 功能特性配置"""
-
-    def __init__(self, max_tokens: int = 8192, context_num: int = 10) -> None:
-        """初始化功能特性配置"""
-        self.max_tokens = max_tokens
-        self.context_num = context_num
-
-    def to_dict(self) -> dict[str, int]:
-        """转换为字典格式"""
-        return {
-            "max_tokens": self.max_tokens,
-            "context_num": self.context_num,
-        }
-
-
 class HermesApp:
     """Hermes 应用配置"""
 
@@ -100,21 +84,18 @@ class HermesChatRequest:
         app: HermesApp,
         question: str,
         conversation_id: str = "",
-        features: HermesFeatures | None = None,
         language: str = "zh_cn",
     ) -> None:
         """初始化 Hermes Chat 请求"""
         self.app = app
         self.conversation_id = conversation_id
         self.question = question
-        self.features = features or HermesFeatures()
         self.language = language
 
     def to_dict(self) -> dict[str, Any]:
         """转换为请求字典格式"""
         request_dict = {
             "app": self.app.to_dict(),
-            "features": self.features.to_dict(),
             "language": self.language,
             "question": self.question,
         }

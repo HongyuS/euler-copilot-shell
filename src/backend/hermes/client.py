@@ -15,7 +15,7 @@ from log.manager import get_logger, log_exception
 
 from .constants import HTTP_OK
 from .exceptions import HermesAPIError
-from .models import HermesApp, HermesChatRequest, HermesFeatures
+from .models import HermesApp, HermesChatRequest
 from .services import (
     HermesAgentManager,
     HermesConversationManager,
@@ -251,7 +251,6 @@ class HermesChatClient(LLMClientBase):
                 app=app,
                 question=prompt,
                 conversation_id=conversation_id,
-                features=HermesFeatures(),
                 language=language,
             )
 

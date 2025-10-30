@@ -2,7 +2,7 @@
 
 from .client import HermesChatClient
 from .exceptions import HermesAPIError
-from .models import HermesAgent, HermesApp, HermesChatRequest, HermesFeatures, HermesMessage
+from .models import HermesAgent, HermesApp, HermesChatRequest, HermesMessage
 from .services.agent import HermesAgentManager
 from .services.conversation import HermesConversationManager
 from .services.http import HermesHttpManager
@@ -17,7 +17,6 @@ __all__ = [
     "HermesChatClient",
     "HermesChatRequest",
     "HermesConversationManager",
-    "HermesFeatures",
     "HermesHttpManager",
     "HermesMessage",
     "HermesModelManager",
