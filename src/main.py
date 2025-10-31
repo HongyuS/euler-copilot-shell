@@ -17,7 +17,7 @@ from log.manager import (
     get_logger,
     setup_logging,
 )
-from tool import backend_init, llm_config, select_agent
+from tool import backend_init, browser_login, llm_config, select_agent
 
 
 def parse_args() -> argparse.Namespace:
@@ -83,6 +83,17 @@ For more information and documentation, please visit:
         "--agent",
         action="store_true",
         help=_("Select default agent"),
+    )
+
+    # 认证管理选项组
+    auth_group = parser.add_argument_group(
+        _("Authentication Management Options"),
+        _("For managing login and authentication"),
+    )
+    auth_group.add_argument(
+        "--login",
+        action="store_true",
+        help=_("Login via browser to obtain API key"),
     )
 
     # 语言设置选项组
@@ -162,7 +173,7 @@ def set_log_level(config_manager: ConfigManager, level: str) -> None:
     sys.stdout.write(_("✓ Logging system initialized\n"))
 
 
-def main() -> None:
+def main() -> None:  # noqa: C901, PLR0911
     """主函数"""
     # 首先初始化配置管理器
     config_manager = ConfigManager()
@@ -212,6 +223,11 @@ def main() -> None:
     # 处理命令行参数设置的日志级别
     if args.log_level:
         set_log_level(config_manager, args.log_level)
+        return
+
+    # 处理认证相关参数
+    if args.login:
+        browser_login()
         return
 
     setup_logging(config_manager)
