@@ -27,59 +27,37 @@ class HermesConversationManager:
         self._conversation_id: str | None = None
 
     def reset_conversation(self) -> None:
-        """重置会话，下次聊天时会创建新的会话"""
+        """重置会话，清除当前会话ID，下次聊天时后端会自动创建新的会话"""
+        if self._conversation_id:
+            self.logger.info("重置会话 - 清除会话ID: %s", self._conversation_id)
         self._conversation_id = None
 
-    async def ensure_conversation(self, llm_id: str = "") -> str:
+    def get_conversation_id(self) -> str:
         """
-        确保有可用的会话 ID，智能重用空对话或创建新会话
-
-        优先使用已存在的空对话，如果没有空对话或获取失败，则创建新对话。
-        这样可以避免产生过多的空对话记录。
-
-        Args:
-            llm_id: 指定的 LLM ID
+        获取当前会话ID
 
         Returns:
-            str: 可用的会话 ID
+            str: 当前会话ID，如果没有会话则返回空字符串
 
         """
-        if self._conversation_id is None:
-            try:
-                # 先尝试获取现有对话列表
-                conversation_list = await self._get_conversation_list()
+        return self._conversation_id or ""
 
-                # 如果有对话，检查最新的对话是否为空
-                if conversation_list:
-                    latest_conversation_id = conversation_list[0]  # 已经按时间排序，第一个是最新的
-                    try:
-                        # 检查最新对话是否为空
-                        if await self._is_conversation_empty(latest_conversation_id):
-                            self.logger.info("重用空对话 - ID: %s", latest_conversation_id)
-                            self._conversation_id = latest_conversation_id
-                            return self._conversation_id
-                    except HermesAPIError:
-                        # 如果检查对话记录失败，继续创建新对话
-                        self.logger.warning("检查对话记录失败，将创建新对话")
-
-                # 如果没有对话或最新对话不为空，创建新对话
-                self._conversation_id = await self._create_conversation(llm_id)
-
-            except HermesAPIError:
-                # 如果获取对话列表失败，直接创建新对话
-                self.logger.warning("获取对话列表失败，将创建新对话")
-                self._conversation_id = await self._create_conversation(llm_id)
-
-        return self._conversation_id
-
-    async def stop_conversation(self, task_id: str = "") -> None:
+    def set_conversation_id(self, conversation_id: str) -> None:
         """
-        停止当前会话
+        设置会话ID
+
+        当从后端 SSE 流中接收到会话ID时调用此方法存储。
 
         Args:
-            task_id: 可选的任务ID，如果提供且非空，则作为查询参数发送
+            conversation_id: 从后端接收到的会话ID
 
         """
+        if conversation_id and self._conversation_id != conversation_id:
+            self.logger.info("更新会话ID: %s -> %s", self._conversation_id or "空", conversation_id)
+            self._conversation_id = conversation_id
+
+    async def stop_conversation(self) -> None:
+        """停止当前会话"""
         if self.http_manager.client is None or self.http_manager.client.is_closed:
             return
 
@@ -87,12 +65,7 @@ class HermesConversationManager:
             stop_url = urljoin(self.http_manager.base_url, "/api/stop")
             headers = self.http_manager.build_headers()
 
-            # 构建请求参数
-            params = {}
-            if task_id:
-                params["taskId"] = task_id
-
-            response = await self.http_manager.client.post(stop_url, headers=headers, params=params)
+            response = await self.http_manager.client.post(stop_url, headers=headers)
 
             if response.status_code != HTTP_OK:
                 error_text = await response.aread()

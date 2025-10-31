@@ -43,6 +43,7 @@ class BackendFactory:
             return HermesChatClient(
                 base_url=config_manager.get_eulerintelli_url(),
                 auth_token=config_manager.get_eulerintelli_key(),
+                config_manager=config_manager,
             )
         msg = f"不支持的后端类型: {backend}"
         raise ValueError(msg)

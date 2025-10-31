@@ -84,12 +84,12 @@ class MCPConfirmWidget(Container):
     @on(Button.Pressed, "#mcp-confirm-yes")
     def confirm_execution(self) -> None:
         """确认执行"""
-        self.post_message(MCPConfirmResult(confirmed=True, task_id=self.event.get_task_id()))
+        self.post_message(MCPConfirmResult(confirmed=True, conversation_id=self.event.get_conversation_id()))
 
     @on(Button.Pressed, "#mcp-confirm-no")
     def cancel_execution(self) -> None:
         """取消执行"""
-        self.post_message(MCPConfirmResult(confirmed=False, task_id=self.event.get_task_id()))
+        self.post_message(MCPConfirmResult(confirmed=False, conversation_id=self.event.get_conversation_id()))
 
     def on_key(self, event) -> None:  # noqa: ANN001
         """处理键盘事件"""
@@ -185,16 +185,6 @@ class MCPParameterWidget(Container):
                     self.param_inputs[param_name] = param_input
                     yield param_input
 
-            # 简化的补充说明输入
-            if params:  # 只有在有其他参数时才显示补充说明
-                description_input = Input(
-                    placeholder=_("补充说明（可选）"),
-                    id="param_description",
-                    classes="param-input-compact",
-                )
-                self.param_inputs["description"] = description_input
-                yield description_input
-
             # 紧凑的按钮行
             with Horizontal(classes="param-buttons"):
                 yield Button(_("✓ 提交"), variant="success", id="mcp-param-submit")
@@ -204,45 +194,36 @@ class MCPParameterWidget(Container):
     def submit_parameters(self) -> None:
         """提交参数"""
         # 收集用户输入的参数
-        content_params = {}
-        description = ""
+        params = {}
 
         for param_name, input_widget in self.param_inputs.items():
             value = input_widget.value.strip()
-            if param_name == "description":
-                description = value
-            elif value:
-                content_params[param_name] = value
+            if value:
+                params[param_name] = value
 
-        # 构建参数结构
-        params = {
-            "content": content_params,
-            "description": description,
-        }
-
-        self.post_message(MCPParameterResult(params=params, task_id=self.event.get_task_id()))
+        self.post_message(MCPParameterResult(params=params, conversation_id=self.event.get_conversation_id()))
 
     @on(Button.Pressed, "#mcp-param-cancel")
     def cancel_parameters(self) -> None:
         """取消参数输入"""
-        self.post_message(MCPParameterResult(params=None, task_id=self.event.get_task_id()))
+        self.post_message(MCPParameterResult(params=None, conversation_id=self.event.get_conversation_id()))
 
 
 class MCPConfirmResult(Message):
     """MCP 确认结果消息"""
 
-    def __init__(self, *, confirmed: bool, task_id: str) -> None:
+    def __init__(self, *, confirmed: bool, conversation_id: str) -> None:
         """初始化确认结果"""
         super().__init__()
         self.confirmed = confirmed
-        self.task_id = task_id
+        self.conversation_id = conversation_id
 
 
 class MCPParameterResult(Message):
     """MCP 参数结果消息"""
 
-    def __init__(self, *, params: dict | None, task_id: str) -> None:
+    def __init__(self, *, params: dict | None, conversation_id: str) -> None:
         """初始化参数结果"""
         super().__init__()
         self.params = params
-        self.task_id = task_id
+        self.conversation_id = conversation_id

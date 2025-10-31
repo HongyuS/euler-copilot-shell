@@ -58,64 +58,92 @@ class HermesMessage:
         return {"role": self.role, "content": self.content}
 
 
-class HermesFeatures:
-    """Hermes 功能特性配置"""
-
-    def __init__(self, max_tokens: int = 8192, context_num: int = 10) -> None:
-        """初始化功能特性配置"""
-        self.max_tokens = max_tokens
-        self.context_num = context_num
-
-    def to_dict(self) -> dict[str, int]:
-        """转换为字典格式"""
-        return {
-            "max_tokens": self.max_tokens,
-            "context_num": self.context_num,
-        }
-
-
 class HermesApp:
     """Hermes 应用配置"""
 
-    def __init__(self, app_id: str, flow_id: str = "") -> None:
-        """初始化应用配置"""
+    def __init__(
+        self,
+        app_id: str,
+        flow_id: str = "",
+        *,
+        params: dict[str, Any] | bool | None = None,
+    ) -> None:
+        """
+        初始化应用配置
+
+        Args:
+            app_id: 应用ID
+            flow_id: 流ID
+            params: MCP 响应参数（bool 表示确认/取消，dict 表示参数补全内容）
+
+        """
         self.app_id = app_id
         self.flow_id = flow_id
+        self.params = params
 
     def to_dict(self) -> dict[str, Any]:
         """转换为字典格式"""
-        return {
+        app_dict: dict[str, Any] = {
             "appId": self.app_id,
-            "auth": {},
             "flowId": self.flow_id,
-            "params": {},
         }
+
+        # 如果有 MCP 响应参数，直接使用 params 的值
+        if self.params is not None:
+            app_dict["params"] = self.params
+        else:
+            # 没有 params 时，添加空的 params 字段（保持向后兼容）
+            app_dict["params"] = {}
+
+        return app_dict
 
 
 class HermesChatRequest:
     """Hermes Chat 请求类"""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         app: HermesApp,
-        conversation_id: str,
         question: str,
-        features: HermesFeatures | None = None,
-        language: str = "zh_cn",
+        conversation_id: str = "",
+        language: str = "zh",
+        llm_id: str = "",
+        kb_ids: list[str] | None = None,
     ) -> None:
-        """初始化 Hermes Chat 请求"""
+        """
+        初始化 Hermes Chat 请求
+
+        Args:
+            app: 应用配置
+            question: 用户问题
+            conversation_id: 会话ID
+            language: 语言
+            llm_id: 大模型ID
+            kb_ids: 知识库ID列表
+
+        """
         self.app = app
         self.conversation_id = conversation_id
         self.question = question
-        self.features = features or HermesFeatures()
         self.language = language
+        self.llm_id = llm_id
+        self.kb_ids = kb_ids or []
 
     def to_dict(self) -> dict[str, Any]:
         """转换为请求字典格式"""
-        return {
-            "app": self.app.to_dict(),
-            "conversationId": self.conversation_id,
-            "features": self.features.to_dict(),
-            "language": self.language,
+        request_dict: dict[str, Any] = {
             "question": self.question,
+            "language": self.language,
+            "llmId": self.llm_id,
         }
+
+        if self.app and self.app.app_id:
+            request_dict["app"] = self.app.to_dict()
+
+        if self.conversation_id:
+            request_dict["conversationId"] = self.conversation_id
+
+        if self.kb_ids:
+            request_dict["kbIds"] = self.kb_ids
+
+        return request_dict
