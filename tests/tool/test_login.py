@@ -14,23 +14,28 @@ class TestLoginFunctions(unittest.TestCase):
     @patch("urllib.request.urlopen")
     def test_get_auth_url_success(self, mock_urlopen: MagicMock) -> None:
         """测试成功获取授权 URL"""
-        # 模拟后端响应
+        # 模拟后端响应（包含 Web 端的 redirect_uri）
         mock_response = Mock()
         mock_response.read.return_value = json.dumps(
             {
                 "code": 200,
                 "message": "success",
-                "result": {"url": "https://auth.example.com/login?client_id=123"},
+                "result": {
+                    "url": "https://auth.example.com/login?client_id=123&redirect_uri=https://web.example.com/callback",
+                },
             },
         ).encode("utf-8")
         mock_response.__enter__ = Mock(return_value=mock_response)
         mock_response.__exit__ = Mock(return_value=False)
         mock_urlopen.return_value = mock_response
 
-        result = get_auth_url("https://api.example.com", "http://localhost:8081/callback")
+        callback_url = "http://localhost:8081/callback"
+        result = get_auth_url("https://api.example.com", callback_url)
 
+        # 验证返回的 URL 包含本地回调地址
         self.assertIsNotNone(result)
-        self.assertEqual(result, "https://auth.example.com/login?client_id=123")
+        self.assertIn("redirect_uri=http%3A%2F%2Flocalhost%3A8081%2Fcallback", result) # type: ignore[ignore]
+        self.assertIn("client_id=123", result) # type: ignore[ignore]
 
     @patch("urllib.request.urlopen")
     def test_get_auth_url_error_response(self, mock_urlopen: MagicMock) -> None:
@@ -62,7 +67,7 @@ class TestCallbackServer(unittest.TestCase):
         mock_socket.bind.return_value = None
 
         server = CallbackServer(start_port=8081)
-        port = server._find_available_port()
+        port = server._find_available_port()  # noqa: SLF001
 
         self.assertEqual(port, 8081)
 
@@ -76,7 +81,7 @@ class TestCallbackServer(unittest.TestCase):
         mock_socket.bind.side_effect = [OSError, OSError, None]
 
         server = CallbackServer(start_port=8081)
-        port = server._find_available_port()
+        port = server._find_available_port()  # noqa: SLF001
 
         self.assertEqual(port, 8083)
 
@@ -92,7 +97,7 @@ class TestCallbackServer(unittest.TestCase):
         server = CallbackServer(start_port=8081, max_attempts=3)
 
         with self.assertRaises(RuntimeError) as context:
-            server._find_available_port()
+            server._find_available_port()  # noqa: SLF001
 
         self.assertIn("无法找到可用端口", str(context.exception))
 
