@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 
     from backend.mcp_handler import MCPEventHandler
     from backend.models import ModelInfo
+    from config.manager import ConfigManager
 
     from .models import HermesAgent
 
@@ -38,20 +39,20 @@ if TYPE_CHECKING:
 class HermesChatClient(LLMClientBase):
     """Hermes Chat API 客户端 - 重构版本"""
 
-    def __init__(self, base_url: str, auth_token: str = "", llm_id: str = "") -> None:
+    def __init__(self, base_url: str, auth_token: str = "", config_manager: ConfigManager | None = None) -> None:
         """
         初始化 Hermes Chat API 客户端
 
         Args:
             base_url: API 基础 URL
             auth_token: 认证令牌
-            llm_id: 大模型 ID（用于 Chat 请求）
+            config_manager: 配置管理器（用于动态获取 llm_id）
 
         """
         self.logger = get_logger(__name__)
 
         self.current_agent_id: str = ""  # 当前选择的智能体 ID
-        self.llm_id: str = llm_id  # 大模型 ID
+        self.config_manager = config_manager  # 配置管理器，用于动态获取 llm_id
 
         # HTTP 管理器 - 立即初始化
         self.http_manager = HermesHttpManager(base_url, auth_token)
@@ -69,7 +70,7 @@ class HermesChatClient(LLMClientBase):
         # 用户信息缓存（在初始化时加载）
         self._user_info: dict[str, Any] | None = None
 
-        self.logger.info("Hermes 客户端初始化成功 - URL: %s, LLM ID: %s", base_url, llm_id or "未指定")
+        self.logger.info("Hermes 客户端初始化成功 - URL: %s", base_url)
 
     @property
     def user_manager(self) -> HermesUserManager:
@@ -214,33 +215,6 @@ class HermesChatClient(LLMClientBase):
         if self._conversation_manager is not None:
             self._conversation_manager.reset_conversation()
 
-    def _validate_llm_id(self) -> None:
-        """
-        验证 llm_id 是否已配置
-
-        Raises:
-            HermesAPIError: 当 llm_id 未配置时
-
-        """
-        if not self.llm_id:
-            main_message = _("未配置 Chat 模型")
-            hint_prefix = _("配置步骤")
-            step1 = _("按 [bold]Ctrl+S[/bold] 打开设置")
-            step2 = _("确认后端为 [bold]openEuler Intelligence[/bold]")
-            step3 = _("点击 [bold]更改用户设置[/bold] 按钮")
-            step4 = _("切换到 [bold]大模型设置[/bold] 标签页")
-            step5 = _("使用 [bold]↑↓[/bold] 键选择模型，[bold]空格[/bold] 激活，[bold]回车[/bold] 保存")
-            error_message = (
-                f"[bold red]{main_message}[/bold red]\n\n"
-                f"[yellow]{hint_prefix}:[/yellow]\n"
-                f"  [cyan]1.[/cyan] {step1}\n"
-                f"  [cyan]2.[/cyan] {step2}\n"
-                f"  [cyan]3.[/cyan] {step3}\n"
-                f"  [cyan]4.[/cyan] {step4}\n"
-                f"  [cyan]5.[/cyan] {step5}"
-            )
-            raise HermesAPIError(400, error_message)
-
     async def get_llm_response(self, prompt: str) -> AsyncGenerator[str, None]:
         """
         生成命令建议
@@ -290,7 +264,7 @@ class HermesChatClient(LLMClientBase):
                 question=prompt,
                 conversation_id=conversation_id,
                 language=language,
-                llm_id=self.llm_id,
+                llm_id=self._get_llm_id(),
             )
 
             # 直接传递异常，不在这里处理
@@ -360,7 +334,7 @@ class HermesChatClient(LLMClientBase):
                 question="",
                 conversation_id=conversation_id,
                 language=language,
-                llm_id=self.llm_id,
+                llm_id=self._get_llm_id(),
             )
 
             self.logger.debug("MCP 响应请求数据: %s", request.to_dict())
@@ -395,6 +369,46 @@ class HermesChatClient(LLMClientBase):
         except Exception as e:
             log_exception(self.logger, "关闭 Hermes 客户端失败", e)
             raise
+
+    def _get_llm_id(self) -> str:
+        """
+        从配置管理器获取当前的 llm_id
+
+        Returns:
+            str: 当前配置的 llm_id，如果未配置则返回空字符串
+
+        """
+        if self.config_manager is None:
+            return ""
+        return self.config_manager.get_llm_chat_model()
+
+    def _validate_llm_id(self) -> None:
+        """
+        验证 llm_id 是否已配置
+
+        Raises:
+            HermesAPIError: 当 llm_id 未配置时
+
+        """
+        llm_id = self._get_llm_id()
+        if not llm_id:
+            main_message = _("未配置 Chat 模型")
+            hint_prefix = _("配置步骤")
+            step1 = _("按 Ctrl+S 打开设置")
+            step2 = _("确认后端为 openEuler Intelligence")
+            step3 = _('点击 "更改用户设置" 按钮')
+            step4 = _('切换到 "大模型设置" 标签页')
+            step5 = _("使用 ↑↓ 键选择模型，空格激活，回车保存")
+            error_message = (
+                f"{main_message}\n\n"
+                f"{hint_prefix}:\n"
+                f"  1. {step1}\n"
+                f"  2. {step2}\n"
+                f"  3. {step3}\n"
+                f"  4. {step4}\n"
+                f"  5. {step5}"
+            )
+            raise HermesAPIError(400, error_message)
 
     async def _chat_stream(
         self,

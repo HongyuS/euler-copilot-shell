@@ -1,6 +1,7 @@
 """测试 HermesChatClient 的 llm_id 验证功能"""
 
 import asyncio
+from unittest.mock import Mock
 
 from backend.hermes.client import HermesChatClient
 from backend.hermes.exceptions import HermesAPIError
@@ -13,9 +14,16 @@ async def test_llm_id_validation():
     print("=" * 60 + "\n")
 
     # 测试 1: 没有 llm_id 应该抛出异常
-    print("测试 1: 创建没有 llm_id 的客户端")
-    client = HermesChatClient(base_url="http://localhost:8000", llm_id="")
-    print(f"  客户端 llm_id: '{client.llm_id}'")
+    print("测试 1: 创建没有 llm_id 的客户端（模拟未配置）")
+    # 创建一个模拟的 ConfigManager，返回空的 llm_id
+    mock_config_empty = Mock()
+    mock_config_empty.get_llm_chat_model.return_value = ""
+    
+    client = HermesChatClient(
+        base_url="http://localhost:8000",
+        config_manager=mock_config_empty,
+    )
+    print(f"  配置的 llm_id: '{client._get_llm_id()}'")
 
     try:
         # 尝试生成响应，应该抛出异常
@@ -28,12 +36,16 @@ async def test_llm_id_validation():
         print(f"\n错误消息:\n{e.message}\n")
 
     # 测试 2: 有 llm_id 的客户端不应该在验证阶段抛出异常
-    print("测试 2: 创建有 llm_id 的客户端")
+    print("测试 2: 创建有 llm_id 的客户端（模拟已配置）")
+    # 创建一个模拟的 ConfigManager，返回有效的 llm_id
+    mock_config_with_llm = Mock()
+    mock_config_with_llm.get_llm_chat_model.return_value = "test-model-id"
+    
     client_with_llm = HermesChatClient(
         base_url="http://localhost:8000",
-        llm_id="test-model-id",
+        config_manager=mock_config_with_llm,
     )
-    print(f"  客户端 llm_id: '{client_with_llm.llm_id}'")
+    print(f"  配置的 llm_id: '{client_with_llm._get_llm_id()}'")
     print("  ✓ llm_id 验证应该通过（实际请求会因为连接问题失败）\n")
 
     print("=" * 60)
