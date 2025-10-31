@@ -132,19 +132,17 @@ class HermesChatRequest:
     def to_dict(self) -> dict[str, Any]:
         """转换为请求字典格式"""
         request_dict: dict[str, Any] = {
-            "app": self.app.to_dict(),
-            "language": self.language,
             "question": self.question,
+            "language": self.language,
+            "llmId": self.llm_id,
         }
+
+        if self.app and self.app.app_id:
+            request_dict["app"] = self.app.to_dict()
 
         if self.conversation_id:
             request_dict["conversationId"] = self.conversation_id
 
-        # 添加 llmId（如果有）
-        if self.llm_id:
-            request_dict["llmId"] = self.llm_id
-
-        # 添加 kbIds（如果有）
         if self.kb_ids:
             request_dict["kbIds"] = self.kb_ids
 
