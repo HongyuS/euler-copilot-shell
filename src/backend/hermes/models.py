@@ -61,47 +61,91 @@ class HermesMessage:
 class HermesApp:
     """Hermes 应用配置"""
 
-    def __init__(self, app_id: str, flow_id: str = "") -> None:
-        """初始化应用配置"""
+    def __init__(
+        self,
+        app_id: str,
+        flow_id: str = "",
+        *,
+        params: dict[str, Any] | bool | None = None,
+    ) -> None:
+        """
+        初始化应用配置
+
+        Args:
+            app_id: 应用ID
+            flow_id: 流ID
+            params: MCP 响应参数（bool 表示确认/取消，dict 表示参数补全内容）
+
+        """
         self.app_id = app_id
         self.flow_id = flow_id
+        self.params = params
 
     def to_dict(self) -> dict[str, Any]:
         """转换为字典格式"""
-        return {
+        app_dict: dict[str, Any] = {
             "appId": self.app_id,
-            "auth": {},
             "flowId": self.flow_id,
-            "params": {},
         }
+
+        # 如果有 MCP 响应参数，直接使用 params 的值
+        if self.params is not None:
+            app_dict["params"] = self.params
+        else:
+            # 没有 params 时，添加空的 params 字段（保持向后兼容）
+            app_dict["params"] = {}
+
+        return app_dict
 
 
 class HermesChatRequest:
     """Hermes Chat 请求类"""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         app: HermesApp,
         question: str,
         conversation_id: str = "",
-        language: str = "zh_cn",
+        language: str = "zh",
+        llm_id: str = "",
+        kb_ids: list[str] | None = None,
     ) -> None:
-        """初始化 Hermes Chat 请求"""
+        """
+        初始化 Hermes Chat 请求
+
+        Args:
+            app: 应用配置
+            question: 用户问题
+            conversation_id: 会话ID
+            language: 语言
+            llm_id: 大模型ID
+            kb_ids: 知识库ID列表
+
+        """
         self.app = app
         self.conversation_id = conversation_id
         self.question = question
         self.language = language
+        self.llm_id = llm_id
+        self.kb_ids = kb_ids or []
 
     def to_dict(self) -> dict[str, Any]:
         """转换为请求字典格式"""
-        request_dict = {
+        request_dict: dict[str, Any] = {
             "app": self.app.to_dict(),
             "language": self.language,
             "question": self.question,
         }
 
-        # 只有当 conversation_id 不为空时才添加到请求中
         if self.conversation_id:
             request_dict["conversationId"] = self.conversation_id
+
+        # 添加 llmId（如果有）
+        if self.llm_id:
+            request_dict["llmId"] = self.llm_id
+
+        # 添加 kbIds（如果有）
+        if self.kb_ids:
+            request_dict["kbIds"] = self.kb_ids
 
         return request_dict

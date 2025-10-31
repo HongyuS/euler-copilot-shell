@@ -56,14 +56,8 @@ class HermesConversationManager:
             self.logger.info("更新会话ID: %s -> %s", self._conversation_id or "空", conversation_id)
             self._conversation_id = conversation_id
 
-    async def stop_conversation(self, task_id: str = "") -> None:
-        """
-        停止当前会话
-
-        Args:
-            task_id: 可选的任务ID，如果提供且非空，则作为查询参数发送
-
-        """
+    async def stop_conversation(self) -> None:
+        """停止当前会话"""
         if self.http_manager.client is None or self.http_manager.client.is_closed:
             return
 
@@ -71,12 +65,7 @@ class HermesConversationManager:
             stop_url = urljoin(self.http_manager.base_url, "/api/stop")
             headers = self.http_manager.build_headers()
 
-            # 构建请求参数
-            params = {}
-            if task_id:
-                params["taskId"] = task_id
-
-            response = await self.http_manager.client.post(stop_url, headers=headers, params=params)
+            response = await self.http_manager.client.post(stop_url, headers=headers)
 
             if response.status_code != HTTP_OK:
                 error_text = await response.aread()

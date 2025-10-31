@@ -10,7 +10,7 @@ from urllib.parse import urljoin
 import httpx
 
 from backend.base import LLMClientBase
-from i18n.manager import get_locale
+from i18n.manager import _, get_locale
 from log.manager import get_logger, log_exception
 
 from .constants import HTTP_OK
@@ -38,12 +38,20 @@ if TYPE_CHECKING:
 class HermesChatClient(LLMClientBase):
     """Hermes Chat API 客户端 - 重构版本"""
 
-    def __init__(self, base_url: str, auth_token: str = "") -> None:
-        """初始化 Hermes Chat API 客户端"""
+    def __init__(self, base_url: str, auth_token: str = "", llm_id: str = "") -> None:
+        """
+        初始化 Hermes Chat API 客户端
+
+        Args:
+            base_url: API 基础 URL
+            auth_token: 认证令牌
+            llm_id: 大模型 ID（用于 Chat 请求）
+
+        """
         self.logger = get_logger(__name__)
 
         self.current_agent_id: str = ""  # 当前选择的智能体 ID
-        self.current_task_id: str = ""  # 当前正在运行的任务 ID
+        self.llm_id: str = llm_id  # 大模型 ID
 
         # HTTP 管理器 - 立即初始化
         self.http_manager = HermesHttpManager(base_url, auth_token)
@@ -61,7 +69,7 @@ class HermesChatClient(LLMClientBase):
         # 用户信息缓存（在初始化时加载）
         self._user_info: dict[str, Any] | None = None
 
-        self.logger.info("Hermes 客户端初始化成功 - URL: %s", base_url)
+        self.logger.info("Hermes 客户端初始化成功 - URL: %s, LLM ID: %s", base_url, llm_id or "未指定")
 
     @property
     def user_manager(self) -> HermesUserManager:
@@ -206,6 +214,33 @@ class HermesChatClient(LLMClientBase):
         if self._conversation_manager is not None:
             self._conversation_manager.reset_conversation()
 
+    def _validate_llm_id(self) -> None:
+        """
+        验证 llm_id 是否已配置
+
+        Raises:
+            HermesAPIError: 当 llm_id 未配置时
+
+        """
+        if not self.llm_id:
+            main_message = _("未配置 Chat 模型")
+            hint_prefix = _("配置步骤")
+            step1 = _("按 [bold]Ctrl+S[/bold] 打开设置")
+            step2 = _("确认后端为 [bold]openEuler Intelligence[/bold]")
+            step3 = _("点击 [bold]更改用户设置[/bold] 按钮")
+            step4 = _("切换到 [bold]大模型设置[/bold] 标签页")
+            step5 = _("使用 [bold]↑↓[/bold] 键选择模型，[bold]空格[/bold] 激活，[bold]回车[/bold] 保存")
+            error_message = (
+                f"[bold red]{main_message}[/bold red]\n\n"
+                f"[yellow]{hint_prefix}:[/yellow]\n"
+                f"  [cyan]1.[/cyan] {step1}\n"
+                f"  [cyan]2.[/cyan] {step2}\n"
+                f"  [cyan]3.[/cyan] {step3}\n"
+                f"  [cyan]4.[/cyan] {step4}\n"
+                f"  [cyan]5.[/cyan] {step5}"
+            )
+            raise HermesAPIError(400, error_message)
+
     async def get_llm_response(self, prompt: str) -> AsyncGenerator[str, None]:
         """
         生成命令建议
@@ -219,9 +254,12 @@ class HermesChatClient(LLMClientBase):
             str: 流式响应的文本内容
 
         Raises:
-            HermesAPIError: 当 API 调用失败时
+            HermesAPIError: 当 API 调用失败时或 llm_id 未配置时
 
         """
+        # 验证 llm_id 是否已配置
+        self._validate_llm_id()
+
         # 如果有未完成的会话，先停止它
         await self._stop()
 
@@ -252,6 +290,7 @@ class HermesChatClient(LLMClientBase):
                 question=prompt,
                 conversation_id=conversation_id,
                 language=language,
+                llm_id=self.llm_id,
             )
 
             # 直接传递异常，不在这里处理
@@ -290,12 +329,12 @@ class HermesChatClient(LLMClientBase):
         """
         return await self.agent_manager.get_available_agents()
 
-    async def send_mcp_response(self, task_id: str, *, params: bool | dict) -> AsyncGenerator[str, None]:
+    async def send_mcp_response(self, conversation_id: str, *, params: bool | dict) -> AsyncGenerator[str, None]:
         """
         发送 MCP 响应并获取流式回复
 
         Args:
-            task_id: 任务ID
+            conversation_id: 会话ID
             params: 响应参数（bool 表示确认/取消，dict 表示参数补全）
 
         Yields:
@@ -306,34 +345,28 @@ class HermesChatClient(LLMClientBase):
 
         """
         # 不在 MCP 响应时重置状态跟踪，保持去重机制有效
-        self.logger.info("发送 MCP 响应 - 任务ID: %s", task_id)
+        self.logger.info("发送 MCP 响应 - 会话ID: %s, 参数类型: %s", conversation_id, type(params).__name__)
         start_time = time.time()
 
         try:
             # 构建 MCP 响应请求
-            client = await self.http_manager.get_client()
-            chat_url = urljoin(self.http_manager.base_url, "/api/chat")
-            headers = self.http_manager.build_headers()
+            app = HermesApp(self.current_agent_id, params=params)
 
-            request_data = {
-                "taskId": task_id,
-                "params": params,
-            }
+            current_locale = get_locale()
+            language = "zh" if current_locale.startswith("zh") else "en"
 
-            self.logger.info("准备发送 MCP 响应请求 - URL: %s, 任务ID: %s", chat_url, task_id)
-            self.logger.debug("请求头: %s", headers)
-            self.logger.debug("请求内容: %s", request_data)
+            request = HermesChatRequest(
+                app=app,
+                question="",
+                conversation_id=conversation_id,
+                language=language,
+                llm_id=self.llm_id,
+            )
 
-            async with client.stream(
-                "POST",
-                chat_url,
-                json=request_data,
-                headers=headers,
-            ) as response:
-                self.logger.info("收到 MCP 响应 - 状态码: %d", response.status_code)
-                await self._validate_chat_response(response)
-                async for text in self._process_stream_events(response):
-                    yield text
+            self.logger.debug("MCP 响应请求数据: %s", request.to_dict())
+
+            async for text in self._chat_stream(request):
+                yield text
 
             duration = time.time() - start_time
             self.logger.info("MCP 响应请求完成 - 耗时: %.3fs", duration)
@@ -431,14 +464,12 @@ class HermesChatClient(LLMClientBase):
                 event_count += 1
                 self.logger.info("解析到事件 #%d - 类型: %s", event_count, event.event_type)
 
-                # 处理任务ID和会话ID
-                self._handle_task_id(event)
+                # 处理会话ID
                 self._handle_conversation_id(event)
 
                 # 处理特殊事件类型
                 should_break, break_message = self.stream_processor.handle_special_events(event)
                 if should_break:
-                    self._cleanup_task_id("回答结束")
                     if break_message:
                         has_error_message = True
                         yield break_message
@@ -458,7 +489,6 @@ class HermesChatClient(LLMClientBase):
 
         except Exception:
             self.logger.exception("处理流式响应事件时出错")
-            self._cleanup_task_id("发生异常")
             raise
 
         # 只有在没有内容且没有错误消息的情况下才显示无内容消息
@@ -477,25 +507,12 @@ class HermesChatClient(LLMClientBase):
             self.logger.warning("无法解析 SSE 事件")
         return event
 
-    def _handle_task_id(self, event: HermesStreamEvent) -> None:
-        """处理事件中的任务ID"""
-        task_id = event.get_task_id()
-        if task_id and not self.current_task_id:
-            self.current_task_id = task_id
-            self.logger.debug("设置当前任务ID: %s", task_id)
-
     def _handle_conversation_id(self, event: HermesStreamEvent) -> None:
         """处理事件中的会话ID"""
         conversation_id = event.get_conversation_id()
         if conversation_id:
             # 通过 conversation_manager 存储会话ID
             self.conversation_manager.set_conversation_id(conversation_id)
-
-    def _cleanup_task_id(self, context: str) -> None:
-        """清理任务ID"""
-        if self.current_task_id:
-            self.logger.debug("%s清理任务ID: %s", context, self.current_task_id)
-            self.current_task_id = ""
 
     async def _handle_event_content(self, event: HermesStreamEvent) -> AsyncGenerator[str, None]:
         """处理单个事件的内容"""
@@ -524,9 +541,7 @@ class HermesChatClient(LLMClientBase):
     async def _stop(self) -> None:
         """停止当前会话"""
         if self._conversation_manager is not None:
-            await self._conversation_manager.stop_conversation(self.current_task_id)
-            # 停止后清理任务ID
-            self._cleanup_task_id("手动停止")
+            await self._conversation_manager.stop_conversation()
 
     async def __aenter__(self) -> Self:
         """异步上下文管理器入口"""

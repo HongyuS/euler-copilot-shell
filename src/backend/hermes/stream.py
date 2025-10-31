@@ -81,10 +81,6 @@ class HermesStreamEvent:
         """获取会话ID"""
         return self.data.get("conversationId", "")
 
-    def get_task_id(self) -> str:
-        """获取任务ID"""
-        return self.data.get("taskId", "")
-
     def get_content(self) -> dict[str, Any]:
         """获取内容部分"""
         return self.data.get("content", {})
