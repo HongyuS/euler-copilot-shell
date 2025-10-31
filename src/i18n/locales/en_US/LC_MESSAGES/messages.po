@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: oi-cli\n"
 "Report-Msgid-Bugs-To: contact@openeuler.org\n"
-"POT-Creation-Date: 2025-10-21 10:54+0800\n"
+"POT-Creation-Date: 2025-10-31 17:01+0800\n"
 "PO-Revision-Date: 2025-10-20 19:28+0800\n"
 "Last-Translator: openEuler Intelligence Team\n"
 "Language-Team: English\n"
@@ -41,7 +41,7 @@ msgstr "Unknown risk"
 msgid "✓ 确认"
 msgstr "✓ Confirm"
 
-#: src/app/mcp_widgets.py:82 src/app/mcp_widgets.py:201
+#: src/app/mcp_widgets.py:82 src/app/mcp_widgets.py:191
 msgid "✗ 取消"
 msgstr "✗ Cancel"
 
@@ -58,191 +58,250 @@ msgstr "📝 Parameter Input"
 msgid "请输入 {param_name}"
 msgstr "Please enter {param_name}"
 
-#: src/app/mcp_widgets.py:191
-msgid "补充说明（可选）"
-msgstr "Additional notes (optional)"
-
-#: src/app/mcp_widgets.py:200
+#: src/app/mcp_widgets.py:190
 msgid "✓ 提交"
 msgstr "✓ Submit"
 
-#: src/app/settings.py:63
+#: src/app/settings.py:57
 msgid "设置"
 msgstr "Settings"
 
-#: src/app/settings.py:66
-msgid "后端:"
-msgstr "Backend:"
-
-#: src/app/settings.py:76
-msgid "Base URL:"
-msgstr "Base URL:"
-
-#: src/app/settings.py:88
-msgid "API Key:"
-msgstr "API Key:"
-
-#: src/app/settings.py:95
-msgid "API 访问密钥，可选"
-msgstr "API access key, optional"
-
-#: src/app/settings.py:103 src/app/settings.py:239
-msgid "模型:"
-msgstr "Model:"
-
-#: src/app/settings.py:108 src/app/settings.py:244
-msgid "模型名称，可选"
-msgstr "Model name, optional"
-
-#: src/app/settings.py:117 src/app/settings.py:272
-msgid "MCP 工具授权:"
-msgstr "MCP Tool Authorization:"
-
-#: src/app/settings.py:119 src/app/settings.py:174 src/app/settings.py:274
-#: src/app/settings.py:549 src/app/settings.py:555
-msgid "自动执行"
-msgstr "Auto Execute"
-
-#: src/app/settings.py:119 src/app/settings.py:174 src/app/settings.py:181
-#: src/app/settings.py:274 src/app/settings.py:549 src/app/settings.py:555
-msgid "手动确认"
-msgstr "Manual Confirm"
-
-#: src/app/settings.py:133
+#: src/app/settings.py:64 src/app/dialogs/user.py:179
 msgid "保存"
 msgstr "Save"
 
-#: src/app/settings.py:134 src/app/dialogs/common.py:27
+#: src/app/settings.py:65 src/app/dialogs/user.py:180
+#: src/app/dialogs/common.py:27
 msgid "取消"
 msgstr "Cancel"
 
-#: src/app/settings.py:437
+#: src/app/settings.py:174
+msgid "后端:"
+msgstr "Backend:"
+
+#: src/app/settings.py:184
+msgid "Base URL:"
+msgstr "Base URL:"
+
+#: src/app/settings.py:196
+msgid "API Key:"
+msgstr "API Key:"
+
+#: src/app/settings.py:203
+msgid "API 访问密钥，可选"
+msgstr "API access key, optional"
+
+#: src/app/settings.py:213
+msgid "模型:"
+msgstr "Model:"
+
+#: src/app/settings.py:218
+msgid "模型名称，可选"
+msgstr "Model name, optional"
+
+#: src/app/settings.py:228
+msgid "用户设置:"
+msgstr "User Settings:"
+
+#: src/app/settings.py:230
+msgid "更改用户设置"
+msgstr "Change User Settings"
+
+#: src/app/settings.py:407
 msgid "Base URL 不能为空"
 msgstr "Base URL cannot be empty"
 
-#: src/app/settings.py:534
-msgid "切换中..."
-msgstr "Switching..."
-
-#: src/app/tui.py:217
+#: src/app/tui.py:216
 msgid "Enter command or question..."
 msgstr "Enter question or command..."
 
-#: src/app/tui.py:226
+#: src/app/tui.py:225
 msgid "Quit"
 msgstr "Quit"
 
-#: src/app/tui.py:227
+#: src/app/tui.py:226
 msgid "Settings"
 msgstr "Settings"
 
-#: src/app/tui.py:228
+#: src/app/tui.py:227
 msgid "Reset"
 msgstr "Reset Conversation"
 
-#: src/app/tui.py:229
+#: src/app/tui.py:228
 msgid "Agent"
 msgstr "Select Agent"
 
-#: src/app/tui.py:230
+#: src/app/tui.py:229
 msgid "Cancel"
 msgstr "Cancel"
 
-#: src/app/tui.py:231
+#: src/app/tui.py:230
 msgid "Focus"
 msgstr "Toggle Focus"
 
-#: src/app/tui.py:255
+#: src/app/tui.py:254
 #, python-brace-format
 msgid "Intelligent CLI Assistant {version}"
 msgstr "Command Line Tool {version}"
 
-#: src/app/tui.py:371
+#: src/app/tui.py:372
 msgid "[Cancelled]"
 msgstr "[Cancelled]"
 
-#: src/app/tui.py:576
+#: src/app/tui.py:588
 msgid ""
 "No response received, please check network connection or try again later"
 msgstr ""
 "No response received, please check network connection or try again later"
 
-#: src/app/tui.py:684
+#: src/app/tui.py:696
 msgid "Request timeout, processing stopped"
 msgstr "Request timeout, processing stopped"
 
-#: src/app/tui.py:691
+#: src/app/tui.py:703
 msgid "No response for a long time, processing stopped"
 msgstr "No response for a long time, processing stopped"
 
-#: src/app/tui.py:744 src/app/tui.py:902
+#: src/app/tui.py:756 src/app/tui.py:914
 msgid "Request timeout, please try again later"
 msgstr "Request timeout, please try again later"
 
-#: src/app/tui.py:888
+#: src/app/tui.py:900
 #, python-brace-format
 msgid "Server error: {message}"
 msgstr "Server error: {message}"
 
-#: src/app/tui.py:890
+#: src/app/tui.py:902
 #, python-brace-format
 msgid "Request failed: {message}"
 msgstr "Request failed: {message}"
 
-#: src/app/tui.py:894
+#: src/app/tui.py:906
 msgid "Network connection interrupted, please check network and try again"
 msgstr "Network connection interrupted, please check network and try again"
 
-#: src/app/tui.py:906
+#: src/app/tui.py:918
 msgid "Network connection error, please check network and try again"
 msgstr "Network connection error, please check network and try again"
 
-#: src/app/tui.py:915 src/app/tui.py:949
+#: src/app/tui.py:927 src/app/tui.py:961
 msgid "Server response error, please try again later"
 msgstr "Server response error, please try again later"
 
-#: src/app/tui.py:920
+#: src/app/tui.py:932
 msgid "Data format error, please try again later"
 msgstr "Data format error, please try again later"
 
-#: src/app/tui.py:927
+#: src/app/tui.py:939
 msgid "Authentication failed, please check configuration"
 msgstr "Authentication failed, please check configuration"
 
-#: src/app/tui.py:951
+#: src/app/tui.py:963
 #, python-brace-format
 msgid "Error processing command: {error}"
 msgstr "Processing command failed with error: {error}"
 
-#: src/app/tui.py:1170
+#: src/app/tui.py:1088 src/app/tui.py:1114 src/app/tui.py:1308
+#: src/app/tui.py:1469 src/app/dialogs/agent.py:60 src/app/dialogs/agent.py:130
+#: src/app/dialogs/agent.py:185 src/app/dialogs/agent.py:205
+#: src/app/dialogs/agent.py:208 src/tool/oi_select_agent.py:67
+#: src/tool/oi_select_agent.py:94
+msgid "智能问答"
+msgstr "Smart Chat"
+
+#: src/app/tui.py:1214
 msgid "💡 MCP response sent"
 msgstr "💡 MCP response sent"
 
-#: src/app/tui.py:1173 src/app/tui.py:1202
+#: src/app/tui.py:1217 src/app/tui.py:1246
 msgid "❌ Current client does not support MCP response"
 msgstr "❌ Current client does not support MCP response"
 
-#: src/app/tui.py:1182
+#: src/app/tui.py:1226
 #, python-brace-format
 msgid "❌ Failed to send MCP response: {error}"
 msgstr "❌ Failed to send MCP response: {error}"
 
-#: src/app/tui.py:1249
+#: src/app/tui.py:1293
 #, python-brace-format
 msgid "⏱️ MCP response timeout ({seconds} seconds)"
 msgstr "⏱️ MCP response timeout ({seconds} seconds)"
 
-#: src/app/tui.py:1253
+#: src/app/tui.py:1297
 msgid "🚫 MCP response cancelled"
 msgstr "🚫 MCP response cancelled"
 
-#: src/app/tui.py:1336
+#: src/app/tui.py:1379
 msgid "Backend configuration validation failed, please check and modify"
 msgstr "Backend configuration validation failed, please check and modify"
 
-#: src/app/tui.py:1337
+#: src/app/tui.py:1380
 msgid "Configuration Error"
 msgstr "Configuration Error"
+
+#: src/app/dialogs/user.py:90
+msgid "常规设置"
+msgstr "General Settings"
+
+#: src/app/dialogs/user.py:91
+msgid "大模型设置"
+msgstr "LLM Settings"
+
+#: src/app/dialogs/user.py:133
+msgid "用户名:"
+msgstr "Username:"
+
+#: src/app/dialogs/user.py:142
+msgid "未登录"
+msgstr "Not logged in"
+
+#: src/app/dialogs/user.py:150
+msgid "管理员"
+msgstr "Administrator"
+
+#: src/app/dialogs/user.py:150
+msgid "普通用户"
+msgstr "Regular User"
+
+#: src/app/dialogs/user.py:164
+msgid "MCP 工具授权:"
+msgstr "MCP Tool Authorization:"
+
+#: src/app/dialogs/user.py:166 src/app/dialogs/user.py:374
+msgid "自动执行"
+msgstr "Auto Execute"
+
+#: src/app/dialogs/user.py:166 src/app/dialogs/user.py:374
+msgid "手动确认"
+msgstr "Manual Confirm"
+
+#: src/app/dialogs/user.py:214
+msgid "加载模型失败"
+msgstr "Failed to load models"
+
+#: src/app/dialogs/user.py:216
+msgid "加载中..."
+msgstr "Loading..."
+
+#: src/app/dialogs/user.py:219
+msgid "暂无可用模型"
+msgstr "No models available"
+
+#: src/app/dialogs/user.py:255
+msgid "↑↓: 选择模型  空格: 激活  回车: 保存  ESC: 取消"
+msgstr "↑↓: Select model  Space: Activate  Enter: Save  ESC: Cancel"
+
+#: src/app/dialogs/user.py:273
+msgid "描述: "
+msgstr "Description: "
+
+#: src/app/dialogs/user.py:284
+msgid "类型: "
+msgstr "Type: "
+
+#: src/app/dialogs/user.py:294
+msgid "最大 Token: "
+msgstr "Max Tokens: "
 
 #: src/app/dialogs/common.py:25
 msgid "确认退出吗？"
@@ -264,13 +323,6 @@ msgstr "Please select openEuler Intelligence backend to use agent features"
 msgid "按任意键关闭"
 msgstr "Press any key to close"
 
-#: src/app/dialogs/agent.py:60 src/app/dialogs/agent.py:130
-#: src/app/dialogs/agent.py:185 src/app/dialogs/agent.py:205
-#: src/app/dialogs/agent.py:208 src/tool/oi_select_agent.py:67
-#: src/tool/oi_select_agent.py:94
-msgid "智能问答"
-msgstr "Smart Chat"
-
 #: src/app/dialogs/agent.py:113
 msgid "OS 智能助手"
 msgstr "OS Smart Assistant"
@@ -280,6 +332,34 @@ msgid "使用上下键选择，回车确认，ESC取消 | ✓ 表示当前选中
 msgstr ""
 "Use arrow keys to select, Enter to confirm, ESC to cancel | ✓ indicates "
 "current selection"
+
+#: src/backend/hermes/client.py:395
+msgid "未配置 Chat 模型"
+msgstr "Chat model not configured"
+
+#: src/backend/hermes/client.py:396
+msgid "配置步骤"
+msgstr "Configuration steps"
+
+#: src/backend/hermes/client.py:397
+msgid "按 Ctrl+S 打开设置"
+msgstr "Press Ctrl+S to open settings"
+
+#: src/backend/hermes/client.py:398
+msgid "确认后端为 openEuler Intelligence"
+msgstr "Confirm backend is openEuler Intelligence"
+
+#: src/backend/hermes/client.py:399
+msgid "点击 \"更改用户设置\" 按钮"
+msgstr "Click \"Change User Settings\" button"
+
+#: src/backend/hermes/client.py:400
+msgid "切换到 \"大模型设置\" 标签页"
+msgstr "Switch to \"LLM Settings\" tab"
+
+#: src/backend/hermes/client.py:401
+msgid "使用 ↑↓ 键选择模型，空格激活，回车保存"
+msgstr "Use ↑↓ to select model, space to activate, enter to save"
 
 #: src/backend/hermes/mcp_helpers.py:44
 msgid "正在初始化工具"
@@ -321,11 +401,11 @@ msgstr "Name"
 msgid "说明"
 msgstr "Description"
 
-#: src/main.py:28
+#: src/main.py:27
 msgid "openEuler Intelligence - Intelligent command-line tool"
 msgstr "openEuler Intelligence - Command-line Client"
 
-#: src/main.py:29
+#: src/main.py:28
 msgid ""
 "\n"
 "For more information and documentation, please visit:\n"
@@ -337,33 +417,33 @@ msgstr ""
 "  https://gitee.com/openeuler/euler-copilot-shell/tree/master/docs\n"
 "        "
 
-#: src/main.py:39
+#: src/main.py:38
 msgid "General Options"
 msgstr "General Options"
 
-#: src/main.py:40
+#: src/main.py:39
 msgid "Show help and version information"
 msgstr "Show help and version information"
 
-#: src/main.py:46
+#: src/main.py:45
 msgid "Show this help message and exit"
 msgstr "Show this help message and exit"
 
-#: src/main.py:53
+#: src/main.py:52
 msgid "Show program version number and exit"
 msgstr "Show program version number and exit"
 
-#: src/main.py:58
+#: src/main.py:57
 msgid "Backend Configuration Options"
 msgstr "Backend Configuration Options"
 
-#: src/main.py:59
+#: src/main.py:58
 msgid ""
 "For initializing and configuring openEuler Intelligence backend services"
 msgstr ""
 "For initializing and configuring openEuler Intelligence backend services"
 
-#: src/main.py:65
+#: src/main.py:64
 msgid ""
 "Initialize openEuler Intelligence backend\n"
 " * Initialization requires administrator privileges and network connection"
@@ -371,7 +451,7 @@ msgstr ""
 "Initialize openEuler Intelligence backend\n"
 " * Initialization requires administrator privileges and network connection"
 
-#: src/main.py:73
+#: src/main.py:72
 msgid ""
 "Change openEuler Intelligence LLM settings (requires valid local backend "
 "service)\n"
@@ -381,98 +461,110 @@ msgstr ""
 "service)\n"
 " * Configuration editing requires administrator privileges"
 
-#: src/main.py:80
+#: src/main.py:79
 msgid "Application Configuration Options"
 msgstr "Application Configuration Options"
 
-#: src/main.py:81
+#: src/main.py:80
 msgid "For configuring application frontend behavior and preferences"
 msgstr "For configuring application frontend behavior and preferences"
 
-#: src/main.py:86
+#: src/main.py:85
 msgid "Select default agent"
 msgstr "Select default agent"
 
+#: src/main.py:90
+msgid "Authentication Management Options"
+msgstr "Authentication Management Options"
+
 #: src/main.py:91
+msgid "For managing login and authentication"
+msgstr "For managing login and authentication"
+
+#: src/main.py:96
+msgid "Login via browser to obtain API key"
+msgstr "Login via browser to obtain API key"
+
+#: src/main.py:101
 msgid "Language Settings"
 msgstr "Language Settings"
 
-#: src/main.py:92
+#: src/main.py:102
 msgid "For configuring application display language"
 msgstr "For configuring application display language"
 
-#: src/main.py:100
+#: src/main.py:110
 #, python-brace-format
 msgid "Set display language (available: {locales})"
 msgstr "Set display language (available: {locales})"
 
-#: src/main.py:105
+#: src/main.py:115
 msgid "Log Management Options"
 msgstr "Log Management Options"
 
-#: src/main.py:106
+#: src/main.py:116
 msgid "For viewing and configuring log output"
 msgstr "For viewing and configuring log output"
 
-#: src/main.py:111
+#: src/main.py:121
 msgid "Show latest log content (up to 1000 lines)"
 msgstr "Show latest log content (up to 1000 lines)"
 
-#: src/main.py:117
+#: src/main.py:127
 msgid "Set log level (available: DEBUG, INFO, WARNING, ERROR)"
 msgstr "Set log level (available: DEBUG, INFO, WARNING, ERROR)"
 
-#: src/main.py:140
+#: src/main.py:150
 #, python-brace-format
 msgid "Failed to retrieve logs: {error}\n"
 msgstr "Failed to retrieve logs: {error}\n"
 
-#: src/main.py:147
+#: src/main.py:157
 #, python-brace-format
 msgid "Invalid log level: {level}\n"
 msgstr "Invalid log level: {level}\n"
 
-#: src/main.py:156
+#: src/main.py:166
 #, python-format
 msgid "Log level has been set to: %s"
 msgstr "Log level has been set to: %s"
 
-#: src/main.py:157
+#: src/main.py:167
 msgid "This is a DEBUG level test message"
 msgstr "This is a DEBUG level test message"
 
-#: src/main.py:158
+#: src/main.py:168
 msgid "This is an INFO level test message"
 msgstr "This is an INFO level test message"
 
-#: src/main.py:159
+#: src/main.py:169
 msgid "This is a WARNING level test message"
 msgstr "This is a WARNING level test message"
 
-#: src/main.py:160
+#: src/main.py:170
 msgid "This is an ERROR level test message"
 msgstr "This is an ERROR level test message"
 
-#: src/main.py:162
+#: src/main.py:172
 #, python-brace-format
 msgid "✓ Log level successfully set to: {level}\n"
 msgstr "✓ Log level successfully set to: {level}\n"
 
-#: src/main.py:163
+#: src/main.py:173
 msgid "✓ Logging system initialized\n"
 msgstr "✓ Logging system initialized\n"
 
-#: src/main.py:191
+#: src/main.py:201
 #, python-brace-format
 msgid "✓ Language set to: {locale}\n"
 msgstr "✓ Language set to: {locale}\n"
 
-#: src/main.py:193
+#: src/main.py:203
 #, python-brace-format
 msgid "✗ Unsupported language: {locale}\n"
 msgstr "✗ Unsupported language: {locale}\n"
 
-#: src/main.py:228
+#: src/main.py:246
 msgid "Fatal error in Intelligent Shell application"
 msgstr "Fatal error in Intelligent Shell application"
 
@@ -520,7 +612,9 @@ msgstr "Error: {error}\n"
 
 #: src/tool/oi_llm_config.py:77
 msgid "需要管理员权限才能修改 openEuler Intelligence 配置文件"
-msgstr "Administrator privileges are required to modify openEuler Intelligence configuration files"
+msgstr ""
+"Administrator privileges are required to modify openEuler Intelligence "
+"configuration files"
 
 #: src/tool/oi_llm_config.py:84
 #, python-brace-format
@@ -549,13 +643,16 @@ msgstr "Error occurred when accessing configuration file: {error}"
 #: src/tool/oi_llm_config.py:127
 #, python-brace-format
 msgid "权限不足：无法访问配置文件 {filename}，请以管理员身份运行"
-msgstr "Insufficient permissions: Cannot access configuration file {filename}, please run as administrator"
+msgstr ""
+"Insufficient permissions: Cannot access configuration file {filename}, "
+"please run as administrator"
 
 #: src/tool/validators.py:135 src/tool/validators.py:584
 #: src/tool/validators.py:647
 #, python-brace-format
 msgid "连接超时 - 无法在 {timeout} 秒内连接到 {endpoint}"
-msgstr "Connection timeout - Unable to connect to {endpoint} within {timeout} seconds"
+msgstr ""
+"Connection timeout - Unable to connect to {endpoint} within {timeout} seconds"
 
 #: src/tool/validators.py:140
 #, python-brace-format
@@ -676,7 +773,8 @@ msgstr "OpenAI Embedding configuration validation failed: {error}"
 #: src/tool/validators.py:598
 #, python-brace-format
 msgid "OpenAI Embedding 配置验证成功 - 维度: {dimension}"
-msgstr "OpenAI Embedding configuration validation successful - Dimension: {dimension}"
+msgstr ""
+"OpenAI Embedding configuration validation successful - Dimension: {dimension}"
 
 #: src/tool/validators.py:606
 msgid "OpenAI Embedding 响应为空"
@@ -685,7 +783,8 @@ msgstr "OpenAI Embedding response is empty"
 #: src/tool/validators.py:634
 #, python-brace-format
 msgid "MindIE Embedding 配置验证成功 - 维度: {dimension}"
-msgstr "MindIE Embedding configuration validation successful - Dimension: {dimension}"
+msgstr ""
+"MindIE Embedding configuration validation successful - Dimension: {dimension}"
 
 #: src/tool/validators.py:644
 msgid "MindIE Embedding 响应格式不正确"
@@ -762,7 +861,9 @@ msgstr "[Command start failed] Unable to create subprocess"
 #: src/tool/command_processor.py:136
 #, python-brace-format
 msgid "无法启动命令 '{command}'，请分析可能原因并给出解决建议。"
-msgstr "Unable to start command '{command}', please analyze possible causes and provide solutions."
+msgstr ""
+"Unable to start command '{command}', please analyze possible causes and "
+"provide solutions."
 
 #: src/tool/command_processor.py:165
 #, python-brace-format
@@ -794,3 +895,92 @@ msgstr ""
 #: src/tool/command_processor.py:206
 msgid "读取 stderr 失败"
 msgstr "Failed to read stderr"
+
+#: src/tool/oi_login.py:66
+#, python-brace-format
+msgid "✗ Failed to get authorization URL: {error}\n"
+msgstr "✗ Failed to get authorization URL: {error}\n"
+
+#: src/tool/oi_login.py:142
+msgid ""
+"\n"
+"\n"
+"✗ Login cancelled by user\n"
+msgstr ""
+"\n"
+"\n"
+"✗ Login cancelled by user\n"
+
+#: src/tool/oi_login.py:146
+#, python-brace-format
+msgid ""
+"\n"
+"✗ An error occurred during login: {error}\n"
+msgstr ""
+"\n"
+"✗ An error occurred during login: {error}\n"
+
+#: src/tool/oi_login.py:160
+msgid "✗ Error: openEuler Intelligence URL not configured\n"
+msgstr "✗ Error: openEuler Intelligence URL not configured\n"
+
+#: src/tool/oi_login.py:161
+msgid "Please run deployment initialization first: oi --init\n"
+msgstr "Please run deployment initialization first: oi --init\n"
+
+#: src/tool/oi_login.py:172
+msgid "Getting authorization URL from server...\n"
+msgstr "Getting authorization URL from server...\n"
+
+#: src/tool/oi_login.py:176
+msgid "✗ Failed to get authorization URL\n"
+msgstr "✗ Failed to get authorization URL\n"
+
+#: src/tool/oi_login.py:185
+msgid "Opening browser for login...\n"
+msgstr "Opening browser for login...\n"
+
+#: src/tool/oi_login.py:186
+msgid "If the browser doesn't open automatically, please visit:\n"
+msgstr "If the browser doesn't open automatically, please visit:\n"
+
+#: src/tool/oi_login.py:193
+msgid "Waiting for login to complete...\n"
+msgstr "Waiting for login to complete...\n"
+
+#: src/tool/oi_login.py:206
+msgid ""
+"\n"
+"✓ Login successful!\n"
+msgstr ""
+"\n"
+"✓ Login successful!\n"
+
+#: src/tool/oi_login.py:207
+msgid "✓ API Key has been saved to configuration\n"
+msgstr "✓ API Key has been saved to configuration\n"
+
+#: src/tool/oi_login.py:210
+msgid ""
+"\n"
+"✗ Login failed: No session ID received\n"
+msgstr ""
+"\n"
+"✗ Login failed: No session ID received\n"
+
+#: src/tool/oi_login.py:214
+#, python-brace-format
+msgid ""
+"\n"
+"✗ Login failed: {error}\n"
+msgstr ""
+"\n"
+"✗ Login failed: {error}\n"
+
+#: src/tool/oi_login.py:217
+msgid ""
+"\n"
+"✗ Login failed: Unknown result\n"
+msgstr ""
+"\n"
+"✗ Login failed: Unknown result\n"
