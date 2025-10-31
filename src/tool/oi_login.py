@@ -4,7 +4,9 @@
 实现通过浏览器跳转进行 openEuler Intelligence 登录
 """
 
+import json
 import sys
+import urllib.request
 import webbrowser
 
 from config.manager import ConfigManager
@@ -15,27 +17,56 @@ from .callback_server import CallbackServer
 
 logger = get_logger(__name__)
 
+# HTTP 状态码常量
+HTTP_OK = 200
 
-def build_auth_url(base_url: str, callback_url: str) -> str:
+
+def get_auth_url(base_url: str, callback_url: str) -> str | None:
     """
-    构建授权 URL
-
-    根据 openEuler Intelligence 的 base_url 和回调地址构建登录 URL
+    从后端获取授权 URL
 
     Args:
         base_url: openEuler Intelligence 的基础 URL
         callback_url: 本地回调 URL
 
     Returns:
-        完整的授权 URL
+        授权 URL，如果获取失败则返回 None
 
     """
     # 移除末尾的斜杠
     base_url = base_url.rstrip("/")
 
-    # 构建授权 URL
-    # 根据 API 规范: GET /api/auth/redirect?action=login
-    return f"{base_url}/api/auth/redirect?action=login&callback_url={callback_url}"
+    # 构建请求 URL
+    request_url = f"{base_url}/api/auth/redirect?action=login&callback_url={callback_url}"
+    logger.info("请求授权 URL: %s", request_url)
+
+    # 验证 URL 协议
+    if not request_url.startswith(("http://", "https://")):
+        logger.error("无效的 URL 协议: %s", request_url)
+        return None
+
+    try:
+        # 发送 HTTP GET 请求
+        with urllib.request.urlopen(request_url, timeout=10) as response:  # noqa: S310
+            data = json.loads(response.read().decode("utf-8"))
+            logger.debug("后端响应: %s", data)
+
+            # 检查响应格式
+            if data.get("code") == HTTP_OK and "result" in data:
+                auth_url = data["result"].get("url")
+                if auth_url:
+                    logger.info("获取到授权 URL: %s", auth_url)
+                    return auth_url
+                logger.error("响应中缺少 result.url 字段")
+                return None
+
+            logger.error("后端返回错误: %s", data.get("message", "未知错误"))
+            return None
+
+    except Exception as e:
+        logger.exception("获取授权 URL 失败")
+        sys.stderr.write(_("✗ Failed to get authorization URL: {error}\n").format(error=e))
+        return None
 
 
 def browser_login() -> None:
@@ -71,8 +102,14 @@ def browser_login() -> None:
         # 启动回调服务器
         callback_url = callback_server.start()
 
-        # 构建授权 URL
-        auth_url = build_auth_url(base_url, callback_url)
+        # 从后端获取授权 URL
+        sys.stdout.write(_("Getting authorization URL from server...\n"))
+        auth_url = get_auth_url(base_url, callback_url)
+
+        if not auth_url:
+            sys.stdout.write(_("✗ Failed to get authorization URL\n"))
+            sys.exit(1)
+
         logger.info("授权 URL: %s", auth_url)
 
         # 打开浏览器

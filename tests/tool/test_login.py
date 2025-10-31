@@ -1,34 +1,52 @@
 """测试登录功能模块"""
 
+import json
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from tool.callback_server import CallbackServer
-from tool.oi_login import build_auth_url
+from tool.oi_login import get_auth_url
 
 
 class TestLoginFunctions(unittest.TestCase):
     """测试登录相关函数"""
 
-    def test_build_auth_url(self) -> None:
-        """测试构建授权 URL"""
-        base_url = "http://127.0.0.1:8002"
-        callback_url = "http://127.0.0.1:8081/callback"
+    @patch("urllib.request.urlopen")
+    def test_get_auth_url_success(self, mock_urlopen: MagicMock) -> None:
+        """测试成功获取授权 URL"""
+        # 模拟后端响应
+        mock_response = Mock()
+        mock_response.read.return_value = json.dumps(
+            {
+                "code": 200,
+                "message": "success",
+                "result": {"url": "https://auth.example.com/login?client_id=123"},
+            },
+        ).encode("utf-8")
+        mock_response.__enter__ = Mock(return_value=mock_response)
+        mock_response.__exit__ = Mock(return_value=False)
+        mock_urlopen.return_value = mock_response
 
-        result = build_auth_url(base_url, callback_url)
+        result = get_auth_url("https://api.example.com", "http://localhost:8081/callback")
 
-        expected = "http://127.0.0.1:8002/api/auth/redirect?action=login&callback_url=http://127.0.0.1:8081/callback"
-        self.assertEqual(result, expected)
+        self.assertIsNotNone(result)
+        self.assertEqual(result, "https://auth.example.com/login?client_id=123")
 
-    def test_build_auth_url_with_trailing_slash(self) -> None:
-        """测试构建授权 URL（URL 带末尾斜杠）"""
-        base_url = "http://127.0.0.1:8002/"
-        callback_url = "http://127.0.0.1:8081/callback"
+    @patch("urllib.request.urlopen")
+    def test_get_auth_url_error_response(self, mock_urlopen: MagicMock) -> None:
+        """测试后端返回错误"""
+        # 模拟后端错误响应
+        mock_response = Mock()
+        mock_response.read.return_value = json.dumps({"code": 400, "message": "Bad request", "result": None}).encode(
+            "utf-8",
+        )
+        mock_response.__enter__ = Mock(return_value=mock_response)
+        mock_response.__exit__ = Mock(return_value=False)
+        mock_urlopen.return_value = mock_response
 
-        result = build_auth_url(base_url, callback_url)
+        result = get_auth_url("https://api.example.com", "http://localhost:8081/callback")
 
-        expected = "http://127.0.0.1:8002/api/auth/redirect?action=login&callback_url=http://127.0.0.1:8081/callback"
-        self.assertEqual(result, expected)
+        self.assertIsNone(result)
 
 
 class TestCallbackServer(unittest.TestCase):
