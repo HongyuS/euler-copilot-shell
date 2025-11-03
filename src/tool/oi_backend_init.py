@@ -19,9 +19,6 @@ def backend_init() -> None:
         # 首先检查和更新配置文件
         logger.info("检查配置文件...")
 
-        # 在部署阶段，使用普通配置管理器操作 root 用户的配置
-        # 这样 Agent 初始化时可以正常写入 AppID 等信息
-        # 部署完成后会将完整配置复制为全局模板
         config_manager = ConfigManager()
         config_updated = config_manager.validate_and_update_config()
 
