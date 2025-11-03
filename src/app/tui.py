@@ -634,9 +634,9 @@ class IntelligentTerminal(App):
             "is_first_content": True,
             "received_any_content": False,
             "start_time": start_time,
-            "timeout_seconds": 1800.0,  # 30分钟超时，与HTTP层面保持一致
+            "timeout_seconds": None,  # 无总体超时限制，支持超长时间任务
             "last_content_time": start_time,
-            "no_content_timeout": 300.0,  # 5分钟无内容超时
+            "no_content_timeout": 1800.0,  # 30分钟无内容超时
         }
 
     async def _process_stream(
@@ -679,8 +679,8 @@ class IntelligentTerminal(App):
         output_container: Container,
     ) -> bool:
         """检查各种超时条件，返回是否应该中断处理"""
-        # 检查总体超时
-        if current_time - stream_state["start_time"] > stream_state["timeout_seconds"]:
+        timeout_seconds = stream_state["timeout_seconds"]
+        if timeout_seconds is not None and current_time - stream_state["start_time"] > timeout_seconds:
             output_container.mount(OutputLine(_("Request timeout, processing stopped"), command=False))
             return True
 
@@ -1204,50 +1204,38 @@ class IntelligentTerminal(App):
 
         # 使用统一的流状态管理，与 _handle_command_stream 保持一致
         stream_state = self._init_stream_state()
-        timeout_seconds = 1800.0  # 30分钟超时，与HTTP层面保持一致
 
         try:
-            # 使用 asyncio.wait_for 包装整个流处理过程
-            async def _process_stream() -> bool:
-                async for content in llm_client.send_mcp_response(task_id, params=params):
-                    if not content.strip():
-                        continue
+            async for content in llm_client.send_mcp_response(task_id, params=params):
+                if not content.strip():
+                    continue
 
-                    stream_state["received_any_content"] = True
-                    current_time = asyncio.get_event_loop().time()
+                stream_state["received_any_content"] = True
+                current_time = asyncio.get_event_loop().time()
 
-                    # 更新最后收到内容的时间
-                    if content.strip():
-                        stream_state["last_content_time"] = current_time
+                # 更新最后收到内容的时间
+                if content.strip():
+                    stream_state["last_content_time"] = current_time
 
-                    # 检查超时
-                    if self._check_timeouts(current_time, stream_state, output_container):
-                        break
+                # 检查超时
+                if self._check_timeouts(current_time, stream_state, output_container):
+                    break
 
-                    # 判断是否为 LLM 输出内容
-                    tool_name, _cleaned_content = extract_mcp_tag(content)
-                    is_llm_output = tool_name is None
+                # 判断是否为 LLM 输出内容
+                tool_name, _cleaned_content = extract_mcp_tag(content)
+                is_llm_output = tool_name is None
 
-                    # 处理内容
-                    await self._process_stream_content(
-                        content,
-                        stream_state,
-                        output_container,
-                        is_llm_output=is_llm_output,
-                    )
+                # 处理内容
+                await self._process_stream_content(
+                    content,
+                    stream_state,
+                    output_container,
+                    is_llm_output=is_llm_output,
+                )
 
-                    # 滚动到底部
-                    await self._scroll_to_end()
+                # 滚动到底部
+                await self._scroll_to_end()
 
-                return stream_state["received_any_content"]
-
-            # 执行流处理，添加超时
-            return await asyncio.wait_for(_process_stream(), timeout=timeout_seconds)
-
-        except TimeoutError:
-            output_container.mount(
-                OutputLine(_("⏱️ MCP response timeout ({seconds} seconds)").format(seconds=timeout_seconds)),
-            )
             return stream_state["received_any_content"]
         except asyncio.CancelledError:
             output_container.mount(OutputLine(_("🚫 MCP response cancelled")))
