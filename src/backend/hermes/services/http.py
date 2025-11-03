@@ -44,7 +44,7 @@ class HermesHttpManager:
 
             timeout = httpx.Timeout(
                 connect=30.0,  # 连接超时，允许30秒建立连接
-                read=1800.0,  # 读取超时，支持长时间SSE流（30分钟）
+                read=None,  # 读取超时，无限制以支持超长时间SSE流
                 write=30.0,  # 写入超时
                 pool=30.0,  # 连接池超时
             )
