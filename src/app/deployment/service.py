@@ -542,7 +542,7 @@ class DeploymentService:
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, stderr = await process.communicate(mode_content.encode())
+            _stdout, stderr = await process.communicate(mode_content.encode())
 
             if process.returncode != 0:
                 error_msg = stderr.decode("utf-8", errors="ignore").strip()
@@ -875,7 +875,7 @@ class DeploymentService:
                     stderr=asyncio.subprocess.PIPE,
                 )
 
-                stdout, stderr = await process.communicate()
+                stdout, _stderr = await process.communicate()
                 status = stdout.decode("utf-8").strip()
 
                 if process.returncode == 0 and status == "active":
@@ -1080,7 +1080,7 @@ class DeploymentService:
                     stderr=asyncio.subprocess.PIPE,
                 )
 
-                stdout, stderr = await process.communicate()
+                stdout, _stderr = await process.communicate()
                 status = stdout.decode("utf-8").strip()
 
                 if process.returncode == 0 and status == "active":
