@@ -52,6 +52,10 @@ show_help() {
     echo "    更新所有语言的翻译文件"
     print_green "  compile"
     echo "    编译翻译文件为二进制格式"
+    print_green "  uniq"
+    echo "    去除翻译文件中的重复条目"
+    print_green "  stats"
+    echo "    显示翻译文件的统计信息"
     print_green "  all"
     echo "    执行完整流程 (extract -> update -> compile)"
     print_green "  help"
@@ -60,6 +64,8 @@ show_help() {
     echo "示例:"
     echo "  $0 extract   # 提取可翻译字符串"
     echo "  $0 compile   # 编译翻译文件"
+    echo "  $0 uniq      # 去除重复条目"
+    echo "  $0 stats     # 查看翻译统计"
     echo "  $0 all       # 完整翻译工作流"
     echo ""
     echo "更多信息请参考: docs/development/国际化开发指南.md"
@@ -212,6 +218,102 @@ compile() {
     fi
 }
 
+# 去除重复的翻译条目
+uniq() {
+    print_blue "🔧 去除重复的翻译条目..."
+
+    check_gettext
+
+    if ! command -v msguniq &>/dev/null; then
+        print_red "❌ msguniq command not found. Please install gettext tools."
+        exit 1
+    fi
+
+    processed=0
+    failed=0
+
+    # 遍历所有语言目录
+    for locale_path in "$LOCALE_DIR"/*; do
+        if [ ! -d "$locale_path" ]; then
+            continue
+        fi
+
+        locale_name=$(basename "$locale_path")
+        po_file="$locale_path/LC_MESSAGES/messages.po"
+
+        if [ ! -f "$po_file" ]; then
+            print_yellow "⚠️  Skipping $locale_name: PO file not found"
+            continue
+        fi
+
+        echo "   Processing $locale_name..."
+        # 创建临时文件
+        temp_file="${po_file}.tmp"
+
+        set +e
+        set +o pipefail
+        if msguniq --use-first "$po_file" -o "$temp_file" 2>/dev/null; then
+            mv "$temp_file" "$po_file"
+            echo "   ✅ Processed $locale_name"
+            processed=$((processed + 1))
+        else
+            print_yellow "   ⚠️  Failed to process $locale_name"
+            rm -f "$temp_file"
+            failed=$((failed + 1))
+        fi
+        set -e
+        set -o pipefail
+    done
+
+    echo ""
+    if [ "$processed" -gt 0 ]; then
+        print_green "✅ Successfully processed $processed translation file(s)"
+    fi
+
+    if [ "$failed" -gt 0 ]; then
+        print_yellow "⚠️  Failed to process $failed translation file(s)"
+    fi
+
+    if [ "$processed" -eq 0 ] && [ "$failed" -eq 0 ]; then
+        print_yellow "⚠️  No translation files found to process"
+    fi
+}
+
+# 显示翻译统计信息
+stats() {
+    print_blue "📊 翻译统计信息..."
+
+    check_gettext
+
+    found=0
+
+    # 遍历所有语言目录
+    for locale_path in "$LOCALE_DIR"/*; do
+        if [ ! -d "$locale_path" ]; then
+            continue
+        fi
+
+        locale_name=$(basename "$locale_path")
+        po_file="$locale_path/LC_MESSAGES/messages.po"
+
+        if [ ! -f "$po_file" ]; then
+            print_yellow "⚠️  Skipping $locale_name: PO file not found"
+            continue
+        fi
+
+        echo ""
+        print_green "=== $locale_name ==="
+        msgfmt --statistics "$po_file" 2>&1 || true
+        found=$((found + 1))
+    done
+
+    if [ "$found" -eq 0 ]; then
+        echo ""
+        print_yellow "⚠️  No translation files found"
+    fi
+    echo ""
+}
+
 # 执行完整流程
 all() {
     extract
@@ -240,6 +342,12 @@ main() {
         ;;
     compile)
         compile
+        ;;
+    uniq)
+        uniq
+        ;;
+    stats)
+        stats
         ;;
     all)
         all
