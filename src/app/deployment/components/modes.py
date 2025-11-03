@@ -19,6 +19,7 @@ from textual.widgets import Button, Input, Label, Static
 
 from config.manager import ConfigManager
 from config.model import Backend, ConfigModel
+from i18n.manager import _
 from log.manager import get_logger
 from tool.callback_server import CallbackServer
 from tool.oi_login import get_auth_url
@@ -54,7 +55,7 @@ class InitializationModeScreen(ModalScreen[bool]):
     """
 
     BINDINGS: ClassVar = [
-        Binding("escape", "app.quit", "退出"),
+        Binding("escape", "app.quit", _("退出")),
     ]
 
     def __init__(self) -> None:
@@ -64,16 +65,16 @@ class InitializationModeScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         """组合界面组件"""
         with Container(classes="mode-container"):
-            yield Static("openEuler Intelligence 初始化", classes="mode-title")
+            yield Static(_("openEuler Intelligence 初始化"), classes="mode-title")
             yield Static(
-                "请选择您的初始化方式：",
+                _("请选择您的初始化方式："),
                 classes="mode-description",
             )
 
             with Horizontal(classes="options-row"):
                 # 连接现有服务选项
                 yield ModeOptionButton(
-                    "连接现有服务\n\n输入现有服务的 URL 和 Token 即可连接使用",
+                    _("连接现有服务\n\n输入现有服务的 URL 和 Token 即可连接使用"),
                     id="connect_existing",
                     classes="mode-option",
                     variant="default",
@@ -81,14 +82,14 @@ class InitializationModeScreen(ModalScreen[bool]):
 
                 # 部署新服务选项
                 yield ModeOptionButton(
-                    "部署新服务\n\n在本机部署全新的服务环境和配置",
+                    _("部署新服务\n\n在本机部署全新的服务环境和配置"),
                     id="deploy_new",
                     classes="mode-option",
                     variant="default",
                 )
 
             with Horizontal(classes="mode-button-row"):
-                yield Button("退出", id="exit", variant="error", classes="exit-button")
+                yield Button(_("退出"), id="exit", variant="error", classes="exit-button")
 
     def on_mount(self) -> None:
         """组件挂载时的处理"""
@@ -153,8 +154,8 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
     """
 
     BINDINGS: ClassVar = [
-        Binding("escape", "back", "返回"),
-        Binding("ctrl+q", "app.quit", "退出"),
+        Binding("escape", "back", _("返回")),
+        Binding("ctrl+q", "app.quit", _("退出")),
     ]
 
     def __init__(self) -> None:
@@ -169,52 +170,52 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         """组合界面组件"""
         with Container(classes="connect-container"):
-            yield Static("连接现有 openEuler Intelligence 服务", classes="connect-title")
+            yield Static(_("连接现有 openEuler Intelligence 服务"), classes="connect-title")
             yield Static(
-                "请输入您的 openEuler Intelligence 服务连接信息：",
+                _("请输入您的 openEuler Intelligence 服务连接信息："),
                 classes="connect-description",
             )
 
             with Horizontal(classes="form-row"):
-                yield Label("服务 URL:", classes="form-label")
+                yield Label(_("服务 URL:"), classes="form-label")
                 yield Input(
-                    placeholder="例如：http://your-server:8002",
+                    placeholder=_("例如：http://your-server:8002"),
                     id="service_url",
                     classes="form-input",
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("访问令牌:", classes="form-label")
+                yield Label(_("访问令牌:"), classes="form-label")
                 yield Input(
-                    placeholder="可选，您的访问令牌",
+                    placeholder=_("可选，您的访问令牌"),
                     password=True,
                     id="access_token",
                     classes="form-input",
                 )
                 yield Button(
-                    "获取",
+                    _("获取"),
                     id="get_api_key",
                     variant="primary",
                     classes="get-api-key-button",
                     disabled=True,
                 )
 
-            yield Static("未验证", id="validation_status", classes="validation-status")
+            yield Static(_("未验证"), id="validation_status", classes="validation-status")
 
             yield Static(
-                "提示：\n"
+                _("提示：\n"
                 "• 服务 URL 通常以 http:// 或 https:// 开头\n"
                 "• 访问令牌为可选项，如果服务无需认证可留空\n"
                 "• 输入服务 URL 后，可点击 '获取' 按钮通过浏览器获取访问令牌\n"
                 "• 也可以从 openEuler Intelligence Web 界面手动获取并填入\n"
-                "• 系统会自动验证连接并保存配置",
+                "• 系统会自动验证连接并保存配置"),
                 classes="help-text",
             )
 
             with Horizontal(classes="mode-button-row"):
-                yield Button("连接并保存", id="connect", variant="success", disabled=True)
-                yield Button("返回", id="back", variant="primary")
-                yield Button("退出", id="exit", variant="error")
+                yield Button(_("连接并保存"), id="connect", variant="success", disabled=True)
+                yield Button(_("返回"), id="back", variant="primary")
+                yield Button(_("退出"), id="exit", variant="error")
 
     # ==================== 事件处理方法 ====================
 
@@ -240,7 +241,7 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
             # 获取服务 URL
             url = self.query_one("#service_url", Input).value.strip()
             if not url:
-                self.notify("请先输入服务 URL", severity="warning")
+                self.notify(_("请先输入服务 URL"), severity="warning")
                 return
 
             # 禁用按钮，防止重复点击
@@ -249,12 +250,12 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
 
             # 显示状态
             status_widget = self.query_one("#validation_status", Static)
-            status_widget.update("[yellow]正在获取授权 URL...[/yellow]")
+            status_widget.update(_("[yellow]正在获取授权 URL...[/yellow]"))
 
             # 获取授权 URL
             auth_url, _token = get_auth_url(url)
             if not auth_url:
-                status_widget.update("[red]✗ 获取授权 URL 失败[/red]")
+                status_widget.update(_("[red]✗ 获取授权 URL 失败[/red]"))
                 get_api_key_btn.disabled = False
                 return
 
@@ -263,16 +264,16 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
             launcher_url = self.callback_server.start(auth_url)
 
             # 更新状态并打开浏览器
-            status_widget.update("[yellow]正在打开浏览器登录...[/yellow]")
+            status_widget.update(_("[yellow]正在打开浏览器登录...[/yellow]"))
             webbrowser.open(launcher_url)
-            self.notify("已打开浏览器，请完成登录", severity="information")
+            self.notify(_("已打开浏览器，请完成登录"), severity="information")
 
             # 异步等待登录完成
             self.login_task = asyncio.create_task(self._wait_for_login())
 
         except (OSError, RuntimeError, ValueError) as e:
             self.logger.exception("获取 API Key 失败")
-            self.notify(f"获取 API Key 失败: {e}", severity="error")
+            self.notify(_("获取 API Key 失败: {error}").format(error=e), severity="error")
             try:
                 get_api_key_btn = self.query_one("#get_api_key", Button)
                 get_api_key_btn.disabled = False
@@ -283,7 +284,7 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
     async def on_connect_pressed(self) -> None:
         """处理连接按钮点击"""
         if not self.is_validated:
-            self.notify("请等待连接验证完成", severity="warning")
+            self.notify(_("请等待连接验证完成"), severity="warning")
             return
 
         try:
@@ -295,11 +296,11 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
             await self._save_configuration(url, token)
 
             # 显示成功信息
-            self.notify("配置已保存，初始化完成！", severity="information")
+            self.notify(_("配置已保存，初始化完成！"), severity="information")
             self.app.exit()
 
         except (OSError, RuntimeError, ValueError) as e:
-            self.notify(f"保存配置时发生错误: {e}", severity="error")
+            self.notify(_("保存配置时发生错误: {error}").format(error=e), severity="error")
 
     @on(Button.Pressed, "#back")
     async def on_back_pressed(self) -> None:
@@ -353,7 +354,7 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
         connect_button = self.query_one("#connect", Button)
 
         # 更新状态为验证中
-        status_widget.update("[yellow]验证连接中...[/yellow]")
+        status_widget.update(_("[yellow]验证连接中...[/yellow]"))
         connect_button.disabled = True
         self.is_validated = False
 
@@ -366,16 +367,16 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
             is_valid, message = await validate_oi_connection(url, token)
 
             if is_valid:
-                status_widget.update(f"[green]✓ {message}[/green]")
+                status_widget.update(_("[green]✓ {message}[/green]").format(message=message))
                 connect_button.disabled = False
                 self.is_validated = True
             else:
-                status_widget.update(f"[red]✗ {message}[/red]")
+                status_widget.update(_("[red]✗ {message}[/red]").format(message=message))
                 connect_button.disabled = True
                 self.is_validated = False
 
         except (OSError, RuntimeError, ValueError) as e:
-            status_widget.update(f"[red]✗ 验证异常: {e}[/red]")
+            status_widget.update(_("[red]✗ 验证异常: {error}[/red]").format(error=e))
             connect_button.disabled = True
             self.is_validated = False
 
@@ -391,7 +392,7 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
                 return
 
             # 等待认证结果（超时 5 分钟）
-            status_widget.update("[yellow]等待登录完成...[/yellow]")
+            status_widget.update(_("[yellow]等待登录完成...[/yellow]"))
             auth_result = await asyncio.to_thread(
                 self.callback_server.wait_for_auth,
                 timeout=300,
@@ -407,31 +408,31 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
                     token_input = self.query_one("#access_token", Input)
                     token_input.value = session_id
 
-                    status_widget.update("[green]✓ 登录成功，已获取 API Key[/green]")
+                    status_widget.update(_("[green]✓ 登录成功，已获取 API Key[/green]"))
                     self.logger.info("浏览器登录成功，已获取 API Key")
 
                     # 自动触发验证
                     await self._validate_connection()
                 else:
-                    status_widget.update("[red]✗ 登录失败：未收到 session ID[/red]")
+                    status_widget.update(_("[red]✗ 登录失败：未收到 session ID[/red]"))
                     get_api_key_btn.disabled = False
 
             elif result_type == "error":
                 error_desc = auth_result.get("error_description", "未知错误")
-                status_widget.update(f"[red]✗ 登录失败: {error_desc}[/red]")
+                status_widget.update(_("[red]✗ 登录失败: {error}[/red]").format(error=error_desc))
                 get_api_key_btn.disabled = False
 
             else:
-                status_widget.update("[red]✗ 登录失败：未知结果[/red]")
+                status_widget.update(_("[red]✗ 登录失败：未知结果[/red]"))
                 get_api_key_btn.disabled = False
 
         except asyncio.CancelledError:
             self.logger.info("登录任务被取消")
-            status_widget.update("[yellow]登录已取消[/yellow]")
+            status_widget.update(_("[yellow]登录已取消[/yellow]"))
             get_api_key_btn.disabled = False
         except (OSError, RuntimeError, ValueError) as e:
             self.logger.exception("等待登录时发生错误")
-            status_widget.update(f"[red]✗ 登录异常: {e}[/red]")
+            status_widget.update(_("[red]✗ 登录异常: {error}[/red]").format(error=e))
             get_api_key_btn.disabled = False
         finally:
             # 清理回调服务器

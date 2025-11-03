@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 
+from i18n.manager import _
 from tool.validators import APIValidator
 
 # 常量定义
@@ -117,7 +118,7 @@ class DeploymentConfig:
         """
         # 检查必要字段是否完整（只要求端点）
         if not self.llm.endpoint.strip():
-            return False, "LLM API 端点不能为空", {}
+            return False, _("LLM API 端点不能为空"), {}
 
         validator = APIValidator()
         llm_valid, llm_msg, llm_info = await validator.validate_llm_config(
@@ -146,7 +147,7 @@ class DeploymentConfig:
         """
         # 检查必要字段是否完整（只要求端点）
         if not self.embedding.endpoint.strip():
-            return False, "Embedding API 端点不能为空", {}
+            return False, _("Embedding API 端点不能为空"), {}
 
         validator = APIValidator()
         embed_valid, embed_msg, embed_info = await validator.validate_embedding_config(
@@ -168,14 +169,14 @@ class DeploymentConfig:
         """验证基础字段"""
         errors = []
         if not self.server_ip.strip():
-            errors.append("服务器 IP 地址不能为空")
+            errors.append(_("服务器 IP 地址不能为空"))
         return errors
 
     def _validate_llm_fields(self) -> list[str]:
         """验证 LLM 配置字段"""
         errors = []
         if not self.llm.endpoint.strip():
-            errors.append("LLM API 端点不能为空")
+            errors.append(_("LLM API 端点不能为空"))
         return errors
 
     def _validate_embedding_fields(self) -> list[str]:
@@ -195,10 +196,10 @@ class DeploymentConfig:
         if self.deployment_mode == "light":
             # 如果用户填了任何 Embedding 字段，则端点必须填写，API Key 和模型名称允许为空
             if has_embedding_config and not self.embedding.endpoint.strip():
-                errors.append("Embedding API 端点不能为空")
+                errors.append(_("Embedding API 端点不能为空"))
         elif not self.embedding.endpoint.strip():
             # 全量部署模式下，Embedding 配置是必需的，但只要求端点必填
-            errors.append("Embedding API 端点不能为空")
+            errors.append(_("Embedding API 端点不能为空"))
 
         return errors
 
@@ -206,11 +207,16 @@ class DeploymentConfig:
         """验证数值字段"""
         errors = []
         if self.llm.max_tokens <= 0:
-            errors.append("LLM max_tokens 必须大于 0")
+            errors.append(_("LLM max_tokens 必须大于 0"))
         if not (MIN_TEMPERATURE <= self.llm.temperature <= MAX_TEMPERATURE):
-            errors.append(f"LLM temperature 必须在 {MIN_TEMPERATURE} 到 {MAX_TEMPERATURE} 之间")
+            errors.append(
+                _("LLM temperature 必须在 {min} 到 {max} 之间").format(
+                    min=MIN_TEMPERATURE,
+                    max=MAX_TEMPERATURE,
+                ),
+            )
         if self.llm.request_timeout <= 0:
-            errors.append("LLM 请求超时时间必须大于 0")
+            errors.append(_("LLM 请求超时时间必须大于 0"))
         return errors
 
 
