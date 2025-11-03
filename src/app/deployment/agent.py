@@ -23,6 +23,7 @@ import httpx
 import toml
 
 from config.manager import ConfigManager
+from i18n.manager import _
 from log.manager import get_logger
 
 from .models import AgentInitStatus, DeploymentState
@@ -405,14 +406,14 @@ class AgentManager:
             AgentInitStatus: 初始化状态 (SUCCESS/SKIPPED/FAILED)
 
         """
-        self._report_progress(state, "[bold blue]开始初始化智能体...[/bold blue]", progress_callback)
+        self._report_progress(state, _("[bold blue]开始初始化智能体...[/bold blue]"), progress_callback)
 
         try:
             # 执行所有初始化步骤
             return await self._execute_initialization_steps(state, progress_callback)
 
         except Exception:
-            error_msg = "智能体初始化失败"
+            error_msg = _("智能体初始化失败")
             self._report_progress(state, f"[red]{error_msg}[/red]", progress_callback)
             logger.exception(error_msg)
             return AgentInitStatus.FAILED
@@ -450,14 +451,14 @@ class AgentManager:
         if default_app_id:
             self._report_progress(
                 state,
-                f"[bold green]智能体初始化完成! 默认 App ID: {default_app_id}[/bold green]",
+                _("[bold green]智能体初始化完成! 默认 App ID: {app_id}[/bold green]").format(app_id=default_app_id),
                 progress_callback,
             )
             logger.info("智能体初始化成功完成，默认 App ID: %s", default_app_id)
             return AgentInitStatus.SUCCESS
 
         # 如果没有创建任何智能体，显示警告并返回成功状态
-        self._report_progress(state, "[yellow]未能创建任何智能体[/yellow]", progress_callback)
+        self._report_progress(state, _("[yellow]未能创建任何智能体[/yellow]"), progress_callback)
         return AgentInitStatus.SUCCESS
 
     def _report_progress(
@@ -487,7 +488,10 @@ class AgentManager:
         if not self.service_dir or not self.service_dir.exists():
             self._report_progress(
                 state,
-                f"[yellow]服务配置目录不存在: {self.service_dir}，跳过{operation_name}[/yellow]",
+                _("[yellow]服务配置目录不存在: {dir}，跳过{operation}[/yellow]").format(
+                    dir=self.service_dir,
+                    operation=operation_name,
+                ),
                 callback,
             )
             logger.warning("服务配置目录不存在: %s", self.service_dir)
@@ -498,7 +502,7 @@ class AgentManager:
         if not service_files:
             self._report_progress(
                 state,
-                f"[yellow]未找到服务配置文件，跳过{operation_name}[/yellow]",
+                _("[yellow]未找到服务配置文件，跳过{operation}[/yellow]").format(operation=operation_name),
                 callback,
             )
             return None
@@ -542,7 +546,7 @@ class AgentManager:
                 file_identifier = service_file.stem
                 self._report_progress(
                     state,
-                    f"    [red]处理 {file_identifier} 时发生异常[/red]",
+                    _("    [red]处理 {file} 时发生异常[/red]").format(file=file_identifier),
                     callback,
                 )
                 logger.exception("处理服务文件时发生异常: %s", service_file)
@@ -556,15 +560,15 @@ class AgentManager:
         callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """安装 systemd 服务文件"""
-        self._report_progress(state, "[cyan]安装 systemd 服务文件...[/cyan]", callback)
+        self._report_progress(state, _("[cyan]安装 systemd 服务文件...[/cyan]"), callback)
 
         # 获取服务文件列表
-        service_files = self._get_service_files(state, callback, "服务文件安装")
+        service_files = self._get_service_files(state, callback, _("服务文件安装"))
         if service_files is None:
             return True
 
         # 处理所有服务文件
-        overall_success, installed_files, failed_files = await self._process_service_files(
+        _overall_success, installed_files, _failed_files = await self._process_service_files(
             service_files,
             state,
             callback,
@@ -578,7 +582,7 @@ class AgentManager:
 
             self._report_progress(
                 state,
-                f"[green]成功安装 {len(installed_files)} 个服务文件[/green]",
+                _("[green]成功安装 {count} 个服务文件[/green]").format(count=len(installed_files)),
                 callback,
             )
 
@@ -597,7 +601,7 @@ class AgentManager:
 
         self._report_progress(
             state,
-            f"  [blue]复制服务文件: {service_name}[/blue]",
+            _("  [blue]复制服务文件: {name}[/blue]").format(name=service_name),
             callback,
         )
 
@@ -610,12 +614,12 @@ class AgentManager:
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, stderr = await process.communicate()
+            _stdout, stderr = await process.communicate()
 
         except Exception:
             self._report_progress(
                 state,
-                f"    [red]复制 {service_name} 时发生异常[/red]",
+                _("    [red]复制 {name} 时发生异常[/red]").format(name=service_name),
                 callback,
             )
             logger.exception("复制服务文件时发生异常: %s", service_file)
@@ -624,7 +628,7 @@ class AgentManager:
             if process.returncode == 0:
                 self._report_progress(
                     state,
-                    f"    [green]{service_name} 复制成功[/green]",
+                    _("    [green]{name} 复制成功[/green]").format(name=service_name),
                     callback,
                 )
                 logger.info("服务文件复制成功: %s -> %s", service_file, target_path)
@@ -633,7 +637,7 @@ class AgentManager:
             error_output = stderr.decode("utf-8") if stderr else ""
             self._report_progress(
                 state,
-                f"    [red]{service_name} 复制失败: {error_output}[/red]",
+                _("    [red]{name} 复制失败: {error}[/red]").format(name=service_name, error=error_output),
                 callback,
             )
             logger.error("服务文件复制失败: %s, 错误: %s", service_file, error_output)
@@ -645,7 +649,7 @@ class AgentManager:
         callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """重新加载 systemd 配置"""
-        self._report_progress(state, "[cyan]重新加载 systemd 配置...[/cyan]", callback)
+        self._report_progress(state, _("[cyan]重新加载 systemd 配置...[/cyan]"), callback)
 
         try:
             cmd = "sudo systemctl daemon-reload"
@@ -655,12 +659,12 @@ class AgentManager:
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, stderr = await process.communicate()
+            _stdout, stderr = await process.communicate()
 
         except Exception:
             self._report_progress(
                 state,
-                "[red]重新加载 systemd 配置时发生异常[/red]",
+                _("[red]重新加载 systemd 配置时发生异常[/red]"),
                 callback,
             )
             logger.exception("重新加载 systemd 配置时发生异常")
@@ -669,7 +673,7 @@ class AgentManager:
             if process.returncode == 0:
                 self._report_progress(
                     state,
-                    "[green]systemd 配置重新加载成功[/green]",
+                    _("[green]systemd 配置重新加载成功[/green]"),
                     callback,
                 )
                 logger.info("systemd 配置重新加载成功")
@@ -678,7 +682,7 @@ class AgentManager:
             error_output = stderr.decode("utf-8") if stderr else ""
             self._report_progress(
                 state,
-                f"[red]systemd 配置重新加载失败: {error_output}[/red]",
+                _("[red]systemd 配置重新加载失败: {error}[/red]").format(error=error_output),
                 callback,
             )
             logger.error("systemd 配置重新加载失败: %s", error_output)
@@ -690,12 +694,12 @@ class AgentManager:
         callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """运行脚本拉起 MCP Server 进程"""
-        self._report_progress(state, "[cyan]启动 MCP Server 进程...[/cyan]", callback)
+        self._report_progress(state, _("[cyan]启动 MCP Server 进程...[/cyan]"), callback)
 
         if not self.run_script_path or not self.run_script_path.exists():
             self._report_progress(
                 state,
-                f"[red]MCP 启动脚本不存在: {self.run_script_path}[/red]",
+                _("[red]MCP 启动脚本不存在: {path}[/red]").format(path=self.run_script_path),
                 callback,
             )
             logger.error("MCP 启动脚本不存在: %s", self.run_script_path)
@@ -706,7 +710,7 @@ class AgentManager:
             # 清理失败不会阻止继续执行，只是记录警告
             self._report_progress(
                 state,
-                "[yellow]清理旧进程时遇到问题，但继续执行启动脚本[/yellow]",
+                _("[yellow]清理旧进程时遇到问题，但继续执行启动脚本[/yellow]"),
                 callback,
             )
 
@@ -714,7 +718,7 @@ class AgentManager:
         try:
             # 执行 run.sh 脚本
             cmd = f"bash {self.run_script_path}"
-            self._report_progress(state, f"  [blue]执行命令: {cmd}[/blue]", callback)
+            self._report_progress(state, _("  [blue]执行命令: {cmd}[/blue]").format(cmd=cmd), callback)
             logger.info("执行 MCP 启动脚本: %s", cmd)
 
             process = await asyncio.create_subprocess_shell(
@@ -723,27 +727,27 @@ class AgentManager:
                 stderr=asyncio.subprocess.STDOUT,
             )
 
-            stdout, _ = await process.communicate()
+            stdout, _stderr = await process.communicate()
             output = stdout.decode("utf-8") if stdout else ""
 
             if process.returncode == 0:
                 self._report_progress(
                     state,
-                    "[green]MCP Server 启动脚本执行成功[/green]",
+                    _("[green]MCP Server 启动脚本执行成功[/green]"),
                     callback,
                 )
                 logger.info("MCP Server 启动脚本执行成功")
                 return True
 
         except Exception:
-            error_msg = "执行 MCP Server 启动脚本失败"
+            error_msg = _("执行 MCP Server 启动脚本失败")
             self._report_progress(state, f"[red]{error_msg}[/red]", callback)
             logger.exception(error_msg)
             return False
         else:
             self._report_progress(
                 state,
-                f"[red]MCP Server 启动脚本执行失败 (返回码: {process.returncode})[/red]",
+                _("[red]MCP Server 启动脚本执行失败 (返回码: {code})[/red]").format(code=process.returncode),
                 callback,
             )
             logger.error("MCP Server 启动脚本执行失败: %s, 输出: %s", cmd, output)
@@ -801,15 +805,15 @@ class AgentManager:
         callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """验证 MCP Server 服务状态"""
-        self._report_progress(state, "[cyan]验证 MCP Server 服务状态...[/cyan]", callback)
+        self._report_progress(state, _("[cyan]验证 MCP Server 服务状态...[/cyan]"), callback)
 
         # 获取服务文件列表
-        service_files = self._get_service_files(state, callback, "服务验证")
+        service_files = self._get_service_files(state, callback, _("服务验证"))
         if service_files is None:
             return True
 
         # 处理所有服务文件
-        overall_success, active_services, failed_services = await self._process_service_files(
+        _overall_success, _active_services, failed_services = await self._process_service_files(
             service_files,
             state,
             callback,
@@ -819,13 +823,13 @@ class AgentManager:
         if failed_services:
             self._report_progress(
                 state,
-                f"[red]关键服务状态异常: {', '.join(failed_services)}，停止初始化[/red]",
+                _("[red]关键服务状态异常: {services}，停止初始化[/red]").format(services=", ".join(failed_services)),
                 callback,
             )
             logger.error("关键服务状态异常，停止初始化: %s", failed_services)
             return False
 
-        self._report_progress(state, "[green]MCP Server 服务验证完成[/green]", callback)
+        self._report_progress(state, _("[green]MCP Server 服务验证完成[/green]"), callback)
         return True
 
     async def _verify_single_service(
@@ -845,7 +849,7 @@ class AgentManager:
         if retry_count > max_retries:
             self._report_progress(
                 state,
-                f"    [red]{service_name} 启动超时 (30秒)[/red]",
+                _("    [red]{name} 启动超时 (30秒)[/red]").format(name=service_name),
                 callback,
             )
             logger.error("服务启动超时: %s", service_name)
@@ -854,13 +858,16 @@ class AgentManager:
         if retry_count == 0:
             self._report_progress(
                 state,
-                f"  [magenta]检查服务状态: {service_name}[/magenta]",
+                _("  [magenta]检查服务状态: {name}[/magenta]").format(name=service_name),
                 callback,
             )
         else:
             self._report_progress(
                 state,
-                f"    [dim]{service_name} 重新检查状态... (第 {retry_count} 次)[/dim]",
+                _("    [dim]{name} 重新检查状态... (第 {count} 次)[/dim]").format(
+                    name=service_name,
+                    count=retry_count,
+                ),
                 callback,
             )
 
@@ -873,13 +880,13 @@ class AgentManager:
                 stderr=asyncio.subprocess.PIPE,
             )
 
-            stdout, stderr = await process.communicate()
+            stdout, _stderr = await process.communicate()
             output = stdout.decode("utf-8") if stdout else ""
 
         except Exception:
             self._report_progress(
                 state,
-                f"    [red]检查 {service_name} 状态失败[/red]",
+                _("    [red]检查 {name} 状态失败[/red]").format(name=service_name),
                 callback,
             )
             logger.exception("检查服务状态失败: %s", service_name)
@@ -890,7 +897,7 @@ class AgentManager:
                 # 服务正常运行
                 self._report_progress(
                     state,
-                    f"    [green]{service_name} 状态正常 (active running)[/green]",
+                    _("    [green]{service_name} 状态正常 (active running)[/green]").format(service_name=service_name),
                     callback,
                 )
                 logger.info("服务状态正常: %s", service_name)
@@ -900,7 +907,7 @@ class AgentManager:
             if "failed" in output.lower() or "code=exited" in output.lower():
                 self._report_progress(
                     state,
-                    f"    [red]{service_name} 服务启动失败[/red]",
+                    _("    [red]{service_name} 服务启动失败[/red]").format(service_name=service_name),
                     callback,
                 )
                 logger.error("服务启动失败: %s, 详细信息: %s", service_name, output.strip())
@@ -911,7 +918,9 @@ class AgentManager:
                 if retry_count == 0:
                     self._report_progress(
                         state,
-                        f"    [yellow]{service_name} 正在启动中，等待启动完成...[/yellow]",
+                        _("    [yellow]{service_name} 正在启动中，等待启动完成...[/yellow]").format(
+                            service_name=service_name,
+                        ),
                         callback,
                     )
                     logger.info("服务正在启动中，等待启动完成: %s", service_name)
@@ -923,7 +932,10 @@ class AgentManager:
             # 其他状态都认为是异常
             self._report_progress(
                 state,
-                f"    [red]{service_name} 状态异常 (返回码: {process.returncode})[/red]",
+                _("    [red]{service_name} 状态异常 (返回码: {returncode})[/red]").format(
+                    service_name=service_name,
+                    returncode=process.returncode,
+                ),
                 callback,
             )
             logger.warning("服务状态异常: %s, 返回码: %d, 输出: %s", service_name, process.returncode, output.strip())
@@ -941,7 +953,7 @@ class AgentManager:
             dict[str, str]: MCP 路径名 -> 服务 ID 的映射
 
         """
-        self._report_progress(state, "[cyan]注册 MCP 服务...[/cyan]", callback)
+        self._report_progress(state, _("[cyan]注册 MCP 服务...[/cyan]"), callback)
 
         # 加载 MCP 配置
         configs = await self._load_mcp_configs(state, callback)
@@ -958,19 +970,23 @@ class AgentManager:
                 mcp_service_mapping[mcp_path_name] = service_id
                 self._report_progress(
                     state,
-                    f"  [green]{config.name} 注册成功: {mcp_path_name} -> {service_id}[/green]",
+                    _("  [green]{name} 注册成功: {mcp_path} -> {service_id}[/green]").format(
+                        name=config.name,
+                        mcp_path=mcp_path_name,
+                        service_id=service_id,
+                    ),
                     callback,
                 )
             else:
                 self._report_progress(
                     state,
-                    f"  [red]MCP 服务 {config.name} 注册失败[/red]",
+                    _("  [red]MCP 服务 {name} 注册失败[/red]").format(name=config.name),
                     callback,
                 )
 
         self._report_progress(
             state,
-            f"[green]MCP 服务注册完成，成功 {len(mcp_service_mapping)} 个[/green]",
+            _("[green]MCP 服务注册完成，成功 {count} 个[/green]").format(count=len(mcp_service_mapping)),
             callback,
         )
         return mcp_service_mapping
@@ -982,7 +998,7 @@ class AgentManager:
         callback: Callable[[DeploymentState], None] | None,
     ) -> str | None:
         """从配置文件创建智能体"""
-        self._report_progress(state, "[cyan]读取应用配置并创建智能体...[/cyan]", callback)
+        self._report_progress(state, _("[cyan]读取应用配置并创建智能体...[/cyan]"), callback)
 
         # 读取应用配置
         app_configs = await self._load_app_configs(state, callback)
@@ -1008,7 +1024,7 @@ class AgentManager:
                     default_app_id = app_id
                     self._report_progress(
                         state,
-                        f"  [dim]设置默认智能体: {app_config.name}[/dim]",
+                        _("  [dim]设置默认智能体: {name}[/dim]").format(name=app_config.name),
                         callback,
                     )
                     self.config_manager.set_default_app(app_id)
@@ -1016,12 +1032,12 @@ class AgentManager:
         if created_agents:
             self._report_progress(
                 state,
-                f"[green]成功创建 {len(created_agents)} 个智能体[/green]",
+                _("[green]成功创建 {count} 个智能体[/green]").format(count=len(created_agents)),
                 callback,
             )
             return default_app_id
 
-        self._report_progress(state, "[red]未能创建任何智能体[/red]", callback)
+        self._report_progress(state, _("[red]未能创建任何智能体[/red]"), callback)
         return None
 
     async def _create_single_agent(
@@ -1034,7 +1050,7 @@ class AgentManager:
         """创建单个智能体"""
         self._report_progress(
             state,
-            f"[magenta]创建智能体: {app_config.name}[/magenta]",
+            _("[magenta]创建智能体: {name}[/magenta]").format(name=app_config.name),
             callback,
         )
 
@@ -1047,7 +1063,7 @@ class AgentManager:
         if missing_services:
             self._report_progress(
                 state,
-                f"  [yellow]缺少 MCP 服务: {', '.join(missing_services)}，跳过[/yellow]",
+                _("  [yellow]缺少 MCP 服务: {services}，跳过[/yellow]").format(services=", ".join(missing_services)),
                 callback,
             )
             logger.warning("智能体 %s 缺少 MCP 服务: %s", app_config.name, missing_services)
@@ -1056,7 +1072,7 @@ class AgentManager:
         if not mcp_service_ids:
             self._report_progress(
                 state,
-                f"  [yellow]智能体 {app_config.name} 没有可用的 MCP 服务，跳过[/yellow]",
+                _("  [yellow]智能体 {name} 没有可用的 MCP 服务，跳过[/yellow]").format(name=app_config.name),
                 callback,
             )
             return None
@@ -1076,7 +1092,7 @@ class AgentManager:
         except Exception:
             self._report_progress(
                 state,
-                f"  [red]创建智能体 {app_config.name} 失败[/red]",
+                _("  [red]创建智能体 {name} 失败[/red]").format(name=app_config.name),
                 callback,
             )
             logger.exception("创建智能体失败: %s", app_config.name)
@@ -1084,7 +1100,10 @@ class AgentManager:
         else:
             self._report_progress(
                 state,
-                f"  [green]智能体 {app_config.name} 创建成功: {app_id}[/green]",
+                _("  [green]智能体 {name} 创建成功: {app_id}[/green]").format(
+                    name=app_config.name,
+                    app_id=app_id,
+                ),
                 callback,
             )
             return app_id
@@ -1112,12 +1131,12 @@ class AgentManager:
         callback: Callable[[DeploymentState], None] | None,
     ) -> list[AppConfig]:
         """加载应用配置"""
-        self._report_progress(state, "[cyan]加载应用配置文件...[/cyan]", callback)
+        self._report_progress(state, _("[cyan]加载应用配置文件...[/cyan]"), callback)
 
         if not self.app_config_path or not self.app_config_path.exists():
             self._report_progress(
                 state,
-                f"[red]应用配置文件不存在: {self.app_config_path}[/red]",
+                _("[red]应用配置文件不存在: {path}[/red]").format(path=self.app_config_path),
                 callback,
             )
             logger.error("应用配置文件不存在: %s", self.app_config_path)
@@ -1131,7 +1150,7 @@ class AgentManager:
             if not applications:
                 self._report_progress(
                     state,
-                    "[yellow]配置文件中没有找到应用定义[/yellow]",
+                    _("[yellow]配置文件中没有找到应用定义[/yellow]"),
                     callback,
                 )
                 logger.warning("配置文件中没有找到应用定义")
@@ -1151,21 +1170,21 @@ class AgentManager:
                 except KeyError as e:
                     self._report_progress(
                         state,
-                        f"  [red]应用配置缺少必需字段: {e}[/red]",
+                        _("  [red]应用配置缺少必需字段: {field}[/red]").format(field=e),
                         callback,
                     )
                     logger.exception("应用配置缺少必需字段")
                     continue
 
         except Exception:
-            error_msg = f"加载应用配置文件失败: {self.app_config_path}"
+            error_msg = _("加载应用配置文件失败: {path}").format(path=self.app_config_path)
             self._report_progress(state, f"[red]{error_msg}[/red]", callback)
             logger.exception(error_msg)
             return []
         else:
             self._report_progress(
                 state,
-                f"[green]成功加载 {len(app_configs)} 个应用配置[/green]",
+                _("[green]成功加载 {count} 个应用配置[/green]").format(count=len(app_configs)),
                 callback,
             )
             return app_configs
@@ -1176,16 +1195,20 @@ class AgentManager:
         callback: Callable[[DeploymentState], None] | None,
     ) -> list[tuple[Path, McpConfig]]:
         """加载 MCP 配置"""
-        self._report_progress(state, "[cyan]加载 MCP 配置文件...[/cyan]", callback)
+        self._report_progress(state, _("[cyan]加载 MCP 配置文件...[/cyan]"), callback)
 
         config_loader = McpConfigLoader(self.mcp_config_dir)
         configs = config_loader.load_all_configs()
 
         if not configs:
-            self._report_progress(state, "[yellow]未找到 MCP 配置文件[/yellow]", callback)
+            self._report_progress(state, _("[yellow]未找到 MCP 配置文件[/yellow]"), callback)
             return []
 
-        self._report_progress(state, f"[green]成功加载 {len(configs)} 个 MCP 配置[/green]", callback)
+        self._report_progress(
+            state,
+            _("[green]成功加载 {count} 个 MCP 配置[/green]").format(count=len(configs)),
+            callback,
+        )
         return configs
 
     async def _process_mcp_service(
@@ -1201,7 +1224,7 @@ class AgentManager:
             if not valid:
                 self._report_progress(
                     state,
-                    f"  [red]MCP 服务 {config.name} SSE Endpoint 验证失败[/red]",
+                    _("  [red]MCP 服务 {name} SSE Endpoint 验证失败[/red]").format(name=config.name),
                     callback,
                 )
                 return None
@@ -1217,7 +1240,11 @@ class AgentManager:
             await self._activate_mcp_service(service_id, config.name, state, callback)
 
         except (ApiError, httpx.RequestError, Exception) as e:
-            self._report_progress(state, f"  [red]{config.name} 处理失败: {e}[/red]", callback)
+            self._report_progress(
+                state,
+                _("  [red]{name} 处理失败: {error}[/red]").format(name=config.name, error=e),
+                callback,
+            )
             logger.exception("MCP 服务 %s 处理失败", config.name)
             return None
 
@@ -1230,7 +1257,7 @@ class AgentManager:
         callback: Callable[[DeploymentState], None] | None,
     ) -> str:
         """注册 MCP 服务"""
-        self._report_progress(state, f"  [blue]注册 {config.name}...[/blue]", callback)
+        self._report_progress(state, _("  [blue]注册 {name}...[/blue]").format(name=config.name), callback)
         return await self.api_client.register_mcp_service(config)
 
     async def _install_and_wait_mcp_service(
@@ -1241,12 +1268,16 @@ class AgentManager:
         callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """安装并等待 MCP 服务完成"""
-        self._report_progress(state, f"  [cyan]安装 {config_name} (ID: {service_id})...[/cyan]", callback)
+        self._report_progress(
+            state,
+            _("  [cyan]安装 {name} (ID: {service_id})...[/cyan]").format(name=config_name, service_id=service_id),
+            callback,
+        )
         await self.api_client.install_mcp_service(service_id)
 
-        self._report_progress(state, f"  [dim]等待 {config_name} 安装完成...[/dim]", callback)
+        self._report_progress(state, _("  [dim]等待 {name} 安装完成...[/dim]").format(name=config_name), callback)
         if not await self.api_client.wait_for_installation(service_id):
-            self._report_progress(state, f"  [red]{config_name} 安装超时[/red]", callback)
+            self._report_progress(state, _("  [red]{name} 安装超时[/red]").format(name=config_name), callback)
             return False
 
         return True
@@ -1259,9 +1290,9 @@ class AgentManager:
         callback: Callable[[DeploymentState], None] | None,
     ) -> None:
         """激活 MCP 服务"""
-        self._report_progress(state, f"  [yellow]激活 {config_name}...[/yellow]", callback)
+        self._report_progress(state, _("  [yellow]激活 {name}...[/yellow]").format(name=config_name), callback)
         await self.api_client.activate_mcp_service(service_id)
-        self._report_progress(state, f"  [green]{config_name} 处理完成[/green]", callback)
+        self._report_progress(state, _("  [green]{name} 处理完成[/green]").format(name=config_name), callback)
 
     async def _validate_sse_endpoint(
         self,
@@ -1273,7 +1304,7 @@ class AgentManager:
         url = config.config.get("url") or ""
         self._report_progress(
             state,
-            f"[magenta]验证 SSE Endpoint: {config.name} -> {url}[/magenta]",
+            _("[magenta]验证 SSE Endpoint: {name} -> {url}[/magenta]").format(name=config.name, url=url),
             callback,
         )
 
@@ -1286,7 +1317,7 @@ class AgentManager:
             if await self._try_simple_sse_check(url, config.name, attempt, max_attempts):
                 self._report_progress(
                     state,
-                    f"  [green]{config.name} SSE Endpoint 验证通过[/green]",
+                    _("  [green]{name} SSE Endpoint 验证通过[/green]").format(name=config.name),
                     callback,
                 )
                 logger.info("SSE Endpoint 简单验证成功: %s (尝试 %d 次)", url, attempt)
@@ -1296,7 +1327,7 @@ class AgentManager:
             if await self._try_mcp_initialize_check(url, config.name, attempt, max_attempts):
                 self._report_progress(
                     state,
-                    f"  [green]{config.name} SSE Endpoint 验证通过[/green]",
+                    _("  [green]{name} SSE Endpoint 验证通过[/green]").format(name=config.name),
                     callback,
                 )
                 logger.info("SSE Endpoint MCP 协议验证成功: %s (尝试 %d 次)", url, attempt)
@@ -1309,7 +1340,7 @@ class AgentManager:
         # 所有尝试都失败了
         self._report_progress(
             state,
-            f"  [red]{config.name} SSE Endpoint 验证失败: 30秒内无法连接[/red]",
+            _("  [red]{name} SSE Endpoint 验证失败: 30秒内无法连接[/red]").format(name=config.name),
             callback,
         )
         logger.error(

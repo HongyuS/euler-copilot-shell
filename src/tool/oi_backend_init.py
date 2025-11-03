@@ -8,6 +8,7 @@ from textual.app import App
 
 from app.deployment import InitializationModeScreen
 from config.manager import ConfigManager
+from i18n.manager import _
 from log.manager import get_logger
 
 
@@ -35,7 +36,7 @@ def backend_init() -> None:
             """部署 TUI 应用"""
 
             CSS_PATH = css_path
-            TITLE = "openEuler Intelligence 部署助手"
+            TITLE = _("openEuler Intelligence 部署助手")
 
             def on_mount(self) -> None:
                 """启动时先显示初始化模式选择界面"""
