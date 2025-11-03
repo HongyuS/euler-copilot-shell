@@ -18,6 +18,7 @@ import httpx
 import toml
 
 from config.manager import ConfigManager
+from i18n.manager import _
 from log.manager import get_logger
 
 from .agent import AgentManager
@@ -62,7 +63,7 @@ class DeploymentResourceManager:
             return template_path.read_text(encoding="utf-8")
         except OSError as e:
             logger.exception("读取模板文件失败 %s", template_path)
-            msg = f"无法读取模板文件: {template_path}"
+            msg = _("无法读取模板文件: {path}").format(path=template_path)
             raise RuntimeError(msg) from e
 
     @classmethod
@@ -134,11 +135,11 @@ class DeploymentResourceManager:
 
         except toml.TomlDecodeError as e:
             logger.exception("解析 TOML 内容时出错")
-            msg = f"TOML 格式错误: {e}"
+            msg = _("TOML 格式错误: {error}").format(error=e)
             raise ValueError(msg) from e
         except Exception as e:
             logger.exception("更新 TOML 配置时发生错误")
-            msg = f"更新 TOML 配置失败: {e}"
+            msg = _("更新 TOML 配置失败: {error}").format(error=e)
             raise RuntimeError(msg) from e
 
     @classmethod
@@ -184,26 +185,29 @@ class DeploymentService:
 
         # 更新状态
         if progress_callback:
-            temp_state.current_step_name = "检查部署依赖"
-            temp_state.add_log("正在检查部署环境依赖...")
+            temp_state.current_step_name = _("检查部署依赖")
+            temp_state.add_log(_("正在检查部署环境依赖..."))
             progress_callback(temp_state)
 
         # 检查操作系统
         if not self.detect_openeuler():
-            errors.append("仅支持 openEuler 操作系统")
+            errors.append(_("仅支持 openEuler 操作系统"))
             return False, errors
 
         # 检查 Python 版本兼容性
         python_version = sys.version_info
         current_version = f"{python_version.major}.{python_version.minor}"
         if python_version < (3, 10) and progress_callback:
-            temp_state.add_log(f"⚠ 检测到 Python {current_version}，低于 3.10 版本将不支持全量部署模式")
+            warning_msg = _("⚠ 检测到 Python {version}，低于 3.10 版本将不支持全量部署模式").format(
+                version=current_version,
+            )
+            temp_state.add_log(warning_msg)
             progress_callback(temp_state)
 
         # 检查并安装 openeuler-intelligence-installer
         if not self.resource_manager.check_installer_available():
             if progress_callback:
-                temp_state.add_log("缺少 openeuler-intelligence-installer 包，正在尝试安装...")
+                temp_state.add_log(_("缺少 openeuler-intelligence-installer 包，正在尝试安装..."))
                 progress_callback(temp_state)
 
             success, install_errors = await self._install_intelligence_installer(progress_callback)
@@ -213,11 +217,11 @@ class DeploymentService:
 
         # 检查 sudo 权限
         if not await self.check_sudo_privileges():
-            errors.append("需要管理员权限，请确保可以使用 sudo")
+            errors.append(_("需要管理员权限，请确保可以使用 sudo"))
             return False, errors
 
         if progress_callback:
-            temp_state.add_log("✓ 部署环境依赖检查完成")
+            temp_state.add_log(_("✓ 部署环境依赖检查完成"))
             progress_callback(temp_state)
 
         return True, []
@@ -263,17 +267,17 @@ class DeploymentService:
 
             # 检查是否低于 3.10
             if python_version < (3, 10) and deployment_mode == "full":
-                return False, (
+                return False, _(
                     "当前 openEuler 版本低于 24.03 LTS，"
-                    "不支持全量部署模式。请使用轻量部署模式或升级到 openEuler 24.03+ 版本"
+                    "不支持全量部署模式。请使用轻量部署模式或升级到 openEuler 24.03+ 版本",
                 )
 
         except Exception as e:
             logger.exception("检查 Python 环境版本时发生错误")
-            return False, f"无法检查 Python 环境: {e}"
+            return False, _("无法检查 Python 环境: {error}").format(error=e)
         else:
             # Python 版本符合要求
-            return True, f"Python 环境版本 {current_version} 符合要求"
+            return True, _("Python 环境版本 {version} 符合要求").format(version=current_version)
 
     async def check_sudo_privileges(self) -> bool:
         """检查 sudo 权限"""
@@ -329,8 +333,8 @@ class DeploymentService:
             logger.exception("部署过程中发生错误")
             self.state.is_running = False
             self.state.is_failed = True
-            self.state.error_message = "部署过程中发生异常"
-            self.state.add_log("✗ 部署失败")
+            self.state.error_message = _("部署过程中发生异常")
+            self.state.add_log(_("✗ 部署失败"))
 
             if progress_callback:
                 progress_callback(self.state)
@@ -340,7 +344,7 @@ class DeploymentService:
         # 部署完成，创建全局配置模板供其他用户使用
         self.state.is_running = False
         self.state.is_completed = True
-        self.state.add_log("✓ openEuler Intelligence 后端部署完成！")
+        self.state.add_log(_("✓ openEuler Intelligence 后端部署完成！"))
 
         # 创建全局配置模板，包含部署时的配置信息
         await self._create_global_config_template(config)
@@ -378,7 +382,7 @@ class DeploymentService:
         try:
             temp_state = DeploymentState()
             if progress_callback:
-                temp_state.add_log("正在安装 openeuler-intelligence-installer...")
+                temp_state.add_log(_("正在安装 openeuler-intelligence-installer..."))
                 progress_callback(temp_state)
 
             # 执行安装命令
@@ -389,21 +393,21 @@ class DeploymentService:
                 # 验证安装是否成功
                 if self.resource_manager.check_installer_available():
                     if progress_callback:
-                        temp_state.add_log("✓ openeuler-intelligence-installer 安装成功")
+                        temp_state.add_log(_("✓ openeuler-intelligence-installer 安装成功"))
                         progress_callback(temp_state)
                     return True, []
 
-                errors.append("openeuler-intelligence-installer 安装后资源文件仍然缺失")
+                errors.append(_("openeuler-intelligence-installer 安装后资源文件仍然缺失"))
                 return False, errors
 
-            errors.append("安装 openeuler-intelligence-installer 失败")
+            errors.append(_("安装 openeuler-intelligence-installer 失败"))
             # 添加安装输出到错误信息
             if output_lines:
-                errors.append("安装输出:")
+                errors.append(_("安装输出:"))
                 errors.extend(output_lines[-5:])  # 只显示最后5行
 
         except Exception as e:
-            errors.append(f"安装过程中发生异常: {e}")
+            errors.append(_("安装过程中发生异常: {error}").format(error=e))
             logger.exception("安装 openeuler-intelligence-installer 时发生异常")
 
         return False, errors
@@ -439,9 +443,9 @@ class DeploymentService:
 
         # 如果是全量部署模式，提示用户到网页端完成 Agent 配置
         if config.deployment_mode == "full":
-            self.state.add_log("✓ 基础服务部署完成")
-            self.state.add_log("请访问网页管理界面完成 Agent 服务配置")
-            self.state.add_log(f"管理界面地址: http://{config.server_ip}:8080")
+            self.state.add_log(_("✓ 基础服务部署完成"))
+            self.state.add_log(_("请访问网页管理界面完成 Agent 服务配置"))
+            self.state.add_log(_("管理界面地址: http://{ip}:8080").format(ip=config.server_ip))
 
         return True
 
@@ -478,36 +482,36 @@ class DeploymentService:
     ) -> bool:
         """检查系统环境和资源"""
         self.state.current_step = 1
-        self.state.current_step_name = "检查系统环境"
-        self.state.add_log("正在检查系统环境...")
+        self.state.current_step_name = _("检查系统环境")
+        self.state.add_log(_("正在检查系统环境..."))
 
         if progress_callback:
             progress_callback(self.state)
 
         # 检查操作系统
         if not self.detect_openeuler():
-            self.state.add_log("✗ 错误: 仅支持 openEuler 操作系统")
+            self.state.add_log(_("✗ 错误: 仅支持 openEuler 操作系统"))
             return False
-        self.state.add_log("✓ 检测到 openEuler 操作系统")
+        self.state.add_log(_("✓ 检测到 openEuler 操作系统"))
 
         # 检查 openEuler & Python 版本是否支持指定的部署模式
         python_check_ok, python_msg = self.check_python_version_for_deployment(config.deployment_mode)
         if not python_check_ok:
-            self.state.add_log(f"✗ 错误: {python_msg}")
+            self.state.add_log(_("✗ 错误: {msg}").format(msg=python_msg))
             return False
 
         # 检查安装器资源
         if not self.resource_manager.check_installer_available():
-            self.state.add_log("✗ 错误: openeuler-intelligence-installer 包未安装或资源缺失")
-            self.state.add_log("请先安装: sudo dnf install -y openeuler-intelligence-installer")
+            self.state.add_log(_("✗ 错误: openeuler-intelligence-installer 包未安装或资源缺失"))
+            self.state.add_log(_("请先安装: sudo dnf install -y openeuler-intelligence-installer"))
             return False
-        self.state.add_log("✓ openeuler-intelligence-installer 资源可用")
+        self.state.add_log(_("✓ openeuler-intelligence-installer 资源可用"))
 
         # 检查权限
         if not await self.check_sudo_privileges():
-            self.state.add_log("✗ 错误: 需要管理员权限")
+            self.state.add_log(_("✗ 错误: 需要管理员权限"))
             return False
-        self.state.add_log("✓ 具有管理员权限")
+        self.state.add_log(_("✓ 具有管理员权限"))
 
         return True
 
@@ -518,8 +522,8 @@ class DeploymentService:
     ) -> bool:
         """设置部署模式"""
         self.state.current_step = 0
-        self.state.current_step_name = "初始化部署配置"
-        self.state.add_log("正在设置部署模式...")
+        self.state.current_step_name = _("初始化部署配置")
+        self.state.add_log(_("正在设置部署模式..."))
 
         if progress_callback:
             progress_callback(self.state)
@@ -546,15 +550,16 @@ class DeploymentService:
 
             if process.returncode != 0:
                 error_msg = stderr.decode("utf-8", errors="ignore").strip()
-                self.state.add_log(f"✗ 设置部署模式失败: {error_msg}")
+                self.state.add_log(_("✗ 设置部署模式失败: {error}").format(error=error_msg))
                 return False
 
-            web_status = "启用" if config.enable_web else "禁用"
-            rag_status = "启用" if config.enable_rag else "禁用"
-            self.state.add_log(f"✓ 部署模式设置完成 (Web界面: {web_status}, RAG: {rag_status})")
+            web_status = _("启用") if config.enable_web else _("禁用")
+            rag_status = _("启用") if config.enable_rag else _("禁用")
+            status_msg = _("✓ 部署模式设置完成 (Web界面: {web}, RAG: {rag})").format(web=web_status, rag=rag_status)
+            self.state.add_log(status_msg)
 
         except Exception as e:
-            self.state.add_log(f"✗ 设置部署模式失败: {e}")
+            self.state.add_log(_("✗ 设置部署模式失败: {error}").format(error=e))
             logger.exception("设置部署模式失败")
             return False
 
@@ -567,17 +572,17 @@ class DeploymentService:
     ) -> bool:
         """运行环境检查脚本"""
         self.state.current_step = 1
-        self.state.current_step_name = "检查系统环境"
-        self.state.add_log("正在执行系统环境检查...")
+        self.state.current_step_name = _("检查系统环境")
+        self.state.add_log(_("正在执行系统环境检查..."))
 
         if progress_callback:
             progress_callback(self.state)
 
         try:
             script_path = self.resource_manager.INSTALLER_BASE_PATH / "1-check-env" / "check_env.sh"
-            return await self._run_script(script_path, "环境检查脚本", progress_callback)
+            return await self._run_script(script_path, _("环境检查脚本"), progress_callback)
         except Exception as e:
-            self.state.add_log(f"✗ 环境检查失败: {e}")
+            self.state.add_log(_("✗ 环境检查失败: {error}").format(error=e))
             logger.exception("环境检查脚本执行失败")
             return False
 
@@ -588,8 +593,8 @@ class DeploymentService:
     ) -> bool:
         """运行依赖安装脚本"""
         self.state.current_step = 2
-        self.state.current_step_name = "安装依赖组件"
-        self.state.add_log("正在安装 openEuler Intelligence 依赖组件...")
+        self.state.current_step_name = _("安装依赖组件")
+        self.state.add_log(_("正在安装 openEuler Intelligence 依赖组件..."))
 
         if progress_callback:
             progress_callback(self.state)
@@ -598,9 +603,9 @@ class DeploymentService:
             script_path = (
                 self.resource_manager.INSTALLER_BASE_PATH / "2-install-dependency" / "install_openEulerIntelligence.sh"
             )
-            return await self._run_script(script_path, "依赖安装脚本", progress_callback)
+            return await self._run_script(script_path, _("依赖安装脚本"), progress_callback)
         except Exception as e:
-            self.state.add_log(f"✗ 依赖安装失败: {e}")
+            self.state.add_log(_("✗ 依赖安装失败: {error}").format(error=e))
             logger.exception("依赖安装脚本执行失败")
             return False
 
@@ -611,17 +616,17 @@ class DeploymentService:
     ) -> bool:
         """运行配置初始化脚本"""
         self.state.current_step = 4
-        self.state.current_step_name = "初始化配置和服务"
-        self.state.add_log("正在初始化配置和启动服务...")
+        self.state.current_step_name = _("初始化配置和服务")
+        self.state.add_log(_("正在初始化配置和启动服务..."))
 
         if progress_callback:
             progress_callback(self.state)
 
         try:
             script_path = self.resource_manager.INSTALLER_BASE_PATH / "3-install-server" / "init_config.sh"
-            return await self._run_script(script_path, "配置初始化脚本", progress_callback)
+            return await self._run_script(script_path, _("配置初始化脚本"), progress_callback)
         except Exception as e:
-            self.state.add_log(f"✗ 配置初始化失败: {e}")
+            self.state.add_log(_("✗ 配置初始化失败: {error}").format(error=e))
             logger.exception("配置初始化脚本执行失败")
             return False
 
@@ -633,7 +638,7 @@ class DeploymentService:
     ) -> bool:
         """运行部署脚本"""
         if not script_path.exists():
-            self.state.add_log(f"✗ 脚本文件不存在: {script_path}")
+            self.state.add_log(_("✗ 脚本文件不存在: {path}").format(path=script_path))
             return False
 
         try:
@@ -671,16 +676,16 @@ class DeploymentService:
             self._process = None
 
             if return_code == 0:
-                self.state.add_log(f"✓ {script_name}执行成功")
+                self.state.add_log(_("✓ {name}执行成功").format(name=script_name))
                 return True
 
         except Exception as e:
-            self.state.add_log(f"✗ 运行{script_name}时发生错误: {e}")
+            self.state.add_log(_("✗ 运行{name}时发生错误: {error}").format(name=script_name, error=e))
             logger.exception("运行脚本失败: %s", script_path)
             return False
 
         else:
-            self.state.add_log(f"✗ {script_name}执行失败，返回码: {return_code}")
+            self.state.add_log(_("✗ {name}执行失败，返回码: {code}").format(name=script_name, code=return_code))
             return False
 
     async def _heartbeat_progress(self, progress_callback: Callable[[DeploymentState], None] | None) -> None:
@@ -701,8 +706,8 @@ class DeploymentService:
     ) -> bool:
         """生成配置文件"""
         self.state.current_step = 3
-        self.state.current_step_name = "更新配置文件"
-        self.state.add_log("正在更新配置文件...")
+        self.state.current_step_name = _("更新配置文件")
+        self.state.add_log(_("正在更新配置文件..."))
 
         if progress_callback:
             progress_callback(self.state)
@@ -710,14 +715,14 @@ class DeploymentService:
         try:
             # 更新 env 文件
             await self._update_env_file(config)
-            self.state.add_log("✓ 更新 env 配置文件")
+            self.state.add_log(_("✓ 更新 env 配置文件"))
 
             # 更新 config.toml 文件
             await self._update_config_toml(config)
-            self.state.add_log("✓ 更新 config.toml 配置文件")
+            self.state.add_log(_("✓ 更新 config.toml 配置文件"))
 
         except Exception as e:
-            self.state.add_log(f"✗ 更新配置文件失败: {e}")
+            self.state.add_log(_("✗ 更新配置文件失败: {error}").format(error=e))
             logger.exception("更新配置文件失败")
             return False
 
@@ -746,11 +751,11 @@ class DeploymentService:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        _, backup_stderr = await backup_process.communicate()
+        _backup_stdout, backup_stderr = await backup_process.communicate()
 
         if backup_process.returncode != 0:
             error_msg = backup_stderr.decode("utf-8", errors="ignore").strip()
-            msg = f"备份 env 文件失败: {error_msg}"
+            msg = _("备份 env 文件失败: {error}").format(error=error_msg)
             raise RuntimeError(msg)
 
         # 写入更新后的内容
@@ -761,12 +766,11 @@ class DeploymentService:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-
-        _, write_stderr = await process.communicate(updated_content.encode())
+        _write_stdout, write_stderr = await process.communicate(updated_content.encode())
 
         if process.returncode != 0:
             error_msg = write_stderr.decode("utf-8", errors="ignore").strip()
-            msg = f"写入 env 文件失败: {error_msg}"
+            msg = _("写入 env 文件失败: {error}").format(error=error_msg)
             raise RuntimeError(msg)
 
     async def _update_config_toml(self, config: DeploymentConfig) -> None:
@@ -792,11 +796,11 @@ class DeploymentService:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        _, backup_stderr = await backup_process.communicate()
+        _backup_stdout, backup_stderr = await backup_process.communicate()
 
         if backup_process.returncode != 0:
             error_msg = backup_stderr.decode("utf-8", errors="ignore").strip()
-            msg = f"备份 config.toml 文件失败: {error_msg}"
+            msg = _("备份 config.toml 文件失败: {error}").format(error=error_msg)
             raise RuntimeError(msg)
 
         # 写入更新后的内容
@@ -807,12 +811,11 @@ class DeploymentService:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-
-        _, write_stderr = await process.communicate(updated_content.encode())
+        _write_stdout, write_stderr = await process.communicate(updated_content.encode())
 
         if process.returncode != 0:
             error_msg = write_stderr.decode("utf-8", errors="ignore").strip()
-            msg = f"写入 config.toml 文件失败: {error_msg}"
+            msg = _("写入 config.toml 文件失败: {error}").format(error=error_msg)
             raise RuntimeError(msg)
 
     async def _read_process_output_lines(self, process: asyncio.subprocess.Process) -> AsyncGenerator[str, None]:
@@ -860,7 +863,10 @@ class DeploymentService:
         check_interval = 2.0  # 2秒
 
         for attempt in range(1, max_attempts + 1):
-            self.state.add_log(f"检查 oi-runtime 服务状态 ({attempt}/{max_attempts})...")
+            self.state.add_log(_("检查 oi-runtime 服务状态 ({current}/{total})...").format(
+                current=attempt,
+                total=max_attempts,
+            ))
 
             if progress_callback:
                 progress_callback(self.state)
@@ -879,21 +885,21 @@ class DeploymentService:
                 status = stdout.decode("utf-8").strip()
 
                 if process.returncode == 0 and status == "active":
-                    self.state.add_log("✓ Framework 服务状态正常")
+                    self.state.add_log(_("✓ Framework 服务状态正常"))
                     return True
 
-                self.state.add_log(f"Framework 服务状态: {status}")
+                self.state.add_log(_("Framework 服务状态: {status}").format(status=status))
 
                 if attempt < max_attempts:
-                    self.state.add_log(f"等待 {check_interval} 秒后重试...")
+                    self.state.add_log(_("等待 {seconds} 秒后重试...").format(seconds=check_interval))
                     await asyncio.sleep(check_interval)
 
             except (OSError, TimeoutError) as e:
-                self.state.add_log(f"检查服务状态时发生错误: {e}")
+                self.state.add_log(_("检查服务状态时发生错误: {error}").format(error=e))
                 if attempt < max_attempts:
                     await asyncio.sleep(check_interval)
 
-        self.state.add_log("✗ Framework 服务状态检查超时失败")
+        self.state.add_log(_("✗ Framework 服务状态检查超时失败"))
         return False
 
     async def _check_framework_api_health(
@@ -908,7 +914,7 @@ class DeploymentService:
         api_url = f"http://{server_ip}:{server_port}/api/user"
         http_ok = 200  # HTTP OK 状态码
 
-        self.state.add_log("等待 openEuler Intelligence 服务就绪")
+        self.state.add_log(_("等待 openEuler Intelligence 服务就绪"))
 
         async with httpx.AsyncClient(timeout=httpx.Timeout(5.0)) as client:
             for attempt in range(1, max_attempts + 1):
@@ -920,20 +926,20 @@ class DeploymentService:
                     response = await client.get(api_url)
 
                     if response.status_code == http_ok:
-                        self.state.add_log("✓ openEuler Intelligence 服务已就绪")
+                        self.state.add_log(_("✓ openEuler Intelligence 服务已就绪"))
                         return True
 
                 except httpx.ConnectError:
                     pass
                 except httpx.TimeoutException:
-                    self.state.add_log(f"连接 {api_url} 超时")
+                    self.state.add_log(_("连接 {url} 超时").format(url=api_url))
                 except (httpx.RequestError, OSError) as e:
-                    self.state.add_log(f"API 连通性检查时发生错误: {e}")
+                    self.state.add_log(_("API 连通性检查时发生错误: {error}").format(error=e))
 
                 if attempt < max_attempts:
                     await asyncio.sleep(check_interval)
 
-        self.state.add_log("✗ openEuler Intelligence API 服务检查超时失败")
+        self.state.add_log(_("✗ openEuler Intelligence API 服务检查超时失败"))
         return False
 
     async def _run_agent_init(
@@ -943,8 +949,8 @@ class DeploymentService:
     ) -> bool:
         """运行 Agent 初始化脚本"""
         self.state.current_step = 5
-        self.state.current_step_name = "初始化 Agent 服务"
-        self.state.add_log("正在检查 openEuler Intelligence 后端服务状态...")
+        self.state.current_step_name = _("初始化 Agent 服务")
+        self.state.add_log(_("正在检查 openEuler Intelligence 后端服务状态..."))
 
         if progress_callback:
             progress_callback(self.state)
@@ -955,10 +961,10 @@ class DeploymentService:
 
         # 检查 openEuler Intelligence 后端服务状态
         if not await self._check_framework_service_health(server_ip, server_port, progress_callback):
-            self.state.add_log("✗ openEuler Intelligence 服务检查失败")
+            self.state.add_log(_("✗ openEuler Intelligence 服务检查失败"))
             return False
 
-        self.state.add_log("✓ openEuler Intelligence 服务检查通过，开始初始化 Agent...")
+        self.state.add_log(_("✓ openEuler Intelligence 服务检查通过，开始初始化 Agent..."))
 
         if progress_callback:
             progress_callback(self.state)
@@ -968,11 +974,11 @@ class DeploymentService:
         init_status = await agent_manager.initialize_agents(self.state, progress_callback)
 
         if init_status == AgentInitStatus.SUCCESS:
-            self.state.add_log("✓ Agent 初始化完成")
+            self.state.add_log(_("✓ Agent 初始化完成"))
             return True
 
         if init_status == AgentInitStatus.SKIPPED:
-            self.state.add_log("⚠ Agent 初始化已跳过（RPM 包不可用），但部署将继续进行")
+            self.state.add_log(_("⚠ Agent 初始化已跳过（RPM 包不可用），但部署将继续进行"))
             return True  # 跳过不算失败，继续部署
 
         # FAILED
@@ -1011,15 +1017,15 @@ class DeploymentService:
             success = template_manager.create_global_template()
 
             if success:
-                self.state.add_log("✓ 全局配置模板创建成功，其他用户可正常使用")
+                self.state.add_log(_("✓ 全局配置模板创建成功，其他用户可正常使用"))
                 logger.info("全局配置模板创建成功，包含部署时的完整配置信息")
             else:
-                self.state.add_log("⚠ 全局配置模板创建失败，可能影响其他用户使用")
+                self.state.add_log(_("⚠ 全局配置模板创建失败，可能影响其他用户使用"))
                 logger.warning("全局配置模板创建失败")
 
         except Exception:
             logger.exception("创建全局配置模板时发生异常")
-            self.state.add_log("⚠ 配置模板创建异常，可能影响其他用户使用")
+            self.state.add_log(_("⚠ 配置模板创建异常，可能影响其他用户使用"))
 
     def _update_backend_url_config(self, config: DeploymentConfig) -> None:
         """

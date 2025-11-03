@@ -18,6 +18,7 @@ from textual.widgets import (
 
 from app.deployment.service import DeploymentService
 from app.deployment.ui import DeploymentConfigScreen
+from i18n.manager import _
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -88,20 +89,20 @@ class EnvironmentCheckScreen(ModalScreen[bool]):
     def compose(self) -> ComposeResult:
         """组合界面组件"""
         with Container(classes="check-container"):
-            yield Static("环境检查", classes="check-title")
+            yield Static(_("环境检查"), classes="check-title")
 
             with Horizontal(classes="check-item"):
                 yield Static("", id="os_status", classes="check-status")
-                yield Static("检查操作系统类型...", id="os_desc", classes="check-description")
+                yield Static(_("检查操作系统类型..."), id="os_desc", classes="check-description")
 
             with Horizontal(classes="check-item"):
                 yield Static("", id="sudo_status", classes="check-status")
-                yield Static("检查管理员权限...", id="sudo_desc", classes="check-description")
+                yield Static(_("检查管理员权限..."), id="sudo_desc", classes="check-description")
 
             with Horizontal(classes="button-row"):
-                yield Button("继续配置", id="continue", variant="success", classes="continue-button", disabled=True)
-                yield Button("返回", id="back", variant="primary", classes="back-button")
-                yield Button("退出", id="exit", variant="error", classes="exit-button")
+                yield Button(_("继续配置"), id="continue", variant="success", classes="continue-button", disabled=True)
+                yield Button(_("返回"), id="back", variant="primary", classes="back-button")
+                yield Button(_("退出"), id="exit", variant="error", classes="exit-button")
 
     async def on_mount(self) -> None:
         """界面挂载时开始环境检查"""
@@ -120,7 +121,7 @@ class EnvironmentCheckScreen(ModalScreen[bool]):
             self._update_ui_state()
 
         except (OSError, RuntimeError) as e:
-            self.notify(f"环境检查过程中发生异常: {e}", severity="error")
+            self.notify(_("环境检查过程中发生异常: {error}").format(error=e), severity="error")
 
     async def _check_operating_system(self) -> None:
         """检查操作系统类型"""
@@ -133,17 +134,17 @@ class EnvironmentCheckScreen(ModalScreen[bool]):
 
             if is_openeuler:
                 os_status.update("[green]✓[/green]")
-                os_desc.update("操作系统: openEuler (支持)")
+                os_desc.update(_("操作系统: openEuler (支持)"))
             else:
                 os_status.update("[red]✗[/red]")
-                os_desc.update("操作系统: 非 openEuler (不支持)")
-                self.error_messages.append("仅支持 openEuler 操作系统")
+                os_desc.update(_("操作系统: 非 openEuler (不支持)"))
+                self.error_messages.append(_("仅支持 openEuler 操作系统"))
 
         except (OSError, RuntimeError) as e:
             self.check_results["os"] = False
             self.query_one("#os_status", Static).update("[red]✗[/red]")
-            self.query_one("#os_desc", Static).update(f"操作系统检查失败: {e}")
-            self.error_messages.append(f"操作系统检查异常: {e}")
+            self.query_one("#os_desc", Static).update(_("操作系统检查失败: {error}").format(error=e))
+            self.error_messages.append(_("操作系统检查异常: {error}").format(error=e))
 
     async def _check_sudo_privileges(self) -> None:
         """检查管理员权限"""
@@ -156,17 +157,17 @@ class EnvironmentCheckScreen(ModalScreen[bool]):
 
             if has_sudo:
                 sudo_status.update("[green]✓[/green]")
-                sudo_desc.update("管理员权限: 可用")
+                sudo_desc.update(_("管理员权限: 可用"))
             else:
                 sudo_status.update("[red]✗[/red]")
-                sudo_desc.update("管理员权限: 不可用 (需要 sudo)")
-                self.error_messages.append("需要管理员权限，请确保可以使用 sudo")
+                sudo_desc.update(_("管理员权限: 不可用 (需要 sudo)"))
+                self.error_messages.append(_("需要管理员权限，请确保可以使用 sudo"))
 
         except (OSError, RuntimeError) as e:
             self.check_results["sudo"] = False
             self.query_one("#sudo_status", Static).update("[red]✗[/red]")
-            self.query_one("#sudo_desc", Static).update(f"权限检查失败: {e}")
-            self.error_messages.append(f"权限检查异常: {e}")
+            self.query_one("#sudo_desc", Static).update(_("权限检查失败: {error}").format(error=e))
+            self.error_messages.append(_("权限检查异常: {error}").format(error=e))
 
     def _update_ui_state(self) -> None:
         """更新界面状态"""

@@ -26,6 +26,7 @@ from textual.widgets import (
 )
 
 from app.tui_header import OIHeader
+from i18n.manager import _
 
 from .models import DeploymentConfig, DeploymentState, EmbeddingConfig, LLMConfig
 from .service import DeploymentService
@@ -137,18 +138,18 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             yield OIHeader()
 
             with TabbedContent():
-                with TabPane("基础配置", id="basic"):
+                with TabPane(_("基础配置"), id="basic"):
                     yield from self._compose_basic_config()
 
-                with TabPane("LLM 配置", id="llm"):
+                with TabPane(_("LLM 配置"), id="llm"):
                     yield from self._compose_llm_config()
 
-                with TabPane("Embedding 配置", id="embedding"):
+                with TabPane(_("Embedding 配置"), id="embedding"):
                     yield from self._compose_embedding_config()
 
             with Horizontal(classes="button-row"):
-                yield Button("开始部署", id="deploy", variant="success")
-                yield Button("取消", id="cancel", variant="error")
+                yield Button(_("开始部署"), id="deploy", variant="success")
+                yield Button(_("取消"), id="cancel", variant="error")
 
     async def on_mount(self) -> None:
         """界面挂载时初始化状态"""
@@ -165,11 +166,11 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             desc = self.query_one("#deployment_mode_desc", Static)
 
             if self.config.deployment_mode == "full":
-                btn.label = "全量部署"
-                desc.update("全量部署：部署框架服务 + Web 界面 + RAG 组件，自动初始化 Agent。")
+                btn.label = _("全量部署")
+                desc.update(_("全量部署：部署框架服务 + Web 界面 + RAG 组件，自动初始化 Agent。"))
             else:
-                btn.label = "轻量部署"
-                desc.update("轻量部署：仅部署框架服务，自动初始化 Agent。")
+                btn.label = _("轻量部署")
+                desc.update(_("轻量部署：仅部署框架服务，自动初始化 Agent。"))
 
         except (ValueError, AttributeError):
             # 如果 UI 组件还没初始化完成，忽略错误
@@ -185,7 +186,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             # 如果不需要验证 Embedding，显示相应状态
             try:
                 embedding_status = self.query_one("#embedding_validation_status", Static)
-                embedding_status.update("[dim]不需要验证[/dim]")
+                embedding_status.update(_("[dim]不需要验证[/dim]"))
             except (ValueError, AttributeError):
                 pass
 
@@ -195,26 +196,26 @@ class DeploymentConfigScreen(ModalScreen[bool]):
     def _compose_basic_config(self) -> ComposeResult:
         """组合基础配置组件"""
         with Vertical():
-            yield Static("基础配置", classes="form-label")
+            yield Static(_("基础配置"), classes="form-label")
 
             with Horizontal(classes="form-row"):
-                yield Label("服务器 IP 地址:", classes="form-label")
+                yield Label(_("服务器 IP 地址:"), classes="form-label")
                 yield Input(
                     value="127.0.0.1",  # 默认为本地地址
-                    placeholder="例如：127.0.0.1",
+                    placeholder=_("例如：127.0.0.1"),
                     id="server_ip",
                     classes="form-input",
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("部署模式:", classes="form-label")
+                yield Label(_("部署模式:"), classes="form-label")
                 # 使用按钮在轻量/全量间切换，按钮文本显示当前选择（不包含括号描述）
-                yield Button("轻量部署", id="deployment_mode_btn", classes="form-input", variant="primary")
+                yield Button(_("轻量部署"), id="deployment_mode_btn", classes="form-input", variant="primary")
 
             # 描述区域，显示当前部署模式的详细说明
             with Horizontal(classes="form-row"):
                 yield Static(
-                    "轻量部署：仅部署框架服务，自动初始化 Agent。",
+                    _("轻量部署：仅部署框架服务，自动初始化 Agent。"),
                     id="deployment_mode_desc",
                     classes="form-input",
                 )
@@ -222,18 +223,18 @@ class DeploymentConfigScreen(ModalScreen[bool]):
     def _compose_llm_config(self) -> ComposeResult:
         """组合 LLM 配置组件"""
         with Vertical(classes="llm-config-container"):
-            yield Static("大语言模型配置", classes="form-label")
+            yield Static(_("大语言模型配置"), classes="form-label")
 
             with Horizontal(classes="form-row"):
-                yield Label("API 端点:", classes="form-label")
+                yield Label(_("API 端点:"), classes="form-label")
                 yield Input(
-                    placeholder="例如：http://localhost:11434/v1",
+                    placeholder=_("例如：http://localhost:11434/v1"),
                     id="llm_endpoint",
                     classes="form-input",
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("API 密钥:", classes="form-label")
+                yield Label(_("API 密钥:"), classes="form-label")
                 yield Input(
                     placeholder="sk-123456",
                     password=True,
@@ -242,19 +243,19 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("模型名称:", classes="form-label")
+                yield Label(_("模型名称:"), classes="form-label")
                 yield Input(
-                    placeholder="例如：deepseek-llm-7b-chat",
+                    placeholder=_("例如：deepseek-llm-7b-chat"),
                     id="llm_model",
                     classes="form-input",
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("验证状态:", classes="form-label")
-                yield Static("未验证", id="llm_validation_status", classes="form-input")
+                yield Label(_("验证状态:"), classes="form-label")
+                yield Static(_("未验证"), id="llm_validation_status", classes="form-input")
 
             with Horizontal(classes="form-row"):
-                yield Label("最大输出令牌数:", classes="form-label")
+                yield Label(_("最大输出令牌数:"), classes="form-label")
                 yield Input(
                     value="8192",
                     id="llm_max_tokens",
@@ -262,7 +263,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("Temperature:", classes="form-label")
+                yield Label(_("Temperature:"), classes="form-label")
                 yield Input(
                     value="0.7",
                     id="llm_temperature",
@@ -270,7 +271,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("请求超时 (秒):", classes="form-label")
+                yield Label(_("请求超时 (秒):"), classes="form-label")
                 yield Input(
                     value="300",
                     id="llm_timeout",
@@ -280,25 +281,25 @@ class DeploymentConfigScreen(ModalScreen[bool]):
     def _compose_embedding_config(self) -> ComposeResult:
         """组合 Embedding 配置组件"""
         with Vertical(classes="embedding-config-container"):
-            yield Static("嵌入模型配置", classes="form-label")
+            yield Static(_("嵌入模型配置"), classes="form-label")
 
             # 添加轻量部署说明
             yield Static(
-                "[dim]轻量部署模式下，Embedding 配置为可选项。[/dim]",
+                _("[dim]轻量部署模式下，Embedding 配置为可选项。[/dim]"),
                 id="embedding_mode_hint",
                 classes="form-input",
             )
 
             with Horizontal(classes="form-row"):
-                yield Label("API 端点:", classes="form-label")
+                yield Label(_("API 端点:"), classes="form-label")
                 yield Input(
-                    placeholder="例如：http://localhost:11434/v1",
+                    placeholder=_("例如：http://localhost:11434/v1"),
                     id="embedding_endpoint",
                     classes="form-input",
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("API 密钥:", classes="form-label")
+                yield Label(_("API 密钥:"), classes="form-label")
                 yield Input(
                     placeholder="sk-123456",
                     password=True,
@@ -307,16 +308,16 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("模型名称:", classes="form-label")
+                yield Label(_("模型名称:"), classes="form-label")
                 yield Input(
-                    placeholder="例如：bge-m3",
+                    placeholder=_("例如：bge-m3"),
                     id="embedding_model",
                     classes="form-input",
                 )
 
             with Horizontal(classes="form-row"):
-                yield Label("验证状态:", classes="form-label")
-                yield Static("未验证", id="embedding_validation_status", classes="form-input")
+                yield Label(_("验证状态:"), classes="form-label")
+                yield Static(_("未验证"), id="embedding_validation_status", classes="form-input")
 
     @on(Button.Pressed, "#deploy")
     async def on_deploy_button_pressed(self) -> None:
@@ -326,7 +327,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             is_valid, errors = self.config.validate()
             if not is_valid:
                 await self.app.push_screen(
-                    ErrorMessageScreen("配置验证失败", errors),
+                    ErrorMessageScreen(_("配置验证失败"), errors),
                 )
                 return
 
@@ -365,11 +366,11 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             hint_widget = self.query_one("#embedding_mode_hint", Static)
             if is_light_mode:
                 hint_widget.update(
-                    "[dim]轻量部署模式下，Embedding 配置为可选项。如果不填写，将跳过 RAG 功能。[/dim]",
+                    _("[dim]轻量部署模式下，Embedding 配置为可选项。如果不填写，将跳过 RAG 功能。[/dim]"),
                 )
             else:
                 hint_widget.update(
-                    "[dim]全量部署模式下，Embedding 配置为必填项，用于支持 RAG 功能。[/dim]",
+                    _("[dim]全量部署模式下，Embedding 配置为必填项，用于支持 RAG 功能。[/dim]"),
                 )
         except (AttributeError, ValueError):
             # 如果控件不存在，忽略错误
@@ -514,24 +515,21 @@ class DeploymentConfigScreen(ModalScreen[bool]):
                 supports_function_call = info.get("supports_function_call", False)
                 if supports_function_call:
                     self.llm_validation_status = ValidationStatus.VALID
-                    status_widget.update(f"[green]✓ {message}[/green]")
-                    self.notify("LLM 验证成功，支持工具调用功能", severity="information")
+                    status_widget.update(_("[green]✓ {message}[/green]").format(message=message))
                 else:
                     self.llm_validation_status = ValidationStatus.INVALID
-                    status_widget.update("[red]✗ 不支持工具调用[/red]")
+                    status_widget.update(_("[red]✗ 不支持工具调用[/red]"))
                     self.notify(
-                        "LLM 验证失败：模型不支持工具调用功能，无法用于部署。请选择支持工具调用的模型。",
+                        _("LLM 验证失败：模型不支持工具调用功能，无法用于部署。请选择支持工具调用的模型。"),
                         severity="error",
                     )
             else:
                 self.llm_validation_status = ValidationStatus.INVALID
-                status_widget.update(f"[red]✗ {message}[/red]")
-                self.notify(f"LLM 验证失败: {message}", severity="error")
+                status_widget.update(_("[red]✗ {message}[/red]").format(message=message))
 
         except (OSError, ValueError, TypeError) as e:
             self.llm_validation_status = ValidationStatus.INVALID
-            status_widget.update(f"[red]✗ 验证异常: {e}[/red]")
-            self.notify(f"LLM 验证过程中出现异常: {e}", severity="error")
+            status_widget.update(_("[red]✗ 验证异常: {error}[/red]").format(error=e))
 
         # 更新部署按钮状态
         self._update_deploy_button_state()
@@ -554,19 +552,18 @@ class DeploymentConfigScreen(ModalScreen[bool]):
             # 更新验证状态
             if is_valid:
                 self.embedding_validation_status = ValidationStatus.VALID
-                status_widget.update(f"[green]✓ {message}[/green]")
-                # 显示维度信息
                 dimension = info.get("dimension", "未知")
-                self.notify(f"Embedding 验证成功，向量维度: {dimension}", severity="information")
+                status_widget.update(_("[green]✓ {message} (维度: {dimension})[/green]").format(
+                    message=message,
+                    dimension=dimension,
+                ))
             else:
                 self.embedding_validation_status = ValidationStatus.INVALID
-                status_widget.update(f"[red]✗ {message}[/red]")
-                self.notify(f"Embedding 验证失败: {message}", severity="error")
+                status_widget.update(_("[red]✗ {message}[/red]").format(message=message))
 
         except (OSError, ValueError, TypeError) as e:
             self.embedding_validation_status = ValidationStatus.INVALID
-            status_widget.update(f"[red]✗ 验证异常: {e}[/red]")
-            self.notify(f"Embedding 验证过程中出现异常: {e}", severity="error")
+            status_widget.update(_("[red]✗ 验证异常: {error}[/red]").format(error=e))
 
         # 更新部署按钮状态
         self._update_deploy_button_state()
@@ -710,17 +707,17 @@ class DeploymentProgressScreen(ModalScreen[bool]):
             yield OIHeader()
 
             with Vertical(classes="progress-section"):
-                yield Static("部署进度:", id="progress_label")
-                yield Static("准备开始部署...", id="step_label")
+                yield Static(_("部署进度:"), id="progress_label")
+                yield Static(_("准备开始部署..."), id="step_label")
 
             with Container(classes="log-section"):
                 yield RichLog(id="deployment_log", highlight=True, markup=True)
 
             with Horizontal(classes="button-section"):
-                yield Button("完成", id="finish", variant="success", disabled=True)
-                yield Button("重试", id="retry", variant="warning", disabled=True)
-                yield Button("重新配置", id="reconfigure", variant="primary", disabled=True)
-                yield Button("取消部署", id="cancel", variant="error")
+                yield Button(_("完成"), id="finish", variant="success", disabled=True)
+                yield Button(_("重试"), id="retry", variant="warning", disabled=True)
+                yield Button(_("重新配置"), id="reconfigure", variant="primary", disabled=True)
+                yield Button(_("取消部署"), id="cancel", variant="error")
 
     async def on_mount(self) -> None:
         """界面挂载时开始部署"""
@@ -755,8 +752,8 @@ class DeploymentProgressScreen(ModalScreen[bool]):
             self.deployment_cancelled = True
 
             # 更新界面
-            self.query_one("#step_label", Static).update("部署已取消")
-            self.query_one("#deployment_log", RichLog).write("部署已被用户取消")
+            self.query_one("#step_label", Static).update(_("部署已取消"))
+            self.query_one("#deployment_log", RichLog).write(_("部署已被用户取消"))
 
             # 等待任务真正结束
             with contextlib.suppress(asyncio.CancelledError):
@@ -819,8 +816,8 @@ class DeploymentProgressScreen(ModalScreen[bool]):
             self.set_interval(0.1, self._check_deployment_status)
 
         except (OSError, RuntimeError) as e:
-            self.query_one("#step_label", Static).update("部署启动失败")
-            self.query_one("#deployment_log", RichLog).write(f"部署启动失败: {e}")
+            self.query_one("#step_label", Static).update(_("部署启动失败"))
+            self.query_one("#deployment_log", RichLog).write(_("部署启动失败: {error}").format(error=e))
             self._update_buttons_after_failure()
 
     def _check_deployment_status(self) -> None:
@@ -836,23 +833,23 @@ class DeploymentProgressScreen(ModalScreen[bool]):
             except asyncio.CancelledError:
                 if not self.deployment_cancelled:
                     self.deployment_cancelled = True
-                    self.query_one("#step_label", Static).update("部署已取消")
-                    self.query_one("#deployment_log", RichLog).write("部署被取消")
+                    self.query_one("#step_label", Static).update(_("部署已取消"))
+                    self.query_one("#deployment_log", RichLog).write(_("部署被取消"))
                     self._update_buttons_after_failure()
             except (OSError, RuntimeError, ValueError) as e:
-                self.query_one("#step_label", Static).update("部署异常")
-                self.query_one("#deployment_log", RichLog).write(f"部署异常: {e}")
+                self.query_one("#step_label", Static).update(_("部署异常"))
+                self.query_one("#deployment_log", RichLog).write(_("部署异常: {error}").format(error=e))
                 self._update_buttons_after_failure()
 
     async def _execute_deployment(self) -> None:
         """执行部署过程"""
         try:
             # 步骤1：检查并安装依赖
-            self.query_one("#step_label", Static).update("正在检查部署环境...")
+            self.query_one("#step_label", Static).update(_("正在检查部署环境..."))
             success, errors = await self.service.check_and_install_dependencies(self._on_progress_update)
 
             if not success:
-                self.query_one("#step_label", Static).update("环境检查失败")
+                self.query_one("#step_label", Static).update(_("环境检查失败"))
                 for error in errors:
                     self.query_one("#deployment_log", RichLog).write(f"[red]✗ {error}[/red]")
                     self.deployment_errors.append(error)
@@ -860,35 +857,34 @@ class DeploymentProgressScreen(ModalScreen[bool]):
                 return
 
             # 步骤2：执行部署
-            self.query_one("#step_label", Static).update("正在执行部署...")
+            self.query_one("#step_label", Static).update(_("正在执行部署..."))
             success = await self.service.deploy(self.config, self._on_progress_update)
 
             # 更新界面状态
             if success:
                 self.deployment_success = True
 
-                self.query_one("#step_label", Static).update("部署完成！")
+                self.query_one("#step_label", Static).update(_("部署完成！"))
                 self.query_one("#deployment_log", RichLog).write(
-                    "[bold green]部署成功完成！[/bold green]",
+                    _("[bold green]部署成功完成！[/bold green]"),
                 )
                 self._update_buttons_after_success()
-                self.notify("部署成功完成！", severity="information")
+                self.notify(_("部署成功完成！"), severity="information")
             else:
-                self.query_one("#step_label", Static).update("部署失败")
+                self.query_one("#step_label", Static).update(_("部署失败"))
                 self.query_one("#deployment_log", RichLog).write(
-                    "[bold red]部署失败，请查看上面的错误信息[/bold red]",
+                    _("[bold red]部署失败，请查看上面的错误信息[/bold red]"),
                 )
-                self.deployment_errors.append("部署执行失败")
+                self.deployment_errors.append(_("部署执行失败"))
                 self._update_buttons_after_failure()
-                self.notify("部署失败，可以重试或重新配置参数", severity="error")
+                self.notify(_("部署失败，可以重试或重新配置参数"), severity="error")
 
         except OSError as e:
-            error_msg = f"部署过程中发生异常: {e}"
-            self.query_one("#step_label", Static).update("部署异常")
+            error_msg = _("部署过程中发生异常: {error}").format(error=e)
+            self.query_one("#step_label", Static).update(_("部署异常"))
             self.query_one("#deployment_log", RichLog).write(f"[bold red]{error_msg}[/bold red]")
             self.deployment_errors.append(error_msg)
             self._update_buttons_after_failure()
-            self.notify("部署异常，可以重试或重新配置参数", severity="error")
 
     def _on_progress_update(self, state: DeploymentState) -> None:
         """处理进度更新"""
@@ -902,7 +898,11 @@ class DeploymentProgressScreen(ModalScreen[bool]):
             self.deployment_progress_value = progress
 
         # 更新步骤标签
-        step_text = f"步骤 {state.current_step}/{state.total_steps}: {state.current_step_name}"
+        step_text = _("步骤 {current}/{total}: {name}").format(
+            current=state.current_step,
+            total=state.total_steps,
+            name=state.current_step_name,
+        )
         self.query_one("#step_label", Static).update(step_text)
 
         # 添加最新的日志条目
@@ -971,13 +971,13 @@ class ErrorMessageScreen(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         """组合界面组件"""
         with Container(classes="error-container"):
-            yield Static(self.title or "错误", classes="error-title")
+            yield Static(self.title or _("错误"), classes="error-title")
 
             with Vertical(classes="error-list"):
                 for message in self.messages:
                     yield Static(f"• {message}")
 
-            yield Button("确定", id="ok", variant="primary")
+            yield Button(_("确定"), id="ok", variant="primary")
 
     @on(Button.Pressed, "#ok")
     def on_ok_button_pressed(self) -> None:
