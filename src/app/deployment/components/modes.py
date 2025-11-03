@@ -17,7 +17,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Input, Label, Static
 
 from config.manager import ConfigManager
-from config.model import Backend
+from config.model import Backend, ConfigModel
 from log.manager import get_logger
 from tool.validators import validate_oi_connection
 
@@ -287,30 +287,28 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
         logger = get_logger(__name__)
 
         try:
-            # 确定是否为 root 用户
-            is_root = os.geteuid() == 0
-
-            if is_root:
-                # root 用户：同时更新全局模板和当前配置
-                logger.info("检测到 root 用户，将同时更新全局模板和当前配置")
-
-                # 创建部署专用的配置管理器来操作全局模板
-                deployment_manager = ConfigManager.create_deployment_manager()
-                deployment_manager.set_eulerintelli_url(url)
-                deployment_manager.set_eulerintelli_key(token)
-                deployment_manager.set_backend(Backend.EULERINTELLI)
-
-                # 创建全局模板
-                if not deployment_manager.create_global_template():
-                    logger.warning("创建全局配置模板失败，但会继续保存用户配置")
-
-            # 更新当前用户配置（无论是否为 root）
+            # 更新当前用户配置
             config_manager = ConfigManager()
             config_manager.set_eulerintelli_url(url)
             config_manager.set_eulerintelli_key(token)
             config_manager.set_backend(Backend.EULERINTELLI)
 
-            logger.info("配置已保存: URL=%s", url)
+            logger.info("用户配置已保存: URL=%s", url)
+
+            # 如果是 root 用户，从用户配置创建全局模板
+            is_root = os.geteuid() == 0
+            if is_root:
+                logger.info("检测到 root 用户，创建全局配置模板")
+
+                deployment_manager = ConfigManager.create_deployment_manager()
+
+                config_dict = config_manager.data.to_dict()
+                deployment_manager.data = ConfigModel.from_dict(config_dict)
+
+                if deployment_manager.create_global_template():
+                    logger.info("全局配置模板创建成功")
+                else:
+                    logger.warning("创建全局配置模板失败，但用户配置已保存")
 
         except (OSError, RuntimeError, ValueError):
             logger.exception("保存配置时发生错误")
