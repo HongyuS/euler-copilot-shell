@@ -28,8 +28,8 @@ class MCPEmojis:
     INIT = "🔧"
     INPUT = "📥"
     OUTPUT = "✅"
-    CANCEL = "❌"
-    ERROR = "⚠️"
+    CANCEL = "⏹️"
+    ERROR = "❌"
     WAITING_START = "⏸️"
     WAITING_PARAM = "📝"
 

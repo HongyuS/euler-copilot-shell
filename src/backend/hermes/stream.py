@@ -77,6 +77,16 @@ class HermesStreamEvent:
         flow = self.get_flow_info()
         return flow.get("stepId", "")
 
+    def get_step_status(self) -> str:
+        """获取步骤状态"""
+        flow = self.get_flow_info()
+        return flow.get("stepStatus", "")
+
+    def get_executor_status(self) -> str:
+        """获取执行器状态"""
+        flow = self.get_flow_info()
+        return flow.get("executorStatus", "")
+
     def get_conversation_id(self) -> str:
         """获取会话ID"""
         return self.data.get("conversationId", "")
@@ -88,17 +98,6 @@ class HermesStreamEvent:
     def is_mcp_step_event(self) -> bool:
         """判断是否为 MCP 步骤相关事件"""
         return self.event_type in MCPEventTypes.ALL_STEP_EVENTS
-
-    def is_executor_event(self) -> bool:
-        """判断是否为流相关事件"""
-        executor_events = {
-            "executor.start",
-            "executor.stop",
-            "executor.failed",
-            "executor.success",
-            "executor.cancel",
-        }
-        return self.event_type in executor_events
 
 
 class HermesStreamProcessor:
@@ -147,23 +146,22 @@ class HermesStreamProcessor:
 
     def format_mcp_status(self, event: HermesStreamEvent) -> str | None:
         """格式化 MCP 状态信息为可读文本"""
-        # 忽略 executor 事件
-        if event.is_executor_event():
-            return None
-
-        # 只处理 step 事件
         if not event.is_mcp_step_event():
             return None
 
+        event_type = event.event_type
+        step_status = event.get_step_status()
+        executor_status = event.get_executor_status()
+
+        # 优先检查状态字段：后端通过 stepStatus/executorStatus=error 表示失败
+        if step_status == "error" or executor_status == "error":
+            return self._format_error_status(event)
+
         step_name = event.get_step_name()
         step_id = event.get_step_id()
-        event_type = event.event_type
         content = event.get_content()
-
-        # 检查是否应该替换之前的进度消息
         should_replace = self._should_replace_progress(event, step_id)
 
-        # 处理特殊的等待状态事件
         if event_type == MCPEventTypes.STEP_WAITING_FOR_START:
             base_message = self._format_waiting_for_start(content, step_name)
             return self._handle_progress_message(
@@ -184,8 +182,28 @@ class HermesStreamProcessor:
                 should_replace=should_replace,
             )
 
-        # 处理其他事件类型
-        return self._format_standard_status(event_type, step_name, step_id, should_replace=should_replace)
+        return self._format_standard_status(
+            event_type,
+            step_name,
+            step_id,
+            step_status,
+            should_replace=should_replace,
+        )
+
+    def _format_error_status(self, event: HermesStreamEvent) -> str:
+        """格式化错误状态消息"""
+        flow_info = event.get_flow_info()
+        step_name = event.get_step_name() or flow_info.get("stepName", "未知工具")
+        step_id = flow_info.get("stepId", "")
+
+        base_message = MCPMessageTemplates.error_message(step_name)
+        return self._handle_progress_message(
+            MCPEventTypes.STEP_ERROR,
+            step_name,
+            step_id,
+            base_message,
+            should_replace=True,
+        )
 
     def _format_waiting_for_start(
         self,
@@ -212,11 +230,14 @@ class HermesStreamProcessor:
         event_type: str,
         step_name: str,
         step_id: str,
+        step_status: str,
         *,
         should_replace: bool,
     ) -> str | None:
-        """格式化标准状态消息"""
-        # 定义事件类型到状态消息的映射
+        """格式化标准步骤状态消息"""
+        if step_status == "error":
+            event_type = MCPEventTypes.STEP_ERROR
+
         status_messages = {
             MCPEventTypes.STEP_INIT: MCPMessageTemplates.init_message(step_name),
             MCPEventTypes.STEP_INPUT: MCPMessageTemplates.input_message(step_name),
@@ -229,11 +250,7 @@ class HermesStreamProcessor:
         if not base_message:
             return None
 
-        # 定义进度消息类型
-        progress_message_types = MCPEventTypes.PROGRESS_MESSAGE_EVENTS
-
-        # 对于所有步骤相关的消息，都检查是否需要替换之前的进度
-        if event_type in progress_message_types and step_id:
+        if event_type in MCPEventTypes.PROGRESS_MESSAGE_EVENTS and step_id:
             base_message = self._handle_progress_message(
                 event_type,
                 step_name,
@@ -253,37 +270,26 @@ class HermesStreamProcessor:
         *,
         should_replace: bool,
     ) -> str:
-        """处理进度消息的替换逻辑"""
-        # 检查是否为最终状态消息
+        """处理进度消息的 MCP 标记和替换逻辑"""
         is_final_state = event_type in MCPEventTypes.FINAL_STATE_EVENTS
-
-        # 关键修复：使用工具名称而不是step_id来跟踪，确保同一工具的后续状态更新能够替换之前的进度
-        # 策略：如果是同一个工具名称的后续消息，就应该替换之前的消息
         has_previous_progress = step_name in self._current_tool_progress
 
-        # 这是一个进度消息，记录到跟踪字典中（使用工具名称作为key）
+        # 非最终状态：记录进度到跟踪字典（使用工具名称作为 key）
         if not is_final_state:
             self._current_tool_progress[step_name] = {
                 "message": base_message,
                 "should_replace": should_replace,
                 "is_progress": True,
-                "step_id": step_id,  # 保留step_id用于调试
+                "step_id": step_id,
             }
 
-        # 使用工具名称作为标识，确保TUI层面能正确识别为MCP消息
+        # 添加 MCP 标记：如果存在之前的进度则标记为替换，否则为新消息
         if has_previous_progress:
-            # 如果有之前的进度，说明这是一个状态更新，需要替换
             base_message = f"{create_mcp_tag(step_name, is_replace=True)}{base_message}"
             if is_final_state:
-                self.logger.debug("添加替换标记给最终状态消息，工具 %s: %s", step_name, event_type)
-                # 清理对应的进度信息
                 self._current_tool_progress.pop(step_name, None)
-            else:
-                self.logger.debug("添加替换标记给工具 %s: %s", step_name, event_type)
         else:
-            # 如果是第一个进度消息，添加MCP标记但不替换
             base_message = f"{create_mcp_tag(step_name, is_replace=False)}{base_message}"
-            self.logger.debug("添加MCP标记给首次进度消息，工具 %s: %s", step_name, event_type)
 
         return base_message
 
@@ -293,21 +299,11 @@ class HermesStreamProcessor:
         if not step_name:
             return False
 
-        # 定义进度消息类型
-        progress_message_types = MCPEventTypes.PROGRESS_MESSAGE_EVENTS
-
         event_type = event.event_type
 
-        # 对于进度消息类型，只要存在同一个工具名称的之前记录，就应该替换
-        if event_type in progress_message_types and step_name in self._current_tool_progress:
+        # 进度消息类型 + 存在之前的记录 → 需要替换
+        if event_type in MCPEventTypes.PROGRESS_MESSAGE_EVENTS and step_name in self._current_tool_progress:
             prev_info = self._current_tool_progress[step_name]
-            if prev_info.get("is_progress", False):
-                self.logger.debug(
-                    "工具 %s 的进度消息将被替换: %s -> %s",
-                    step_name,
-                    prev_info.get("message", "").strip()[:50],
-                    event_type,
-                )
-                return True
+            return prev_info.get("is_progress", False)
 
         return False
