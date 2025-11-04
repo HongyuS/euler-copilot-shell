@@ -4,7 +4,7 @@
 
 Name:           euler-copilot-shell
 Version:        0.10.2
-Release:        3%{?dev_timestamp:.dev%{dev_timestamp}}%{?dist}
+Release:        4%{?dev_timestamp:.dev%{dev_timestamp}}%{?dist}
 Summary:        openEuler Intelligence 智能命令行工具集
 License:        MulanPSL-2.0
 URL:            https://gitee.com/openeuler/euler-copilot-shell
@@ -134,6 +134,10 @@ rm -f /usr/lib/openeuler-intelligence/scripts/5-resource/env.*
 fi
 
 %changelog
+* Tue Nov 04 2025 openEuler <contact@openeuler.org> - 0.10.2-4
+- Fix timeout when executing complex MCP tasks
+- Feature: Add login through browser (requires proper desktop environment)
+
 * Wed Oct 29 2025 openEuler <contact@openeuler.org> - 0.10.2-3
 - Fix issue where failing to fetch mcp when creating agent with oi-manager
 
