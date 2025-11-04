@@ -541,7 +541,7 @@ msgstr "Deployment mode:"
 
 #: src/app/deployment/ui.py:226
 msgid "大语言模型配置"
-msgstr "Large Language Model configuration"
+msgstr "LLM configuration"
 
 #: src/app/deployment/ui.py:229 src/app/deployment/ui.py:294
 msgid "API 端点:"
