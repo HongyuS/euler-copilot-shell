@@ -44,7 +44,6 @@ class MCPConfirmWidget(Container):
         step_name = self.event.get_step_name()
         content = self.event.get_content()
         risk = content.get("risk", "unknown")
-        reason = content.get("reason", _("需要用户确认是否执行此工具"))
 
         # 风险级别文本和图标
         risk_info = {
@@ -62,20 +61,6 @@ class MCPConfirmWidget(Container):
                 classes=f"confirm-info risk-{risk}",
                 markup=False,
             )
-            # 显示简化的说明文字，确保按钮可见
-            if len(reason) > MAX_DISPLAY_LENGTH:
-                # 如果说明太长，显示省略号
-                yield Static(
-                    f"💭 {reason[:TRUNCATE_LENGTH]}...",
-                    classes="confirm-reason",
-                    markup=False,
-                )
-            else:
-                yield Static(
-                    f"💭 {reason}",
-                    classes="confirm-reason",
-                    markup=False,
-                )
             # 确保按钮始终显示
             with Horizontal(classes="confirm-buttons"):
                 yield Button(_("✓ 确认"), variant="success", id="mcp-confirm-yes")
@@ -161,18 +146,12 @@ class MCPParameterWidget(Container):
         """构建参数输入界面"""
         step_name = self.event.get_step_name()
         content = self.event.get_content()
-        message = content.get("message", _("需要补充参数"))
         params = content.get("params", {})
 
         with Vertical(classes="mcp-content"):
             # 紧凑的参数输入标题
             yield Static(_("📝 参数输入"), classes="param-header", markup=False)
             yield Static(f"🔧 {step_name}", classes="param-tool", markup=False)
-            # 显示说明文字，超长时显示省略号
-            if len(message) > MAX_DISPLAY_LENGTH:
-                yield Static(f"💭 {message[:TRUNCATE_LENGTH]}...", classes="param-message", markup=False)
-            else:
-                yield Static(f"💭 {message}", classes="param-message", markup=False)
 
             # 垂直布局的参数输入，更节省空间
             for param_name, param_value in params.items():
