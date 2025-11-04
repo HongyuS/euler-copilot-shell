@@ -330,15 +330,6 @@ BackendRequiredDialog {
     margin-bottom: 1;
 }
 
-.confirm-reason {
-    text-align: left;
-    color: #cccccc;
-    height: auto;
-    padding: 0 1;
-    margin-bottom: 1;
-    text-style: italic;
-}
-
 .confirm-buttons {
     height: 3;
     align: center middle;
@@ -386,14 +377,6 @@ BackendRequiredDialog {
 .param-tool {
     text-align: left;
     color: #4caf50;
-    height: auto;
-    padding: 0 1;
-    margin-bottom: 0;
-}
-
-.param-message {
-    text-align: left;
-    color: #ffffff;
     height: auto;
     padding: 0 1;
     margin-bottom: 0;

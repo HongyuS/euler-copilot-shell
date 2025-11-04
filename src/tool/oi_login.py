@@ -15,6 +15,7 @@ from config.manager import ConfigManager
 from i18n.manager import _
 from log.manager import get_logger
 from tool.callback_server import CallbackServer
+from tool.validators import is_browser_available
 
 logger = get_logger(__name__)
 
@@ -129,6 +130,14 @@ def browser_login() -> None:
 
     """
     logger.info("开始浏览器登录流程")
+
+    # 检查浏览器是否可用
+    if not is_browser_available():
+        sys.stdout.write(_("✗ Error: Browser is not available in current environment\n"))
+        sys.stdout.write(_("This feature requires a graphical environment with browser support.\n"))
+        sys.stdout.write(_("If you are using SSH, please run this command on the server directly\n"))
+        sys.stdout.write(_("or use X11 forwarding / VNC to enable graphical access.\n"))
+        sys.exit(1)
 
     config_manager = _load_config_and_check_url()
     callback_server = CallbackServer()
