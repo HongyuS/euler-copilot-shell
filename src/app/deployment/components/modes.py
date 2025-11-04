@@ -23,7 +23,7 @@ from i18n.manager import _
 from log.manager import get_logger
 from tool.callback_server import CallbackServer
 from tool.oi_login import get_auth_url
-from tool.validators import validate_oi_connection
+from tool.validators import is_browser_available, validate_oi_connection
 
 from . import EnvironmentCheckScreen
 
@@ -166,6 +166,7 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
         self.callback_server: CallbackServer | None = None
         self.login_task: asyncio.Task[None] | None = None
         self.logger = get_logger(__name__)
+        self.browser_available = is_browser_available()
 
     def compose(self) -> ComposeResult:
         """组合界面组件"""
@@ -202,15 +203,26 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
 
             yield Static(_("未验证"), id="validation_status", classes="validation-status")
 
-            yield Static(
-                _("提示：\n"
-                "• 服务 URL 通常以 http:// 或 https:// 开头\n"
-                "• 访问令牌为可选项，如果服务无需认证可留空\n"
-                "• 输入服务 URL 后，可点击 '获取' 按钮通过浏览器获取访问令牌\n"
-                "• 也可以从 openEuler Intelligence Web 界面手动获取并填入\n"
-                "• 系统会自动验证连接并保存配置"),
-                classes="help-text",
-            )
+            # 根据浏览器可用性生成不同的提示文本
+            if self.browser_available:
+                help_text = _(
+                    "提示：\n"
+                    "• 服务 URL 通常以 http:// 或 https:// 开头\n"
+                    "• 访问令牌为可选项，如果服务无需认证可留空\n"
+                    "• 输入服务 URL 后，可点击 '获取' 按钮通过浏览器获取访问令牌\n"
+                    "• 也可以从 openEuler Intelligence Web 界面手动获取并填入\n"
+                    "• 系统会自动验证连接并保存配置",
+                )
+            else:
+                help_text = _(
+                    "提示：\n"
+                    "• 服务 URL 通常以 http:// 或 https:// 开头\n"
+                    "• 访问令牌为可选项，如果服务无需认证可留空\n"
+                    "• [yellow]当前环境不支持浏览器，请从 Web 界面手动获取访问令牌[/yellow]\n"
+                    "• 系统会自动验证连接并保存配置",
+                )
+
+            yield Static(help_text, classes="help-text")
 
             with Horizontal(classes="mode-button-row"):
                 yield Button(_("连接并保存"), id="connect", variant="success", disabled=True)
@@ -238,6 +250,14 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
     async def on_get_api_key_pressed(self) -> None:
         """处理获取 API Key 按钮点击"""
         try:
+            # 检查浏览器是否可用
+            if not self.browser_available:
+                self.notify(
+                    _("当前环境不支持打开浏览器，请手动从 Web 界面获取访问令牌"),
+                    severity="warning",
+                )
+                return
+
             # 获取服务 URL
             url = self.query_one("#service_url", Input).value.strip()
             if not url:
@@ -335,8 +355,8 @@ class ConnectExistingServiceScreen(ModalScreen[bool]):
         try:
             url = self.query_one("#service_url", Input).value.strip()
             get_api_key_btn = self.query_one("#get_api_key", Button)
-            # 只有 URL 有效时才启用按钮
-            get_api_key_btn.disabled = not bool(url)
+            # 只有在浏览器可用且 URL 有效时才启用按钮
+            get_api_key_btn.disabled = not (self.browser_available and bool(url))
         except (AttributeError, ValueError):
             pass
 
