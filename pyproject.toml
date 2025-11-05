@@ -7,11 +7,12 @@ requires-python = ">=3.11"
 license = { text = "MulanPSL-2.0" }
 authors = [{ name = "openEuler", email = "contact@openeuler.org" }]
 dependencies = [
-    "httpx==0.28.1",
-    "openai==2.3.0",
-    "rich==14.2.0",
-    "textual==6.3.0",
-    "toml==0.10.2",
+    "httpx>=0.28.1",
+    "openai>=2.7.1",
+    "pyyaml>=6.0.3",
+    "rich>=14.2.0",
+    "textual>=6.5.0",
+    "toml>=0.10.2",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
