@@ -12,6 +12,7 @@ Agent 管理模块。
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import subprocess
 import tomllib
@@ -361,7 +362,7 @@ class AgentManager:
                 "description": config.description,
                 "type": config.mcp_type,
                 "author": config.author,
-                "config": config.config,
+                "config": self._normalize_mcp_config(config.config),
             }
 
             config_file = target_dir / "config.json"
@@ -387,6 +388,29 @@ class AgentManager:
             )
             logger.info("MCP 配置写入成功: %s -> %s", config.name, target_dir)
             return dir_name
+
+    def _normalize_mcp_config(self, raw_config: dict[str, Any]) -> dict[str, Any]:
+        defaults: dict[str, Any] = {
+            "autoApprove": [],
+            "disabled": False,
+            "auto_install": True,
+            "timeout": 60,
+            "description": "",
+            "headers": {},
+        }
+
+        if not raw_config:
+            return copy.deepcopy(defaults)
+
+        merged = {**defaults, **raw_config}
+
+        if not isinstance(merged.get("autoApprove"), list):
+            merged["autoApprove"] = []
+
+        if not isinstance(merged.get("headers"), dict):
+            merged["headers"] = {}
+
+        return merged
 
     async def _write_app_metadata_to_filesystem(
         self,
