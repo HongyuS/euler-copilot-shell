@@ -15,6 +15,9 @@
 
 .env
 
+# uv
+uv.lock
+
 # ide
 .idea
 
