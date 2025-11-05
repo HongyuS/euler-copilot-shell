@@ -30,6 +30,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+LOCAL_DEPLOYMENT_HOST = "127.0.0.1"
+
+
 class DeploymentResourceManager:
     """部署资源管理器，管理 RPM 包安装的资源文件"""
 
@@ -97,14 +100,14 @@ class DeploymentResourceManager:
             toml_data = toml.loads(content)
 
             # 更新服务器 IP
-            server_ip = str(config.server_ip)
+            server_host = LOCAL_DEPLOYMENT_HOST
             if "login" in toml_data and "settings" in toml_data["login"]:
-                toml_data["login"]["settings"]["host"] = f"http://{server_ip}:8000"
-                toml_data["login"]["settings"]["login_api"] = f"http://{server_ip}:8080/api/auth/login"
+                toml_data["login"]["settings"]["host"] = f"http://{server_host}:8000"
+                toml_data["login"]["settings"]["login_api"] = f"http://{server_host}:8080/api/auth/login"
 
             # 更新 fastapi 域名
             if "fastapi" in toml_data:
-                toml_data["fastapi"]["domain"] = server_ip
+                toml_data["fastapi"]["domain"] = server_host
 
             # 更新 LLM 配置
             if "llm" in toml_data:
@@ -422,7 +425,6 @@ class DeploymentService:
         if not await self._check_and_stop_old_service(progress_callback):
             return False
 
-        # 定义基础部署步骤
         steps = [
             self._setup_deploy_mode,
             self._check_environment,
@@ -430,22 +432,12 @@ class DeploymentService:
             self._run_install_dependency_script,
             self._generate_config_files,
             self._run_init_config_script,
+            self._run_agent_init,
         ]
 
-        # 轻量化部署模式下才自动执行 Agent 初始化
-        if config.deployment_mode == "light":
-            steps.append(self._run_agent_init)
-
-        # 依次执行每个步骤
         for step in steps:
             if not await step(config, progress_callback):
                 return False
-
-        # 如果是全量部署模式，提示用户到网页端完成 Agent 配置
-        if config.deployment_mode == "full":
-            self.state.add_log(_("✓ 基础服务部署完成"))
-            self.state.add_log(_("请访问网页管理界面完成 Agent 服务配置"))
-            self.state.add_log(_("管理界面地址: http://{ip}:8080").format(ip=config.server_ip))
 
         return True
 
@@ -842,7 +834,7 @@ class DeploymentService:
 
     async def _check_framework_service_health(
         self,
-        server_ip: str,
+        server_host: str,
         server_port: int,
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
@@ -852,7 +844,7 @@ class DeploymentService:
             return False
 
         # 2. 检查 HTTP API 接口连通性
-        return await self._check_framework_api_health(server_ip, server_port, progress_callback)
+        return await self._check_framework_api_health(server_host, server_port, progress_callback)
 
     async def _check_systemctl_service_status(
         self,
@@ -863,10 +855,12 @@ class DeploymentService:
         check_interval = 2.0  # 2秒
 
         for attempt in range(1, max_attempts + 1):
-            self.state.add_log(_("检查 oi-runtime 服务状态 ({current}/{total})...").format(
-                current=attempt,
-                total=max_attempts,
-            ))
+            self.state.add_log(
+                _("检查 oi-runtime 服务状态 ({current}/{total})...").format(
+                    current=attempt,
+                    total=max_attempts,
+                ),
+            )
 
             if progress_callback:
                 progress_callback(self.state)
@@ -904,14 +898,14 @@ class DeploymentService:
 
     async def _check_framework_api_health(
         self,
-        server_ip: str,
+        server_host: str,
         server_port: int,
         progress_callback: Callable[[DeploymentState], None] | None,
     ) -> bool:
         """检查 oi-runtime API 健康状态，每10秒检查一次，5分钟后超时"""
         max_attempts = 30
         check_interval = 10.0  # 10秒
-        api_url = f"http://{server_ip}:{server_port}/api/user"
+        api_url = f"http://{server_host}:{server_port}/api/user"
         http_ok = 200  # HTTP OK 状态码
 
         self.state.add_log(_("等待 openEuler Intelligence 服务就绪"))
@@ -955,12 +949,12 @@ class DeploymentService:
         if progress_callback:
             progress_callback(self.state)
 
-        # 使用配置中的服务器 IP 和默认端口
-        server_ip = config.server_ip or "127.0.0.1"
+        # 使用固定的本地服务地址和默认端口
+        server_host = LOCAL_DEPLOYMENT_HOST
         server_port = 8002
 
         # 检查 openEuler Intelligence 后端服务状态
-        if not await self._check_framework_service_health(server_ip, server_port, progress_callback):
+        if not await self._check_framework_service_health(server_host, server_port, progress_callback):
             self.state.add_log(_("✗ openEuler Intelligence 服务检查失败"))
             return False
 
@@ -970,7 +964,7 @@ class DeploymentService:
             progress_callback(self.state)
 
         # 初始化 Agent 和 MCP 服务
-        agent_manager = AgentManager(server_ip=server_ip, server_port=server_port)
+        agent_manager = AgentManager()
         init_status = await agent_manager.initialize_agents(self.state, progress_callback)
 
         if init_status == AgentInitStatus.SUCCESS:
@@ -1031,8 +1025,8 @@ class DeploymentService:
         """
         更新当前用户的配置
 
-        在部署开始时根据用户填写的服务器IP和部署模式
-        更新 openEuler Intelligence 后端 URL
+        在部署开始时根据部署模式
+        更新 openEuler Intelligence 后端的 URL 配置
 
         Args:
             config: 部署配置
@@ -1042,13 +1036,13 @@ class DeploymentService:
             config_manager = ConfigManager()
 
             # 根据部署配置更新 openEuler Intelligence 后端 URL
-            server_ip = config.server_ip or "127.0.0.1"
+            server_host = LOCAL_DEPLOYMENT_HOST
             if config.deployment_mode == "full":
                 # 全量部署模式：有 nginx，端口是 8080
-                eulerintelli_url = f"http://{server_ip}:8080"
+                eulerintelli_url = f"http://{server_host}:8080"
             else:
                 # 轻量部署模式：无 nginx，端口是 8002
-                eulerintelli_url = f"http://{server_ip}:8002"
+                eulerintelli_url = f"http://{server_host}:8002"
 
             config_manager.set_eulerintelli_url(eulerintelli_url)
             logger.info("已更新当前用户 openEuler Intelligence 后端 URL: %s", eulerintelli_url)
