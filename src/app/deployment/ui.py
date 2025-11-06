@@ -29,7 +29,7 @@ from app.tui_header import OIHeader
 from i18n.manager import _
 
 from .models import DeploymentConfig, DeploymentState, EmbeddingConfig, LLMConfig
-from .service import DeploymentService
+from .service import LOCAL_DEPLOYMENT_HOST, DeploymentService
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
@@ -200,12 +200,7 @@ class DeploymentConfigScreen(ModalScreen[bool]):
 
             with Horizontal(classes="form-row"):
                 yield Label(_("服务器 IP 地址:"), classes="form-label")
-                yield Input(
-                    value="127.0.0.1",  # 默认为本地地址
-                    placeholder=_("例如：127.0.0.1"),
-                    id="server_ip",
-                    classes="form-input",
-                )
+                yield Static(LOCAL_DEPLOYMENT_HOST, classes="form-input")
 
             with Horizontal(classes="form-row"):
                 yield Label(_("部署模式:"), classes="form-label")
@@ -596,9 +591,6 @@ class DeploymentConfigScreen(ModalScreen[bool]):
     def _collect_config(self) -> bool:
         """收集用户配置"""
         try:
-            # 基础配置
-            self.config.server_ip = self.query_one("#server_ip", Input).value.strip()
-
             # LLM 配置
             self.config.llm = LLMConfig(
                 endpoint=self.query_one("#llm_endpoint", Input).value.strip(),

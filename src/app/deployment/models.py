@@ -65,7 +65,6 @@ class DeploymentConfig:
     """
 
     # 基础设置
-    server_ip: str = ""
     deployment_mode: str = "light"  # light: 轻量部署, full: 全量部署
 
     # LLM 配置
@@ -90,9 +89,6 @@ class DeploymentConfig:
 
         """
         errors = []
-
-        # 验证基础字段
-        errors.extend(self._validate_basic_fields())
 
         # 验证 LLM 字段
         errors.extend(self._validate_llm_fields())
@@ -164,13 +160,6 @@ class DeploymentConfig:
                 self.embedding.type = detected_type
 
         return embed_valid, embed_msg, embed_info
-
-    def _validate_basic_fields(self) -> list[str]:
-        """验证基础字段"""
-        errors = []
-        if not self.server_ip.strip():
-            errors.append(_("服务器 IP 地址不能为空"))
-        return errors
 
     def _validate_llm_fields(self) -> list[str]:
         """验证 LLM 配置字段"""
