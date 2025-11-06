@@ -51,7 +51,6 @@ async def main() -> None:
     _output("=" * 40)
 
     config = DeploymentConfig(
-        server_ip="127.0.0.1",
         deployment_mode="light",
         llm=LLMConfig(
             endpoint="http://127.0.0.1:1234/v1",

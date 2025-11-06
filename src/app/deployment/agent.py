@@ -12,6 +12,7 @@ Agent 管理模块。
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import subprocess
 import tomllib
@@ -240,14 +241,24 @@ class AgentManager:
             )
 
         if default_app_id:
-            self._report_progress(
-                state,
-                _("[bold green]智能体初始化完成! 默认 App ID: {app_id}[/bold green]").format(
-                    app_id=default_app_id,
-                ),
-                progress_callback,
+            configured = self._update_default_app_config(default_app_id)
+
+            message = (
+                _(
+                    "[bold green]智能体初始化完成! 默认 App ID: {app_id}[/bold green]",
+                ).format(app_id=default_app_id)
+                if configured
+                else _(
+                    "[bold yellow]智能体初始化完成，但默认 App 未写入配置[/bold yellow]",
+                )
             )
-            logger.info("智能体初始化成功完成，默认 App ID: %s", default_app_id)
+
+            self._report_progress(state, message, progress_callback)
+            logger.info(
+                "智能体初始化成功完成，默认 App ID: %s，写入配置: %s",
+                default_app_id,
+                configured,
+            )
             return AgentInitStatus.SUCCESS
 
         # 如果没有创建任何智能体，显示警告并返回成功状态
@@ -351,7 +362,7 @@ class AgentManager:
                 "description": config.description,
                 "type": config.mcp_type,
                 "author": config.author,
-                "config": config.config,
+                "config": self._normalize_mcp_config(config.config),
             }
 
             config_file = target_dir / "config.json"
@@ -377,6 +388,29 @@ class AgentManager:
             )
             logger.info("MCP 配置写入成功: %s -> %s", config.name, target_dir)
             return dir_name
+
+    def _normalize_mcp_config(self, raw_config: dict[str, Any]) -> dict[str, Any]:
+        defaults: dict[str, Any] = {
+            "autoApprove": [],
+            "disabled": False,
+            "auto_install": True,
+            "timeout": 60,
+            "description": "",
+            "headers": {},
+        }
+
+        if not raw_config:
+            return copy.deepcopy(defaults)
+
+        merged = {**defaults, **raw_config}
+
+        if not isinstance(merged.get("autoApprove"), list):
+            merged["autoApprove"] = []
+
+        if not isinstance(merged.get("headers"), dict):
+            merged["headers"] = {}
+
+        return merged
 
     async def _write_app_metadata_to_filesystem(
         self,
@@ -554,6 +588,17 @@ class AgentManager:
             )
             logger.info("智能体元数据创建成功: %s (ID: %s)", app_config.name, app_id)
             return app_id
+
+    def _update_default_app_config(self, default_app_id: str) -> bool:
+        """将默认智能体 ID 写入配置文件"""
+        try:
+            self.config_manager.set_default_app(default_app_id)
+        except Exception:
+            logger.exception("更新默认智能体配置失败: %s", default_app_id)
+            return False
+
+        logger.info("默认智能体配置已更新: %s", default_app_id)
+        return True
 
     def _resolve_mcp_services(
         self,
