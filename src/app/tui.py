@@ -518,7 +518,8 @@ class IntelligentTerminal(App):
             # 立即恢复正常输入界面
             self._restore_normal_input()
             # 发送 MCP 响应并处理结果
-            task = asyncio.create_task(self._send_mcp_response(message.conversation_id, params=message.confirmed))
+            params = {"confirm": message.confirmed}
+            task = asyncio.create_task(self._send_mcp_response(message.conversation_id, params=params))
             self.background_tasks.add(task)
             task.add_done_callback(self._task_done_callback)
 
@@ -531,7 +532,7 @@ class IntelligentTerminal(App):
             # 立即恢复正常输入界面
             self._restore_normal_input()
             # 发送 MCP 响应并处理结果
-            params = message.params if message.params is not None else False
+            params = message.params if message.params is not None else {}
             task = asyncio.create_task(self._send_mcp_response(message.conversation_id, params=params))
             self.background_tasks.add(task)
             task.add_done_callback(self._task_done_callback)
@@ -1192,7 +1193,7 @@ class IntelligentTerminal(App):
             self._mcp_mode = "normal"
             self._current_mcp_conversation_id = ""
 
-    async def _send_mcp_response(self, conversation_id: str, *, params: bool | dict[str, Any]) -> None:
+    async def _send_mcp_response(self, conversation_id: str, *, params: dict[str, Any]) -> None:
         """发送 MCP 响应并处理结果"""
         output_container: Container | None = None
 
@@ -1236,7 +1237,7 @@ class IntelligentTerminal(App):
         self,
         conversation_id: str,
         *,
-        params: bool | dict[str, Any],
+        params: dict[str, Any],
         output_container: Container,
         llm_client: LLMClientBase,
     ) -> bool:

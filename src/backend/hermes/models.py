@@ -66,7 +66,7 @@ class HermesApp:
         app_id: str,
         flow_id: str = "",
         *,
-        params: dict[str, Any] | bool | None = None,
+        params: dict[str, Any] | None = None,
     ) -> None:
         """
         初始化应用配置
@@ -74,7 +74,9 @@ class HermesApp:
         Args:
             app_id: 应用ID
             flow_id: 流ID
-            params: MCP 响应参数（bool 表示确认/取消，dict 表示参数补全内容）
+            params: MCP 响应参数
+                - 对于 MCP 确认消息: {"confirm": true/false}
+                - 对于参数补全: 包含补全参数的字典
 
         """
         self.app_id = app_id

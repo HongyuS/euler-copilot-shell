@@ -303,13 +303,15 @@ class HermesChatClient(LLMClientBase):
         """
         return await self.agent_manager.get_available_agents()
 
-    async def send_mcp_response(self, conversation_id: str, *, params: bool | dict) -> AsyncGenerator[str, None]:
+    async def send_mcp_response(self, conversation_id: str, *, params: dict) -> AsyncGenerator[str, None]:
         """
         发送 MCP 响应并获取流式回复
 
         Args:
             conversation_id: 会话ID
-            params: 响应参数（bool 表示确认/取消，dict 表示参数补全）
+            params: 响应参数
+                - 对于 MCP 确认消息: {"confirm": true/false}
+                - 对于参数补全: 包含补全参数的字典
 
         Yields:
             str: 流式响应的文本内容
