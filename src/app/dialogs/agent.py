@@ -122,6 +122,7 @@ class AgentSelectionDialog(ModalScreen):
         """处理键盘事件"""
         if event.key == "escape":
             self.app.pop_screen()
+            event.stop()
         elif event.key == "enter":
             # 确保有智能体可选择
             if self.agents and 0 <= self.selected_index < len(self.agents):
@@ -130,6 +131,7 @@ class AgentSelectionDialog(ModalScreen):
                 selected_agent = ("", _("智能问答"))
             self.callback(selected_agent)
             self.app.pop_screen()
+            event.stop()
         elif event.key == "up" and self.selected_index > 0:
             self.selected_index -= 1
             self._adjust_view_to_selection()
