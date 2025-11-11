@@ -460,6 +460,9 @@ class IntelligentTerminal(App):
     @on(Input.Submitted, "#command-input")
     def handle_input(self, event: Input.Submitted) -> None:
         """处理命令输入"""
+        if not self._is_in_main_interface():
+            return
+
         user_input = event.value.strip()
         if not user_input or self.processing:
             return
