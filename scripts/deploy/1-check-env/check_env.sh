@@ -347,19 +347,38 @@ function set_hostname {
 }
 
 # 检查单个软件包是否可用
+# 参数: 包名 [备用包名1] [备用包名2] ...
 check_package() {
-  local pkg=$1
-  if dnf list "$pkg" &>/dev/null; then
-    echo -e "${COLOR_INFO}[Info] $(printf '%-30s' "$pkg") \t(可用)${COLOR_RESET}"
+  local primary_pkg=$1
+  shift
+  local alternate_pkgs=("$@")
+
+  # 先检查主包名
+  if dnf list "$primary_pkg" &>/dev/null; then
+    echo -e "${COLOR_INFO}[Info] $(printf '%-30s' "$primary_pkg") \t(可用)${COLOR_RESET}"
     return 0
-  else
-    echo -e "${COLOR_ERROR}[Error] $(printf '%-30s' "$pkg") \t(不可用)${COLOR_RESET}"
-    return 1
   fi
+
+  # 如果主包名不可用，尝试备用包名
+  for alt_pkg in "${alternate_pkgs[@]}"; do
+    if dnf list "$alt_pkg" &>/dev/null; then
+      echo -e "${COLOR_INFO}[Info] $(printf '%-30s' "$primary_pkg") \t(可用，使用 $alt_pkg)${COLOR_RESET}"
+      return 0
+    fi
+  done
+
+  # 所有包名都不可用
+  if [ ${#alternate_pkgs[@]} -gt 0 ]; then
+    echo -e "${COLOR_ERROR}[Error] $(printf '%-30s' "$primary_pkg") \t(不可用，已尝试: ${alternate_pkgs[*]})${COLOR_RESET}"
+  else
+    echo -e "${COLOR_ERROR}[Error] $(printf '%-30s' "$primary_pkg") \t(不可用)${COLOR_RESET}"
+  fi
+  return 1
 }
 
 all_available=true
 # 检查所有软件包
+# 包名格式: "package_name" 或 "package_name:alternate1:alternate2"
 check_packages() {
   local packages=("$@")
 
@@ -369,7 +388,7 @@ check_packages() {
 
   echo -e "${COLOR_INFO}--------------------------------${COLOR_RESET}"
 
-  for pkg in "${packages[@]}"; do
+  for pkg_spec in "${packages[@]}"; do
     # 检查是否超时
     local current_time
     current_time=$(date +%s)
@@ -380,7 +399,10 @@ check_packages() {
       echo -e "${COLOR_INFO}--------------------------------${COLOR_RESET}"
       return 2
     fi
-    if ! check_package "$pkg"; then
+
+    # 分割包名和备用名（使用冒号分隔）
+    IFS=':' read -ra pkg_names <<<"$pkg_spec"
+    if ! check_package "${pkg_names[@]}"; then
       all_available=false
     fi
     sleep 0.1 # 避免请求过快
@@ -389,7 +411,7 @@ check_packages() {
 check_web_pkg() {
   local pkgs=(
     "nginx"
-    "redis"
+    "redis:redis6" # 支持 redis 或 redis6 包名
     "mysql"
     "mysql-server"
     "authHub"
