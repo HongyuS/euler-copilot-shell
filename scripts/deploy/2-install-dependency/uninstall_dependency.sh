@@ -8,9 +8,10 @@ COLOR_RESET='\033[0m'    # 重置颜色
 declare -a uninstalled_pkgs=()
 uninstall_success=true
 missing_pkgs=()
+# 包名格式: "package_name" 或 "package_name:alternate1:alternate2"
 pkgs=(
   "nginx"
-  "redis"
+  "redis:redis6" # 支持 redis 或 redis6 包名
   "mysql"
   "java-17-openjdk"
   "postgresql"
@@ -76,33 +77,45 @@ uninstall_dependency() {
   trap cleanup INT TERM ERR
 
   # 检查并卸载每个包
-  for pkg in "${pkgs[@]}"; do
+  for pkg_spec in "${pkgs[@]}"; do
+    # 解析包名和备用包名（使用冒号分隔）
+    IFS=':' read -ra pkg_names <<<"$pkg_spec"
+    local primary_pkg="${pkg_names[0]}"
+
     # MinIO 使用专门的卸载函数处理
-    if [ "$pkg" = "minio" ]; then
+    if [ "$primary_pkg" = "minio" ]; then
       uninstall_minio || {
         uninstall_success=false
-        missing_pkgs+=("$pkg")
+        missing_pkgs+=("$primary_pkg")
       }
       continue
     fi
 
-    if rpm -q "$pkg" >/dev/null 2>&1; then
-      echo -e "${COLOR_INFO}[Info] 正在卸载 $pkg...${COLOR_RESET}"
-      if [ "$pkg" = "nginx" ]; then
-        dnf remove -y nginx >/dev/null 2>&1
-      elif dnf remove -y "$pkg" >/dev/null 2>&1; then
-        uninstalled_pkgs+=("$pkg")
-      else
-        echo -e "${COLOR_ERROR}[Error] 卸载 $pkg 失败！${COLOR_RESET}"
-        uninstall_success=false
-        missing_pkgs+=("$pkg")
-        cleanup
+    # 尝试检查并卸载主包名或备用包名
+    local pkg_found=false
+    for pkg in "${pkg_names[@]}"; do
+      if rpm -q "$pkg" >/dev/null 2>&1; then
+        pkg_found=true
+        echo -e "${COLOR_INFO}[Info] 正在卸载 $pkg...${COLOR_RESET}"
+        if [ "$pkg" = "nginx" ]; then
+          dnf remove -y nginx >/dev/null 2>&1
+        elif dnf remove -y "$pkg" >/dev/null 2>&1; then
+          uninstalled_pkgs+=("$pkg")
+          break # 成功卸载后跳出循环
+        else
+          echo -e "${COLOR_ERROR}[Error] 卸载 $pkg 失败！${COLOR_RESET}"
+          uninstall_success=false
+          missing_pkgs+=("$pkg")
+          cleanup
+        fi
       fi
-    else
-      echo -e "${COLOR_INFO}[Info] $pkg 未安装，跳过...${COLOR_RESET}"
-    fi
+    done
 
+    if [ "$pkg_found" = false ]; then
+      echo -e "${COLOR_INFO}[Info] $primary_pkg 未安装，跳过...${COLOR_RESET}"
+    fi
   done
+
   # 取消捕获
   trap - INT TERM ERR
   # 检查安装结果
@@ -160,11 +173,11 @@ delete_dir() {
     local target="$BASE_PWD/$dir"
 
     # 检查目录是否存在
-    if ls -d $target &>/dev/null; then
+    if ls -d "$target" &>/dev/null; then
       echo -e "${COLOR_INFO}[Info] 正在删除: $target${COLOR_RESET}" | tee -a "$LOG_FILE"
 
       # 实际删除操作
-      if rm -rf $target; then
+      if rm -rf "$target"; then
         deleted_dirs+=("$target")
         echo -e "${COLOR_INFO}[Info] 成功删除: $target${COLOR_RESET}" | tee -a "$LOG_FILE"
       else
