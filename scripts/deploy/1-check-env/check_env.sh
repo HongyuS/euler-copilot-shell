@@ -357,36 +357,11 @@ check_package() {
     return 1
   fi
 }
-# 需要检查的软件包列表
-PACKAGES=(
-  "euler-copilot-web"
-  "euler-copilot-witchaind-web"
-  "authHub"
-  "authhub-web"
-  "euler-copilot-rag"
-  "euler-copilot-framework"
-  "nginx"
-  "redis"
-  "mysql"
-  "mysql-server"
-  "java-17-openjdk"
-  "postgresql-server"
-  "postgresql-server-devel"
-  "postgresql"
-  "libpq-devel"
-  "git"
-  "make"
-  "gcc"
-  "gcc-c++"
-  "clang"
-  "llvm"
-  "tar"
-  "python3-pip"
-)
+
 all_available=true
 # 检查所有软件包
-check_all_packages() {
-  local PACKAGES=("$@")
+check_packages() {
+  local packages=("$@")
 
   local timeout_seconds=30
   local start_time
@@ -394,7 +369,7 @@ check_all_packages() {
 
   echo -e "${COLOR_INFO}--------------------------------${COLOR_RESET}"
 
-  for pkg in "${PACKAGES[@]}"; do
+  for pkg in "${packages[@]}"; do
     # 检查是否超时
     local current_time
     current_time=$(date +%s)
@@ -410,7 +385,6 @@ check_all_packages() {
     fi
     sleep 0.1 # 避免请求过快
   done
-
 }
 check_web_pkg() {
   local pkgs=(
@@ -423,7 +397,7 @@ check_web_pkg() {
     "euler-copilot-web"
     "euler-copilot-witchaind-web"
   )
-  if ! check_all_packages "${pkgs[@]}"; then
+  if ! check_packages "${pkgs[@]}"; then
     return 1
   fi
 }
@@ -437,7 +411,7 @@ check_framework_pkg() {
     "tar"
     "python3-pip"
   )
-  if ! check_all_packages "${pkgs[@]}"; then
+  if ! check_packages "${pkgs[@]}"; then
     return 1
   fi
 }
@@ -452,7 +426,7 @@ check_rag_pkg() {
     "postgresql-server-devel"
     "libpq-devel"
   )
-  if ! check_all_packages "${pkgs[@]}"; then
+  if ! check_packages "${pkgs[@]}"; then
     return 1
   fi
 }
