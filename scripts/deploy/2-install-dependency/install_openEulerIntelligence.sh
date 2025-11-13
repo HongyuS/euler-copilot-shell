@@ -218,46 +218,57 @@ install_minio() {
   esac
 }
 # 智能安装函数
+# 参数: 包名 或 "包名:备用包名1:备用包名2"
 smart_install() {
-  local pkg=$1
+  local pkg_spec=$1
   local retry=3
   local LOCAL_REPO_DIR="/var/cache/rpms"
   local use_local=false
+
+  # 解析包名和备用包名
+  IFS=':' read -ra pkg_names <<<"$pkg_spec"
+  local primary_pkg="${pkg_names[0]}"
 
   # 检查本地仓库目录是否存在
   if [ -d "$LOCAL_REPO_DIR" ]; then
     use_local=true
   fi
 
-  echo -e "${COLOR_INFO}[Info] 正在安装 $pkg ...${COLOR_RESET}"
+  echo -e "${COLOR_INFO}[Info] 正在安装 $primary_pkg ...${COLOR_RESET}"
 
-  while [ $retry -gt 0 ]; do
-    # 本地安装模式（仅在本地仓库可用时尝试）
-    if [[ "$use_local" == true ]]; then
-      # 检查本地是否存在包（支持模糊匹配）
-      local local_pkg
-      local_pkg=$(find "$LOCAL_REPO_DIR" -name "${pkg}-*.rpm" | head -1)
+  # 尝试安装主包名和备用包名
+  for pkg in "${pkg_names[@]}"; do
+    local current_retry=$retry
 
-      if [[ -n "$local_pkg" ]]; then
-        if dnf --disablerepo='*' --enablerepo=local-rpms install -y "$pkg"; then
-          installed_pkgs+=("$pkg")
-          return 0
+    while [ $current_retry -gt 0 ]; do
+      # 本地安装模式（仅在本地仓库可用时尝试）
+      if [[ "$use_local" == true ]]; then
+        # 检查本地是否存在包（支持模糊匹配）
+        local local_pkg
+        local_pkg=$(find "$LOCAL_REPO_DIR" -name "${pkg}-*.rpm" | head -1)
+
+        if [[ -n "$local_pkg" ]]; then
+          if dnf --disablerepo='*' --enablerepo=local-rpms install -y "$pkg"; then
+            installed_pkgs+=("$primary_pkg")
+            return 0
+          fi
         fi
       fi
-    fi
 
-    # 在线安装模式（本地仓库不可用或本地安装失败）
-    if dnf install -y "$pkg"; then
-      installed_pkgs+=("$pkg")
-      return 0
-    fi
+      # 在线安装模式（本地仓库不可用或本地安装失败）
+      if dnf install -y "$pkg"; then
+        installed_pkgs+=("$primary_pkg")
+        return 0
+      fi
 
-    ((retry--))
-    sleep 1
+      ((current_retry--))
+      sleep 1
+    done
   done
 
-  echo "${COLOR_ERROR}[Error] 错误: $pkg 安装失败！${COLOR_RESET}"
-  missing_pkgs+=("$pkg")
+  # 所有包名都尝试失败
+  echo "${COLOR_ERROR}[Error] 错误: $primary_pkg 安装失败！${COLOR_RESET}"
+  missing_pkgs+=("$primary_pkg")
   install_success=false
 
   return 1
@@ -767,7 +778,7 @@ install_rag() {
 install_web() {
   local pkgs=(
     "nginx"
-    "redis"
+    "redis:redis6" # 支持 redis 或 redis6 包名
     "mysql"
     "mysql-server"
     "authHub"
