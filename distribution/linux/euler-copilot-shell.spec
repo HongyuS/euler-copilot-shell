@@ -4,7 +4,7 @@
 
 Name:           euler-copilot-shell
 Version:        0.10.2
-Release:        5%{?dev_timestamp:.dev%{dev_timestamp}}%{?dist}
+Release:        6%{?dev_timestamp:.dev%{dev_timestamp}}%{?dist}
 Summary:        openEuler Intelligence 智能命令行工具集
 License:        MulanPSL-2.0
 URL:            https://gitee.com/openeuler/euler-copilot-shell
@@ -134,6 +134,10 @@ rm -f /usr/lib/openeuler-intelligence/scripts/5-resource/env.*
 fi
 
 %changelog
+* Thu Nov 13 2025 openEuler <contact@openeuler.org> - 0.10.2-6
+- installer: Add support for package name and alternative package name formats
+- cli: Fix TUI keyboard interaction issue in some environments
+
 * Tue Nov 11 2025 openEuler <contact@openeuler.org> - 0.10.2-5
 - Fix detecting el version issue in deployment script
 
