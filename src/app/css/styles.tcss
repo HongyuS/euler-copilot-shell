@@ -10,7 +10,7 @@ Hermes {
     height: 1fr;
     overflow: auto;
     scrollbar-size: 1 1;
-    border: none;
+    margin: 1 0;
 }
 
 /* 文本区域 */
