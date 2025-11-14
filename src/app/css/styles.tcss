@@ -10,12 +10,7 @@ Hermes {
     height: 1fr;
     overflow: auto;
     scrollbar-size: 1 1;
-    border: solid #4963b1;
-}
-
-/* 输出容器聚焦时的样式 */
-#output-container:focus {
-    border: solid #688efd;
+    border: none;
 }
 
 /* 文本区域 */
