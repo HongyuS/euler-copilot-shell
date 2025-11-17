@@ -1,27 +1,35 @@
-"""测试登录功能模块"""
+"""
+测试登录功能模块
+
+运行方法：
+    pytest tests/tool/test_login.py -v
+"""
 
 import json
-import unittest
 from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 from tool.callback_server import CallbackServer
 from tool.oi_login import get_auth_url
 
 
-class TestLoginFunctions(unittest.TestCase):
+@pytest.mark.unit
+class TestLoginFunctions:
     """测试登录相关函数"""
 
     @patch("urllib.request.urlopen")
     def test_get_auth_url_success(self, mock_urlopen: MagicMock) -> None:
         """测试成功获取授权 URL"""
-        # 模拟后端响应（包含 Web 端的 redirect_uri）
+        # 模拟后端响应
         mock_response = Mock()
         mock_response.read.return_value = json.dumps(
             {
                 "code": 200,
                 "message": "success",
                 "result": {
-                    "url": "https://auth.example.com/login?client_id=123&redirect_uri=https://web.example.com/callback",
+                    "url": "https://auth.example.com/login",
+                    "token": "test-token",
                 },
             },
         ).encode("utf-8")
@@ -29,32 +37,57 @@ class TestLoginFunctions(unittest.TestCase):
         mock_response.__exit__ = Mock(return_value=False)
         mock_urlopen.return_value = mock_response
 
-        callback_url = "http://localhost:8081/callback"
-        result = get_auth_url("https://api.example.com", callback_url)
+        auth_url, login_token = get_auth_url("https://api.example.com")
 
-        # 验证返回的 URL 包含本地回调地址
-        self.assertIsNotNone(result)
-        self.assertIn("redirect_uri=http%3A%2F%2Flocalhost%3A8081%2Fcallback", result) # type: ignore[ignore]
-        self.assertIn("client_id=123", result) # type: ignore[ignore]
+        # 验证返回值
+        assert auth_url is not None
+        assert auth_url == "https://auth.example.com/login"
+        assert login_token == "test-token"
 
     @patch("urllib.request.urlopen")
     def test_get_auth_url_error_response(self, mock_urlopen: MagicMock) -> None:
         """测试后端返回错误"""
         # 模拟后端错误响应
         mock_response = Mock()
-        mock_response.read.return_value = json.dumps({"code": 400, "message": "Bad request", "result": None}).encode(
-            "utf-8",
-        )
+        mock_response.read.return_value = json.dumps(
+            {
+                "code": 400,
+                "message": "Bad request",
+                "result": None,
+            },
+        ).encode("utf-8")
         mock_response.__enter__ = Mock(return_value=mock_response)
         mock_response.__exit__ = Mock(return_value=False)
         mock_urlopen.return_value = mock_response
 
-        result = get_auth_url("https://api.example.com", "http://localhost:8081/callback")
+        auth_url, login_token = get_auth_url("https://api.example.com")
 
-        self.assertIsNone(result)
+        assert auth_url is None
+        assert login_token is None
+
+    @patch("urllib.request.urlopen")
+    def test_get_auth_url_missing_url(self, mock_urlopen: MagicMock) -> None:
+        """测试响应中缺少 URL"""
+        mock_response = Mock()
+        mock_response.read.return_value = json.dumps(
+            {
+                "code": 200,
+                "message": "success",
+                "result": {"token": "test-token"},  # 缺少 url 字段
+            },
+        ).encode("utf-8")
+        mock_response.__enter__ = Mock(return_value=mock_response)
+        mock_response.__exit__ = Mock(return_value=False)
+        mock_urlopen.return_value = mock_response
+
+        auth_url, login_token = get_auth_url("https://api.example.com")
+
+        assert auth_url is None
+        assert login_token is None
 
 
-class TestCallbackServer(unittest.TestCase):
+@pytest.mark.unit
+class TestCallbackServer:
     """测试回调服务器"""
 
     @patch("socket.socket")
@@ -67,9 +100,10 @@ class TestCallbackServer(unittest.TestCase):
         mock_socket.bind.return_value = None
 
         server = CallbackServer(start_port=8081)
-        port = server._find_available_port()  # noqa: SLF001
+        port = server._find_available_port()
 
-        self.assertEqual(port, 8081)
+        assert port == 8081
+        mock_socket.bind.assert_called_once_with(("127.0.0.1", 8081))
 
     @patch("socket.socket")
     def test_find_available_port_retry(self, mock_socket_class: MagicMock) -> None:
@@ -81,9 +115,10 @@ class TestCallbackServer(unittest.TestCase):
         mock_socket.bind.side_effect = [OSError, OSError, None]
 
         server = CallbackServer(start_port=8081)
-        port = server._find_available_port()  # noqa: SLF001
+        port = server._find_available_port()
 
-        self.assertEqual(port, 8083)
+        assert port == 8083
+        assert mock_socket.bind.call_count == 3
 
     @patch("socket.socket")
     def test_find_available_port_failure(self, mock_socket_class: MagicMock) -> None:
@@ -96,11 +131,40 @@ class TestCallbackServer(unittest.TestCase):
 
         server = CallbackServer(start_port=8081, max_attempts=3)
 
-        with self.assertRaises(RuntimeError) as context:
-            server._find_available_port()  # noqa: SLF001
+        with pytest.raises(RuntimeError) as context:
+            server._find_available_port()
 
-        self.assertIn("无法找到可用端口", str(context.exception))
+        assert "无法找到可用端口" in str(context.value)
 
+    def test_callback_server_initialization(self) -> None:
+        """测试回调服务器初始化"""
+        server = CallbackServer(start_port=9000, max_attempts=10)
+        assert server.start_port == 9000
+        assert server.max_attempts == 10
+        assert server.port is None
+        assert server.server is None
+        assert server.thread is None
 
-if __name__ == "__main__":
-    unittest.main()
+    @patch("socketserver.TCPServer")
+    @patch("socket.socket")
+    def test_callback_server_start(
+        self,
+        mock_socket_class: MagicMock,
+        mock_tcp_server: MagicMock,
+    ) -> None:
+        """测试启动回调服务器"""
+        # 模拟端口可用
+        mock_socket = MagicMock()
+        mock_socket_class.return_value.__enter__.return_value = mock_socket
+        mock_socket.bind.return_value = None
+
+        # 模拟 TCPServer
+        mock_server_instance = MagicMock()
+        mock_tcp_server.return_value = mock_server_instance
+
+        server = CallbackServer(start_port=8081)
+        launcher_url = server.start("https://auth.example.com")
+
+        assert launcher_url == "http://127.0.0.1:8081/launcher"
+        assert server.port == 8081
+        mock_tcp_server.assert_called_once()

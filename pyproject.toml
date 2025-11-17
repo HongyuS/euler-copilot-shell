@@ -27,8 +27,13 @@ Homepage = "https://gitee.com/openeuler/euler-copilot-shell"
 [project.scripts]
 oi = "main:main"
 
-[project.optional-dependencies]
-dev = ["ruff>=0.14.0"]
+[dependency-groups]
+dev = [
+    "pytest>=9.0.1",
+    "pytest-asyncio>=1.3.0",
+    "ruff>=0.14.5",
+    "textual-dev>=1.8.0",
+]
 
 [build-system]
 requires = ["hatchling>=1.25"]

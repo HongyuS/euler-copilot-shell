@@ -2,21 +2,21 @@
 测试浏览器可用性检测功能
 
 验证在不同环境下浏览器可用性检测是否正常工作。
+
+运行方法：
+    pytest tests/tool/test_browser_availability.py -v
 """
 
-import sys
-import unittest
 import webbrowser
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-# 添加 src 目录到 Python 路径
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+import pytest
 
 from tool.validators import is_browser_available
 
 
-class TestBrowserAvailability(unittest.TestCase):
+@pytest.mark.unit
+class TestBrowserAvailability:
     """测试浏览器可用性检测"""
 
     @patch("tool.validators.webbrowser.get")
@@ -28,6 +28,7 @@ class TestBrowserAvailability(unittest.TestCase):
 
         result = is_browser_available()
         assert result is True
+        mock_get.assert_called_once()
 
     @patch("tool.validators.webbrowser.get")
     def test_browser_not_available_error(self, mock_get: MagicMock) -> None:
@@ -37,6 +38,7 @@ class TestBrowserAvailability(unittest.TestCase):
 
         result = is_browser_available()
         assert result is False
+        mock_get.assert_called_once()
 
     @patch("tool.validators.webbrowser.get")
     def test_browser_not_available_exception(self, mock_get: MagicMock) -> None:
@@ -46,6 +48,7 @@ class TestBrowserAvailability(unittest.TestCase):
 
         result = is_browser_available()
         assert result is False
+        mock_get.assert_called_once()
 
     @patch("tool.validators.webbrowser.get")
     def test_browser_returns_none(self, mock_get: MagicMock) -> None:
@@ -55,7 +58,14 @@ class TestBrowserAvailability(unittest.TestCase):
 
         result = is_browser_available()
         assert result is False
+        mock_get.assert_called_once()
 
+    @patch("tool.validators.webbrowser.get")
+    def test_browser_runtime_error(self, mock_get: MagicMock) -> None:
+        """测试浏览器检测时出现 RuntimeError"""
+        # 模拟运行时错误
+        mock_get.side_effect = RuntimeError("Browser detection failed")
 
-if __name__ == "__main__":
-    unittest.main()
+        result = is_browser_available()
+        assert result is False
+        mock_get.assert_called_once()
