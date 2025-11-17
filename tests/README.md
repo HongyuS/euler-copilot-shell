@@ -1,6 +1,6 @@
 # 测试文档
 
-本目录包含 openEuler Intelligence 智能 Shell 项目的所有测试用例。
+本目录包含 OE-CLI 的所有测试用例。
 
 ## 运行测试
 
@@ -118,92 +118,25 @@ pytest -m asyncio tests/ -v
 
 ### Backend 模块覆盖
 
-#### ModelInfo 测试
-
-- ✅ ModelInfo 对象创建（OpenAI 风格和 Hermes 完整格式）
-- ✅ 字符串表示方法（优先使用 llm_id）
-- ✅ LLMType 解析（单个和多个类型）
-- ✅ LLMType 枚举值验证
-
-#### LLM ID 验证测试
-
-- ✅ 空 llm_id 抛出异常
-- ✅ 有效 llm_id 通过验证
-- ✅ 从 ConfigManager 获取 llm_id
-- ✅ 没有 ConfigManager 时的处理
-
-#### Hermes & OpenAI 客户端测试
-
-- ✅ Hermes 流式事件解析、错误事件冒泡与模型列表代理
-- ✅ OpenAI 模型列表调用成功路径与 APIError / OpenAIError 分支
+- `test_model_info.py`: 覆盖 ModelInfo 构造、字符串表示和 LLMType 解析/验证。
+- `test_llm_id_validation.py`: 校验 `llm_id` 的空值、有效值以及 ConfigManager 回退路径。
+- `test_hermes_client.py` / `test_openai_client.py`: 验证 Hermes/OpenAI 客户端的流式事件、模型列表代理、成功与异常分支。
 
 ### Tool 模块覆盖
 
-#### 浏览器可用性测试
-
-- ✅ 浏览器可用时返回 True
-- ✅ 命令不存在时返回 False
-- ✅ 命令执行异常时返回 False
-- ✅ 返回 None 时的处理
-- ✅ RuntimeError 处理
-
-#### Token 验证测试
-
-- ✅ 空 token 的验证
-- ✅ 短期 token（32 位十六进制）的有效/无效格式
-- ✅ 长期 token（sk- 前缀 + 32 位十六进制）的有效/无效格式
-- ✅ 其他无效格式的拒绝
-- ✅ 带空格的 token 处理
-- ✅ 混合大小写十六进制 token
-
-#### Token 集成测试
-
-- ✅ 无效 token 不发送请求
-- ✅ 有效 token 发送请求
-- ✅ URL 格式验证优先级
-- ✅ 成功连接处理
-- ✅ 连接错误处理
-
-#### 登录功能测试
-
-- ✅ 成功获取认证 URL
-- ✅ 错误响应处理
-- ✅ 缺少 URL 的处理
-- ✅ 回调服务器端口查找（成功、重试、失败）
-- ✅ 回调服务器初始化和启动
-- ✅ 浏览器不可用 / 正常流程及回调关闭
-
-#### 命令处理与 SSL 标志
-
-- ✅ 系统命令黑名单/白名单识别
-- ✅ 子进程创建失败与回退逻辑
-- ✅ 流式输出聚合与 LLM 兜底
-- ✅ SSL 环境变量解析优先级
-- ✅ APIValidator LLM / Embedding 验证的成功与失败分支
+- `test_browser_availability.py`: 检查浏览器可用性探测的正常、异常与回退分支。
+- `test_token_validation.py` / `test_token_integration.py`: 覆盖短期/长期 token 的解析、空值与格式拒绝，以及网络交互路径。
+- `test_login.py`: 复现浏览器登录流程、回调服务器端口发现、错误响应与清理逻辑。
+- `test_command_processor.py` / `test_ssl_flags.py`: 关注命令黑/白名单、子进程回退、流式输出聚合，以及 SSL 标志和 APIValidator 分支。
 
 ### App.Deployment 模块覆盖
 
-#### 资源文件测试
-
-- ✅ 脚本资源目录存在性检查
-- ✅ RPM 列表文件存在性检查
-- ✅ RPM 列表文件格式验证
-- ✅ config.toml 配置文件检查
-- ✅ systemd 服务文件检查
-
-#### 配置验证测试
-
-- ✅ LLM 配置数据结构（创建、默认值）
-- ✅ Embedding 配置数据结构（创建、默认值、mindie 类型）
-- ✅ 部署配置数据结构（创建、自定义值）
-- ✅ 配置验证（空配置、有效端点、无效部署模式）
-- ✅ 数值字段验证（max_tokens、temperature、timeout）
+- `deployment/test_rpm_availability.py`: 验证脚本资源目录、RPM 列表、配置文件和 systemd 服务文件的存在性与格式。
+- `deployment/test_validate_llm_config.py`: 检查 LLM/Embedding/部署配置数据结构及端点、数值字段的校验逻辑。
 
 ### Config 模块覆盖
 
-- ✅ 用户配置缺失时从全局模板复制
-- ✅ 模板缺失时生成默认配置
-- ✅ validate_and_update_config 触发字段合并与保存
+- `config/test_manager.py`: 覆盖用户配置缺失时的模板复制、模板缺失时的默认生成，以及 `validate_and_update_config` 字段合并与保存。
 
 ## 注意事项
 
