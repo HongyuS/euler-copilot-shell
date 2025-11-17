@@ -28,42 +28,59 @@ pytest tests/backend/test_model_info.py::TestModelInfo::test_model_info_creation
 
 ## 测试统计
 
-### 测试分布
+截至 2025-11-17，pytest 收集到 **127** 个测试用例，覆盖以下模块：
 
-#### Backend 模块 (23 个测试)
+### Backend 模块概览
 
-- `test_model_info.py`: ModelInfo 和 LLMType 测试（19 个测试）
-- `test_llm_id_validation.py`: HermesChatClient llm_id 验证测试（4 个测试）
+- `test_model_info.py`: ModelInfo 与 LLMType 枚举/解析逻辑
+- `test_llm_id_validation.py`: HermesChatClient 的 llm_id 校验
+- `test_hermes_client.py`: Hermes 流式响应解析、错误处理与模型枚举
+- `test_openai_client.py`: OpenAI 客户端的模型列表获取与异常处理
 
-#### Tool 模块 (43 个测试)
+### Tool 模块概览
 
-- `test_browser_availability.py`: 浏览器可用性检测测试（5 个测试）
-- `test_token_validation.py`: Token 格式验证测试（26 个测试）
-- `test_token_integration.py`: Token 集成验证测试（7 个测试）
-- `test_login.py`: 登录功能和回调服务器测试（8 个测试）
+- `test_browser_availability.py`: 浏览器可用性检测
+- `test_token_validation.py`: Token 格式校验
+- `test_token_integration.py`: Token 接入与网络交互
+- `test_login.py`: 浏览器登录、回调服务器与轮询流程
+- `test_command_processor.py`: CLI 命令执行/回退逻辑
+- `test_ssl_flags.py`: SSL 标志解析与 APIValidator 分支
 
-#### App.Deployment 模块 (19 个测试)
+### Config 模块概览
 
-- `test_rpm_availability.py`: 部署资源文件管理测试（5 个测试）
-- `test_validate_llm_config.py`: 部署配置数据模型测试（14 个测试）
+- `test_manager.py`: ConfigManager 的模板复制、默认生成与字段合并
+
+### App 模块概览
+
+- `deployment/test_rpm_availability.py`: 部署资源文件检查
+- `deployment/test_validate_llm_config.py`: 部署配置数据模型与连接性校验
+- `test_agent_manager.py`: AgentManager 帮助函数（MCP 配置解析）
 
 ## 测试结构
 
 ```text
 tests/
-├── conftest.py              # 全局 fixture 定义
-├── backend/                 # 后端模块测试
+├── README.md
+├── conftest.py                  # 全局 fixture 定义
+├── app/
+│   ├── deployment/
+│   │   ├── test_rpm_availability.py
+│   │   └── test_validate_llm_config.py
+│   └── test_agent_manager.py
+├── backend/
+│   ├── test_hermes_client.py
+│   ├── test_llm_id_validation.py
 │   ├── test_model_info.py
-│   └── test_llm_id_validation.py
-├── tool/                    # 工具模块测试
-│   ├── test_browser_availability.py
-│   ├── test_token_validation.py
-│   ├── test_token_integration.py
-│   └── test_login.py
-└── app/                     # 应用模块测试
-    └── deployment/          # 部署模块测试
-        ├── test_rpm_availability.py
-        └── test_validate_llm_config.py
+│   └── test_openai_client.py
+├── config/
+│   └── test_manager.py
+└── tool/
+    ├── test_browser_availability.py
+    ├── test_command_processor.py
+    ├── test_login.py
+    ├── test_ssl_flags.py
+    ├── test_token_integration.py
+    └── test_token_validation.py
 ```
 
 ## 测试类型
@@ -95,10 +112,11 @@ pytest -m asyncio tests/ -v
 - `mock_config_manager_with_llm`: 包含 LLM 配置的 ConfigManager 实例
 - `valid_token_samples`: 有效 token 格式示例列表
 - `invalid_token_samples`: 无效 token 格式示例列表
+- `temp_config_env`: 为配置相关测试提供隔离的用户/全局配置路径
 
 ## 测试覆盖范围
 
-### Backend 模块
+### Backend 模块覆盖
 
 #### ModelInfo 测试
 
@@ -114,7 +132,12 @@ pytest -m asyncio tests/ -v
 - ✅ 从 ConfigManager 获取 llm_id
 - ✅ 没有 ConfigManager 时的处理
 
-### Tool 模块
+#### Hermes & OpenAI 客户端测试
+
+- ✅ Hermes 流式事件解析、错误事件冒泡与模型列表代理
+- ✅ OpenAI 模型列表调用成功路径与 APIError / OpenAIError 分支
+
+### Tool 模块覆盖
 
 #### 浏览器可用性测试
 
@@ -148,8 +171,17 @@ pytest -m asyncio tests/ -v
 - ✅ 缺少 URL 的处理
 - ✅ 回调服务器端口查找（成功、重试、失败）
 - ✅ 回调服务器初始化和启动
+- ✅ 浏览器不可用 / 正常流程及回调关闭
 
-### App.Deployment 模块
+#### 命令处理与 SSL 标志
+
+- ✅ 系统命令黑名单/白名单识别
+- ✅ 子进程创建失败与回退逻辑
+- ✅ 流式输出聚合与 LLM 兜底
+- ✅ SSL 环境变量解析优先级
+- ✅ APIValidator LLM / Embedding 验证的成功与失败分支
+
+### App.Deployment 模块覆盖
 
 #### 资源文件测试
 
@@ -166,6 +198,12 @@ pytest -m asyncio tests/ -v
 - ✅ 部署配置数据结构（创建、自定义值）
 - ✅ 配置验证（空配置、有效端点、无效部署模式）
 - ✅ 数值字段验证（max_tokens、temperature、timeout）
+
+### Config 模块覆盖
+
+- ✅ 用户配置缺失时从全局模板复制
+- ✅ 模板缺失时生成默认配置
+- ✅ validate_and_update_config 触发字段合并与保存
 
 ## 注意事项
 

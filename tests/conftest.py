@@ -4,9 +4,13 @@ Pytest 配置文件
 定义全局 fixtures 和测试配置
 """
 
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+
+from config.manager import ConfigManager
+from config.model import ConfigModel
 
 
 @pytest.fixture
@@ -49,3 +53,30 @@ def invalid_token_samples() -> list[str]:
         "sk-invalid",  # sk- 前缀但长度不对
         "Bearer a1b2c3d4e5f6789012345678abcdef90",  # 带 Bearer 前缀
     ]
+
+
+@pytest.fixture
+def temp_config_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> dict[str, Path]:
+    """为配置相关测试提供隔离的用户/全局配置路径。"""
+    user_dir = tmp_path / "user-config"
+    global_dir = tmp_path / "global-config"
+    user_dir.mkdir()
+    global_dir.mkdir()
+
+    user_path = user_dir / "smart-shell.json"
+    global_path = global_dir / "smart-shell-template.json"
+
+    monkeypatch.setattr(ConfigManager, "USER_CONFIG_DIR", user_dir)
+    monkeypatch.setattr(ConfigManager, "USER_CONFIG_PATH", user_path)
+    monkeypatch.setattr(ConfigManager, "GLOBAL_CONFIG_DIR", global_dir)
+    monkeypatch.setattr(ConfigManager, "GLOBAL_CONFIG_PATH", global_path)
+
+    ConfigManager.data = ConfigModel()
+
+    return {
+        "user_path": user_path,
+        "global_path": global_path,
+    }

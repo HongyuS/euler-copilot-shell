@@ -458,8 +458,9 @@ async def comb_create(api_client: ApiClient, config_path: str) -> None:
 
     # 创建并发布应用
     try:
-        if 'mcpService' in config and config['mcpService']:
-            config['mcpService'] = [item['id'] for item in config['mcpService'] if 'id' in item]
+        mcp_service_entries = config.get("mcpService")
+        if mcp_service_entries:
+            config["mcpService"] = [item["id"] for item in mcp_service_entries if "id" in item]
         app_data = AppData(**config)
         app_id = await call_app_api(api_client, app_data)
         await deploy_app(api_client, app_id)

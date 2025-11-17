@@ -1,11 +1,3 @@
-"""
-部署相关模块
+"""部署相关模块集合。"""
 
-此模块包含 openEuler Intelligence 后端部署的 TUI 界面和相关功能。
-"""
-
-from .components import InitializationModeScreen
-
-__all__ = [
-    "InitializationModeScreen",
-]
+__all__ = []

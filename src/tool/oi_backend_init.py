@@ -6,7 +6,7 @@ from pathlib import Path
 
 from textual.app import App
 
-from app.deployment import InitializationModeScreen
+from app.deployment.components import InitializationModeScreen
 from config.manager import ConfigManager
 from i18n.manager import _
 from log.manager import get_logger
