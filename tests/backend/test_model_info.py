@@ -98,7 +98,7 @@ class TestLLMTypeParser:
         assert ModelInfo.parse_llm_types(None) == []
 
     @pytest.mark.parametrize(
-        "llm_type_str,expected_enum",
+        ("llm_type_str", "expected_enum"),
         [
             ("chat", LLMType.CHAT),
             ("function", LLMType.FUNCTION),

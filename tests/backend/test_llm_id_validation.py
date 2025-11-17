@@ -5,10 +5,19 @@
     pytest tests/backend/test_llm_id_validation.py -v
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import pytest
 
 from backend.hermes.client import HermesChatClient
 from backend.hermes.exceptions import HermesAPIError
+
+if TYPE_CHECKING:
+    from unittest.mock import Mock
+
+HTTP_BAD_REQUEST = 400
 
 
 @pytest.mark.asyncio
@@ -16,7 +25,7 @@ from backend.hermes.exceptions import HermesAPIError
 class TestLLMIDValidation:
     """测试 HermesChatClient 的 llm_id 验证"""
 
-    async def test_empty_llm_id_raises_exception(self, mock_config_manager) -> None:
+    async def test_empty_llm_id_raises_exception(self, mock_config_manager: Mock) -> None:
         """测试没有 llm_id 应该抛出异常"""
         # 创建没有 llm_id 的客户端（模拟未配置）
         client = HermesChatClient(
@@ -24,7 +33,7 @@ class TestLLMIDValidation:
             config_manager=mock_config_manager,
         )
 
-        assert client._get_llm_id() == ""
+        assert client._get_llm_id() == ""  # noqa: SLF001
 
         # 尝试生成响应，应该抛出 HermesAPIError
         with pytest.raises(HermesAPIError) as exc_info:
@@ -32,10 +41,10 @@ class TestLLMIDValidation:
                 pass
 
         # 验证异常信息
-        assert exc_info.value.status_code == 400
+        assert exc_info.value.status_code == HTTP_BAD_REQUEST
         assert "未配置" in exc_info.value.message or "Chat 模型" in exc_info.value.message
 
-    async def test_valid_llm_id_passes_validation(self, mock_config_manager_with_llm) -> None:
+    async def test_valid_llm_id_passes_validation(self, mock_config_manager_with_llm: Mock) -> None:
         """测试有 llm_id 的客户端通过验证"""
         # 创建有 llm_id 的客户端（模拟已配置）
         client = HermesChatClient(
@@ -43,23 +52,23 @@ class TestLLMIDValidation:
             config_manager=mock_config_manager_with_llm,
         )
 
-        assert client._get_llm_id() == "test-model-id"
+        assert client._get_llm_id() == "test-model-id"  # noqa: SLF001
 
         # llm_id 验证应该通过（实际请求会因为连接问题失败）
         # 这里我们只验证不会在 _validate_llm_id 阶段抛出异常
         try:
-            client._validate_llm_id()
+            client._validate_llm_id()  # noqa: SLF001
         except HermesAPIError:
             pytest.fail("不应该在 llm_id 验证阶段抛出异常")
 
-    def test_get_llm_id_from_config_manager(self, mock_config_manager_with_llm) -> None:
+    def test_get_llm_id_from_config_manager(self, mock_config_manager_with_llm: Mock) -> None:
         """测试从配置管理器获取 llm_id"""
         client = HermesChatClient(
             base_url="http://localhost:8000",
             config_manager=mock_config_manager_with_llm,
         )
 
-        llm_id = client._get_llm_id()
+        llm_id = client._get_llm_id()  # noqa: SLF001
         assert llm_id == "test-model-id"
 
     def test_get_llm_id_without_config_manager(self) -> None:
@@ -69,5 +78,5 @@ class TestLLMIDValidation:
             config_manager=None,
         )
 
-        llm_id = client._get_llm_id()
+        llm_id = client._get_llm_id()  # noqa: SLF001
         assert llm_id == ""

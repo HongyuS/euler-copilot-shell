@@ -1,324 +1,208 @@
-"""
-测试部署配置数据模型
+"""测试真实的部署配置数据模型"""
 
-运行方法：
-    pytest tests/app/deployment/test_validate_llm_config.py -v
+from __future__ import annotations
 
-注意：由于 app.deployment 模块存在循环导入，此测试仅测试可以独立导入的数据结构，
-不涉及需要完整模块加载的验证功能。
-"""
-
-import sys
-from pathlib import Path
+from typing import Any
 
 import pytest
 
-# 添加 src 到路径以便导入
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
+from app.deployment.models import DeploymentConfig, EmbeddingConfig, LLMConfig
 
-
-# 由于循环导入问题，我们直接在这里定义测试用的简化数据类
-class SimpleLLMConfig:
-    """简化的 LLM 配置类用于测试"""
-    
-    def __init__(
-        self,
-        endpoint: str = "",
-        api_key: str = "",
-        model: str = "",
-        max_tokens: int = 4096,
-        temperature: float = 0.7,
-        request_timeout: int = 30,
-    ):
-        self.endpoint = endpoint
-        self.api_key = api_key
-        self.model = model
-        self.max_tokens = max_tokens
-        self.temperature = temperature
-        self.request_timeout = request_timeout
-
-
-class SimpleEmbeddingConfig:
-    """简化的 Embedding 配置类用于测试"""
-    
-    def __init__(
-        self,
-        type: str = "openai",  # noqa: A002
-        endpoint: str = "",
-        api_key: str = "",
-        model: str = "",
-    ):
-        self.type = type
-        self.endpoint = endpoint
-        self.api_key = api_key
-        self.model = model
-
-
-class SimpleDeploymentConfig:
-    """简化的部署配置类用于测试"""
-    
-    def __init__(
-        self,
-        deployment_mode: str = "light",
-        llm: SimpleLLMConfig | None = None,
-        embedding: SimpleEmbeddingConfig | None = None,
-        enable_web: bool = False,
-        enable_rag: bool = False,
-    ):
-        self.deployment_mode = deployment_mode
-        self.llm = llm or SimpleLLMConfig()
-        self.embedding = embedding or SimpleEmbeddingConfig()
-        self.enable_web = enable_web
-        self.enable_rag = enable_rag
-    
-    def validate(self) -> tuple[bool, list[str]]:
-        """基础字段验证"""
-        errors = []
-        
-        # 验证部署模式
-        if self.deployment_mode not in ["light", "full"]:
-            errors.append("部署模式必须是 'light' 或 'full'")
-        
-        # 验证 LLM 配置
-        if not self.llm.endpoint:
-            errors.append("LLM 端点不能为空")
-        
-        # 验证 Embedding 配置
-        if not self.embedding.endpoint:
-            errors.append("Embedding 端点不能为空")
-        
-        # 验证数值范围
-        if self.llm.max_tokens <= 0:
-            errors.append("max_tokens 必须大于 0")
-        
-        if not 0 <= self.llm.temperature <= 2:
-            errors.append("temperature 必须在 0 到 2 之间")
-        
-        if self.llm.request_timeout <= 0:
-            errors.append("request_timeout 必须大于 0")
-        
-        return len(errors) == 0, errors
+LLM_DEFAULT_MAX_TOKENS = 8192
+LLM_DEFAULT_TEMPERATURE = 0.7
+LLM_DEFAULT_TIMEOUT = 300
+LLM_CUSTOM_MAX_TOKENS = 1024
+LLM_CUSTOM_TEMPERATURE = 0.1
+LLM_CUSTOM_TIMEOUT = 10
 
 
 @pytest.mark.unit
-class TestLLMConfigStructure:
-    """测试 LLM 配置数据结构"""
+class TestLLMConfig:
+    """验证 LLMConfig dataclass 行为"""
 
-    def test_llm_config_creation(self) -> None:
-        """测试 LLM 配置创建"""
-        llm_config = SimpleLLMConfig(
-            endpoint="http://127.0.0.1:1234/v1",
-            api_key="test-key",
-            model="test-model",
-            max_tokens=4096,
-            temperature=0.7,
-            request_timeout=30,
+    def test_defaults(self) -> None:
+        """LLMConfig 的初始值应与产品约定一致"""
+        config = LLMConfig()
+
+        assert config.endpoint == ""
+        assert config.api_key == ""
+        assert config.model == ""
+        assert config.max_tokens == LLM_DEFAULT_MAX_TOKENS
+        assert config.temperature == LLM_DEFAULT_TEMPERATURE
+        assert config.request_timeout == LLM_DEFAULT_TIMEOUT
+
+    def test_custom_values(self) -> None:
+        """自定义构造参数应被正确保存"""
+        config = LLMConfig(
+            endpoint="http://127.0.0.1:9000/v1",
+            api_key="demo-key",
+            model="demo-model",
+            max_tokens=LLM_CUSTOM_MAX_TOKENS,
+            temperature=LLM_CUSTOM_TEMPERATURE,
+            request_timeout=LLM_CUSTOM_TIMEOUT,
         )
-        
-        assert llm_config.endpoint == "http://127.0.0.1:1234/v1"
-        assert llm_config.api_key == "test-key"
-        assert llm_config.model == "test-model"
-        assert llm_config.max_tokens == 4096
-        assert llm_config.temperature == 0.7
-        assert llm_config.request_timeout == 30
 
-    def test_llm_config_defaults(self) -> None:
-        """测试 LLM 配置默认值"""
-        llm_config = SimpleLLMConfig()
-        
-        assert llm_config.endpoint == ""
-        assert llm_config.api_key == ""
-        assert llm_config.model == ""
-        assert llm_config.max_tokens == 4096
-        assert llm_config.temperature == 0.7
-        assert llm_config.request_timeout == 30
+        assert config.endpoint == "http://127.0.0.1:9000/v1"
+        assert config.api_key == "demo-key"
+        assert config.model == "demo-model"
+        assert config.max_tokens == LLM_CUSTOM_MAX_TOKENS
+        assert config.temperature == LLM_CUSTOM_TEMPERATURE
+        assert config.request_timeout == LLM_CUSTOM_TIMEOUT
 
 
 @pytest.mark.unit
-class TestEmbeddingConfigStructure:
-    """测试 Embedding 配置数据结构"""
+class TestEmbeddingConfig:
+    """验证 EmbeddingConfig dataclass 行为"""
 
-    def test_embedding_config_creation(self) -> None:
-        """测试 Embedding 配置创建"""
-        embed_config = SimpleEmbeddingConfig(
-            type="openai",
-            endpoint="http://127.0.0.1:1234/v1",
-            api_key="test-key",
-            model="test-embedding-model",
-        )
-        
-        assert embed_config.type == "openai"
-        assert embed_config.endpoint == "http://127.0.0.1:1234/v1"
-        assert embed_config.api_key == "test-key"
-        assert embed_config.model == "test-embedding-model"
+    def test_defaults(self) -> None:
+        """默认值应为空字符串"""
+        config = EmbeddingConfig()
+        assert config.type == ""
+        assert config.endpoint == ""
+        assert config.api_key == ""
+        assert config.model == ""
 
-    def test_embedding_config_defaults(self) -> None:
-        """测试 Embedding 配置默认值"""
-        embed_config = SimpleEmbeddingConfig()
-        
-        assert embed_config.type == "openai"
-        assert embed_config.endpoint == ""
-        assert embed_config.api_key == ""
-        assert embed_config.model == ""
-
-    def test_embedding_config_mindie_type(self) -> None:
-        """测试 Embedding 配置 mindie 类型"""
-        embed_config = SimpleEmbeddingConfig(
+    def test_custom_values(self) -> None:
+        """自定义参数应被持久化"""
+        config = EmbeddingConfig(
             type="mindie",
-            endpoint="http://localhost:8001",
+            endpoint="http://localhost:5100/embed",
+            api_key="token",
+            model="embed-model",
         )
-        
-        assert embed_config.type == "mindie"
-        assert embed_config.endpoint == "http://localhost:8001"
+
+        assert config.type == "mindie"
+        assert config.endpoint == "http://localhost:5100/embed"
+        assert config.api_key == "token"
+        assert config.model == "embed-model"
 
 
 @pytest.mark.unit
-class TestDeploymentConfigStructure:
-    """测试部署配置数据结构"""
+class TestDeploymentConfigValidation:
+    """验证 DeploymentConfig.validate 的核心规则"""
 
-    def test_deployment_config_creation(self) -> None:
-        """测试部署配置创建"""
-        config = SimpleDeploymentConfig()
-        
-        assert config is not None
-        assert config.deployment_mode == "light"
-        assert config.llm is not None
-        assert config.embedding is not None
-        assert config.enable_web is False
-        assert config.enable_rag is False
+    def test_llm_endpoint_required(self) -> None:
+        """LLM 端点是最基本的必填项"""
+        config = DeploymentConfig()
+        valid, errors = config.validate()
+        assert not valid
+        assert any("LLM" in error for error in errors)
 
-    def test_deployment_config_with_custom_values(self) -> None:
-        """测试使用自定义值创建部署配置"""
-        config = SimpleDeploymentConfig(
-            deployment_mode="full",
-            llm=SimpleLLMConfig(
-                endpoint="http://localhost:8000",
-                api_key="custom-key",
-                model="custom-model",
+        config.llm.endpoint = "http://127.0.0.1:8000/v1"
+        valid, errors = config.validate()
+        assert valid is True
+        assert errors == []
+
+    def test_light_mode_embedding_optional(self) -> None:
+        """轻量模式下 embedding 可以缺省"""
+        config = DeploymentConfig()
+        config.llm.endpoint = "http://127.0.0.1:8000/v1"
+
+        # light 模式下不填写 embedding 也合法
+        valid, errors = config.validate()
+        assert valid
+        assert not errors
+
+        # 但只填写部分 embedding 字段时需要 endpoint
+        config.embedding.api_key = "token"
+        valid, errors = config.validate()
+        assert not valid
+        assert any("Embedding" in error for error in errors)
+
+        config.embedding.endpoint = "http://localhost:5100/embed"
+        valid, errors = config.validate()
+        assert valid
+        assert not errors
+
+    def test_full_mode_requires_embedding_endpoint(self) -> None:
+        """Full 模式需要 embedding endpoint"""
+        config = DeploymentConfig(deployment_mode="full")
+        config.llm.endpoint = "http://127.0.0.1:8000/v1"
+
+        valid, errors = config.validate()
+        assert not valid
+        assert any("Embedding" in error for error in errors)
+
+        config.embedding.endpoint = "http://localhost:5100/embed"
+        valid, errors = config.validate()
+        assert valid
+
+    def test_numeric_fields_validation(self) -> None:
+        """数值字段应遵守上/下限"""
+        config = DeploymentConfig(
+            llm=LLMConfig(
+                endpoint="http://127.0.0.1:8000/v1",
+                max_tokens=0,
+                temperature=99,
+                request_timeout=-1,
             ),
-            embedding=SimpleEmbeddingConfig(
-                type="mindie",
-                endpoint="http://localhost:8001",
-            ),
-            enable_web=True,
-            enable_rag=True,
+            embedding=EmbeddingConfig(endpoint="http://localhost:5100/embed"),
         )
-        
-        assert config.deployment_mode == "full"
-        assert config.llm.endpoint == "http://localhost:8000"
-        assert config.embedding.type == "mindie"
-        assert config.enable_web is True
-        assert config.enable_rag is True
 
-
-@pytest.mark.unit
-class TestConfigValidation:
-    """测试配置验证功能"""
-
-    def test_validate_empty_config(self) -> None:
-        """测试验证空配置"""
-        config = SimpleDeploymentConfig()
-        
-        is_valid, errors = config.validate()
-        
-        # 空配置应该有验证错误（缺少端点）
-        assert isinstance(is_valid, bool)
-        assert isinstance(errors, list)
-        assert is_valid is False  # 空配置应该验证失败
-        assert len(errors) > 0  # 应该有错误消息
-
-    def test_validate_with_endpoints(self) -> None:
-        """测试包含端点的配置验证"""
-        config = SimpleDeploymentConfig(
-            llm=SimpleLLMConfig(endpoint="http://127.0.0.1:1234/v1"),
-            embedding=SimpleEmbeddingConfig(endpoint="http://127.0.0.1:1234/v1"),
-        )
-        
-        is_valid, errors = config.validate()
-        
-        # 基础验证应该通过（有端点）
-        assert isinstance(is_valid, bool)
-        assert isinstance(errors, list)
-        assert is_valid is True  # 应该验证成功
-        assert len(errors) == 0  # 不应该有错误
-
-    def test_validate_invalid_deployment_mode(self) -> None:
-        """测试无效的部署模式"""
-        config = SimpleDeploymentConfig(
-            deployment_mode="invalid",
-            llm=SimpleLLMConfig(endpoint="http://localhost:1234/v1"),
-            embedding=SimpleEmbeddingConfig(endpoint="http://localhost:1234/v1"),
-        )
-        
-        is_valid, errors = config.validate()
-        
-        # 应该验证失败
-        assert is_valid is False
-        assert len(errors) > 0
-        assert any("部署模式" in error or "deployment" in error.lower() for error in errors)
-
-    def test_validate_numeric_fields_valid(self) -> None:
-        """测试有效的数值字段"""
-        config = SimpleDeploymentConfig(
-            llm=SimpleLLMConfig(
-                endpoint="http://localhost:1234/v1",
-                max_tokens=4096,
-                temperature=0.7,
-                request_timeout=30,
-            ),
-            embedding=SimpleEmbeddingConfig(endpoint="http://localhost:1234/v1"),
-        )
-        
-        is_valid, errors = config.validate()
-        
-        # 应该验证成功
-        assert is_valid is True
-        assert len(errors) == 0
-
-    def test_validate_invalid_max_tokens(self) -> None:
-        """测试无效的 max_tokens"""
-        config = SimpleDeploymentConfig(
-            llm=SimpleLLMConfig(
-                endpoint="http://localhost:1234/v1",
-                max_tokens=0,  # 无效值
-            ),
-            embedding=SimpleEmbeddingConfig(endpoint="http://localhost:1234/v1"),
-        )
-        
-        is_valid, errors = config.validate()
-        
-        # 应该验证失败
-        assert is_valid is False
+        valid, errors = config.validate()
+        assert not valid
         assert any("max_tokens" in error for error in errors)
-
-    def test_validate_invalid_temperature(self) -> None:
-        """测试无效的 temperature"""
-        config = SimpleDeploymentConfig(
-            llm=SimpleLLMConfig(
-                endpoint="http://localhost:1234/v1",
-                temperature=3.0,  # 超出范围
-            ),
-            embedding=SimpleEmbeddingConfig(endpoint="http://localhost:1234/v1"),
-        )
-        
-        is_valid, errors = config.validate()
-        
-        # 应该验证失败
-        assert is_valid is False
         assert any("temperature" in error for error in errors)
+        assert any("超时" in error or "timeout" in error.lower() for error in errors)
 
-    def test_validate_invalid_timeout(self) -> None:
-        """测试无效的 request_timeout"""
-        config = SimpleDeploymentConfig(
-            llm=SimpleLLMConfig(
-                endpoint="http://localhost:1234/v1",
-                request_timeout=-1,  # 无效值
-            ),
-            embedding=SimpleEmbeddingConfig(endpoint="http://localhost:1234/v1"),
+
+@pytest.mark.asyncio
+class TestDeploymentConnectivity:
+    """验证异步连接性方法依赖 APIValidator 的行为"""
+
+    async def test_validate_llm_connectivity_updates_backend_type(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """LLM 验证成功应写入 backend 类型"""
+        config = DeploymentConfig()
+        config.llm.endpoint = "http://127.0.0.1:8000/v1"
+
+        called = {}
+
+        async def fake_validate_llm_config(*_args: Any, **_kwargs: Any) -> tuple[bool, str, dict[str, bool | str]]:
+            called["run"] = True
+            return (True, "ok", {"supports_function_call": True, "detected_function_call_type": "structured_output"})
+
+        monkeypatch.setattr("app.deployment.models.APIValidator.validate_llm_config", fake_validate_llm_config)
+
+        success, message, info = await config.validate_llm_connectivity()
+
+        assert success is True
+        assert message == "ok"
+        assert info["supports_function_call"] is True
+        assert config.detected_backend_type == "structured_output"
+        assert called["run"] is True
+
+    async def test_validate_llm_connectivity_requires_endpoint(self) -> None:
+        """无 endpoint 时直接返回错误"""
+        config = DeploymentConfig()
+        success, message, info = await config.validate_llm_connectivity()
+        assert success is False
+        assert "端点" in message
+        assert info == {}
+
+    async def test_validate_embedding_connectivity_updates_type(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Embedding 验证应更新类型信息"""
+        config = DeploymentConfig()
+        config.embedding.endpoint = "http://localhost:5100/embed"
+
+        async def fake_validate_embedding_config(*_args: Any, **_kwargs: Any) -> tuple[bool, str, dict[str, str]]:
+            return (True, "ok", {"type": "mindie"})
+
+        monkeypatch.setattr(
+            "app.deployment.models.APIValidator.validate_embedding_config",
+            fake_validate_embedding_config,
         )
-        
-        is_valid, errors = config.validate()
-        
-        # 应该验证失败
-        assert is_valid is False
-        assert any("timeout" in error.lower() for error in errors)
+
+        success, message, info = await config.validate_embedding_connectivity()
+
+        assert success is True
+        assert message == "ok"
+        assert info == {"type": "mindie"}
+        assert config.embedding.type == "mindie"
+
+    async def test_validate_embedding_connectivity_requires_endpoint(self) -> None:
+        """缺少 embedding endpoint 时返回错误"""
+        config = DeploymentConfig()
+        success, message, info = await config.validate_embedding_connectivity()
+        assert success is False
+        assert "端点" in message
+        assert info == {}

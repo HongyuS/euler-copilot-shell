@@ -33,10 +33,10 @@ class TestDeploymentResourceFiles:
         """测试 RPM 列表文件是否存在"""
         # 预期的 RPM 列表文件
         rpm_files = ["mcp-servers.rpmlist", "sysTrace.rpmlist"]
-        
+
         for rpm_file in rpm_files:
             file_path = script_resource_dir / rpm_file
-            
+
             # 如果文件存在，验证其为文件
             if file_path.exists():
                 assert file_path.is_file(), f"{rpm_file} 不是文件"
@@ -44,24 +44,22 @@ class TestDeploymentResourceFiles:
     def test_rpm_list_file_format(self, script_resource_dir: Path) -> None:
         """测试 RPM 列表文件的内容格式"""
         rpm_files = ["mcp-servers.rpmlist", "sysTrace.rpmlist"]
-        
+
         for rpm_file in rpm_files:
             file_path = script_resource_dir / rpm_file
-            
+
             # 跳过不存在的文件
             if not file_path.exists():
                 continue
-            
+
             # 验证文件可以读取并包含有效的包名
             with file_path.open(encoding="utf-8") as f:
                 lines = f.readlines()
                 # 应该至少有一些非空行（排除注释）
                 non_comment_lines = [
-                    line.strip() 
-                    for line in lines 
-                    if line.strip() and not line.strip().startswith("#")
+                    line.strip() for line in lines if line.strip() and not line.strip().startswith("#")
                 ]
-                
+
                 # 如果文件存在，应该包含一些包名
                 if non_comment_lines:
                     # 验证包名格式（简单验证：不为空且不以空格开头）
@@ -83,7 +81,7 @@ class TestDeploymentConfiguration:
     def test_config_toml_exists(self, script_resource_dir: Path) -> None:
         """测试 config.toml 配置文件是否存在"""
         config_file = script_resource_dir / "config.toml"
-        
+
         if config_file.exists():
             assert config_file.is_file(), "config.toml 应该是文件"
             assert config_file.stat().st_size > 0, "config.toml 不应该为空"
@@ -91,14 +89,13 @@ class TestDeploymentConfiguration:
     def test_service_files_exist(self, script_resource_dir: Path) -> None:
         """测试 systemd 服务文件是否存在"""
         service_files = ["oi-rag.service", "oi-runtime.service", "tika.service"]
-        
+
         for service_file in service_files:
             file_path = script_resource_dir / service_file
-            
+
             if file_path.exists():
                 assert file_path.is_file(), f"{service_file} 应该是文件"
-                
+
                 # 验证服务文件包含基本的 systemd 单元内容
                 content = file_path.read_text(encoding="utf-8")
-                assert "[Unit]" in content or "[Service]" in content, \
-                    f"{service_file} 应该包含 systemd 单元配置"
+                assert "[Unit]" in content or "[Service]" in content, f"{service_file} 应该包含 systemd 单元配置"
