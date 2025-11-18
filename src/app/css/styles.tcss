@@ -400,13 +400,12 @@ BackendRequiredDialog {
 .progress-line {
     background: rgba(76, 175, 80, 0.1);
     border-left: solid #4caf50;
-    padding: 1;
-    margin: 1 0;
+    padding: 0;
+    margin: 0 1;
 }
 
-/* 进度消息过渡动画效果 */
-.progress-line:focus {
-    background: rgba(76, 175, 80, 0.2);
+.progress-line MarkdownParagraph {
+    margin: 0;
 }
 
 /* 初始化 - 模式选择界面 */
