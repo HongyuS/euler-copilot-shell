@@ -127,6 +127,7 @@ class MarkdownOutput(Markdown):
         """初始化 Markdown 输出组件"""
         super().__init__(markdown_content)
         self.current_content = markdown_content
+        self.add_class("llm-output")
 
     def update_markdown(self, markdown_content: str) -> None:
         """更新 Markdown 内容"""
