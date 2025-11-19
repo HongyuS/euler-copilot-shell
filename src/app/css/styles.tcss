@@ -498,8 +498,8 @@ BackendRequiredDialog {
 .progress-line {
     background: rgba(76, 175, 80, 0.1);
     border-left: solid #4caf50;
-    padding: 0;
-    margin: 0 1;
+    padding: 1 2;
+    margin-top: 1;
 }
 
 .progress-line MarkdownParagraph {
