@@ -20,10 +20,108 @@ Static {
     border: none;
 }
 
+/* Markdown 渲染优化：消除多余空行与错位 */
+Markdown,
+MarkdownBlock,
+MarkdownParagraph,
+MarkdownHeader,
+MarkdownList,
+MarkdownListItem,
+MarkdownListItemMarker,
+MarkdownCodeBlock {
+    padding: 0;
+    margin: 0;
+    border: none;
+}
+
+Markdown {
+    padding: 0 1;
+    margin: 1 0;
+}
+
+MarkdownParagraph,
+MarkdownList,
+MarkdownCodeBlock {
+    margin: 1 0;
+}
+
+MarkdownHeader,
+MarkdownH1,
+MarkdownH2,
+MarkdownH3,
+MarkdownH4,
+MarkdownH5,
+MarkdownH6 {
+    margin-bottom: 1;
+}
+
+MarkdownList {
+    margin-left: 2;
+}
+
+MarkdownBulletList,
+MarkdownOrderedList {
+    margin: 1 0;
+}
+
+MarkdownBulletList Horizontal,
+MarkdownOrderedList Horizontal {
+    height: auto;
+    width: 1fr;
+    align: left top;
+    content-align: left top;
+}
+
+MarkdownBulletList Vertical,
+MarkdownOrderedList Vertical {
+    height: auto;
+    width: 1fr;
+    padding: 0;
+    margin: 0;
+    align: left top;
+}
+
+MarkdownBullet {
+    width: 3;
+    min-width: 3;
+    content-align: right top;
+    margin: 0 1 0 0;
+}
+
+MarkdownBulletList Vertical > MarkdownParagraph,
+MarkdownOrderedList Vertical > MarkdownParagraph,
+MarkdownBulletList Vertical > MarkdownHeading,
+MarkdownOrderedList Vertical > MarkdownHeading {
+    margin: 0;
+}
+
+MarkdownBulletList Vertical > MarkdownParagraph:first-child,
+MarkdownOrderedList Vertical > MarkdownParagraph:first-child,
+MarkdownBulletList Vertical > MarkdownHeading:first-child,
+MarkdownOrderedList Vertical > MarkdownHeading:first-child {
+    margin-top: 0;
+}
+
+MarkdownBulletList Vertical > MarkdownParagraph:last-child,
+MarkdownOrderedList Vertical > MarkdownParagraph:last-child,
+MarkdownBulletList Vertical > MarkdownHeading:last-child,
+MarkdownOrderedList Vertical > MarkdownHeading:last-child {
+    margin-bottom: 0;
+}
+
+MarkdownFence,
+MarkdownCodeBlock {
+    margin: 1 0;
+}
+
 /* 用户输入的命令行样式 */
 .command-line {
     color: #688efd;
     padding: 0 1;
+}
+
+.llm-output {
+    margin-top: 1;
 }
 
 /* 底部输入区域样式 */
@@ -400,13 +498,12 @@ BackendRequiredDialog {
 .progress-line {
     background: rgba(76, 175, 80, 0.1);
     border-left: solid #4caf50;
-    padding: 1;
-    margin: 1 0;
+    padding: 1 2;
+    margin-top: 1;
 }
 
-/* 进度消息过渡动画效果 */
-.progress-line:focus {
-    background: rgba(76, 175, 80, 0.2);
+.progress-line MarkdownParagraph {
+    margin: 0;
 }
 
 /* 初始化 - 模式选择界面 */
