@@ -108,6 +108,14 @@ class OutputLine(Static):
 
     def action_copy(self) -> None:
         """复制内容到剪贴板"""
+        selection = self.text_selection
+        if selection is not None:
+            extracted = self.get_selection(selection)
+            if extracted:
+                selected_text, _ = extracted
+                if selected_text:
+                    self.app.copy_to_clipboard(selected_text)
+                    return
         if self.text_content:
             self.app.copy_to_clipboard(self.text_content)
 
@@ -136,6 +144,14 @@ class MarkdownOutput(Markdown):
 
     def action_copy(self) -> None:
         """复制内容到剪贴板"""
+        selection = self.text_selection
+        if selection is not None:
+            extracted = self.get_selection(selection)
+            if extracted:
+                selected_text, _ = extracted
+                if selected_text:
+                    self.app.copy_to_clipboard(selected_text)
+                    return
         if self.current_content:
             self.app.copy_to_clipboard(self.current_content)
 
