@@ -36,6 +36,7 @@ from tool.validators import APIValidator
 if TYPE_CHECKING:
     from textual.events import Key as KeyEvent
     from textual.visual import VisualType
+    from textual.widget import Widget
 
     from backend import LLMClientBase
 
@@ -47,6 +48,39 @@ class ContentChunkParams(NamedTuple):
     is_llm_output: bool
     current_content: str
     is_first_content: bool
+
+
+class SelectionCopyMixin:
+    """为支持文本选择复制的组件提供通用方法"""
+
+    def _copy_selected_text(self) -> bool:
+        """若当前屏幕存在文本选区则复制选中内容"""
+        widget = cast("Widget", self)
+        app = widget.app
+        if app is None:
+            return False
+
+        screen = widget.screen
+        if screen is not None:
+            selected_text = screen.get_selected_text()
+            if selected_text is not None:
+                app.copy_to_clipboard(selected_text)
+                return True
+
+        selection = widget.text_selection
+        if selection is None:
+            return False
+
+        extracted = widget.get_selection(selection)
+        if not extracted:
+            return False
+
+        selected_text, _ = extracted
+        if not selected_text:
+            return False
+
+        app.copy_to_clipboard(selected_text)
+        return True
 
 
 class FocusableContainer(Container):
@@ -95,7 +129,7 @@ class FocusableContainer(Container):
             self.refresh()
 
 
-class OutputLine(Static):
+class OutputLine(SelectionCopyMixin, Static):
     """输出行组件"""
 
     def __init__(self, text: str = "", *, command: bool = False) -> None:
@@ -108,14 +142,8 @@ class OutputLine(Static):
 
     def action_copy(self) -> None:
         """复制内容到剪贴板"""
-        selection = self.text_selection
-        if selection is not None:
-            extracted = self.get_selection(selection)
-            if extracted:
-                selected_text, _ = extracted
-                if selected_text:
-                    self.app.copy_to_clipboard(selected_text)
-                    return
+        if self._copy_selected_text():
+            return
         if self.text_content:
             self.app.copy_to_clipboard(self.text_content)
 
@@ -132,7 +160,7 @@ class OutputLine(Static):
         return self.text_content
 
 
-class MarkdownOutput(Markdown):
+class MarkdownOutput(SelectionCopyMixin, Markdown):
     """Markdown 输出组件"""
 
     def __init__(self, markdown_content: str = "") -> None:
@@ -144,14 +172,8 @@ class MarkdownOutput(Markdown):
 
     def action_copy(self) -> None:
         """复制内容到剪贴板"""
-        selection = self.text_selection
-        if selection is not None:
-            extracted = self.get_selection(selection)
-            if extracted:
-                selected_text, _ = extracted
-                if selected_text:
-                    self.app.copy_to_clipboard(selected_text)
-                    return
+        if self._copy_selected_text():
+            return
         if self.current_content:
             self.app.copy_to_clipboard(self.current_content)
 
