@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, cast
 
-from rich.markdown import Markdown as RichMarkdown
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Container
 from textual.message import Message
-from textual.widgets import Footer, Input, Static
+from textual.widgets import Footer, Input, Markdown, Static
 
 from __version__ import __version__
 from app.dialogs import AgentSelectionDialog, BackendRequiredDialog, ExitDialog
@@ -37,8 +36,8 @@ from tool.validators import APIValidator, validate_oi_connection
 
 if TYPE_CHECKING:
     from textual.events import Key as KeyEvent
-    from textual.events import Mount
     from textual.visual import VisualType
+    from textual.widget import Widget
 
     from backend.base import LLMClientBase
 
@@ -50,6 +49,39 @@ class ContentChunkParams(NamedTuple):
     is_llm_output: bool
     current_content: str
     is_first_content: bool
+
+
+class SelectionCopyMixin:
+    """为支持文本选择复制的组件提供通用方法"""
+
+    def _copy_selected_text(self) -> bool:
+        """若当前屏幕存在文本选区则复制选中内容"""
+        widget = cast("Widget", self)
+        app = widget.app
+        if app is None:
+            return False
+
+        screen = widget.screen
+        if screen is not None:
+            selected_text = screen.get_selected_text()
+            if selected_text is not None:
+                app.copy_to_clipboard(selected_text)
+                return True
+
+        selection = widget.text_selection
+        if selection is None:
+            return False
+
+        extracted = widget.get_selection(selection)
+        if not extracted:
+            return False
+
+        selected_text, _ = extracted
+        if not selected_text:
+            return False
+
+        app.copy_to_clipboard(selected_text)
+        return True
 
 
 class FocusableContainer(Container):
@@ -98,7 +130,7 @@ class FocusableContainer(Container):
             self.refresh()
 
 
-class OutputLine(Static):
+class OutputLine(SelectionCopyMixin, Static):
     """输出行组件"""
 
     def __init__(self, text: str = "", *, command: bool = False) -> None:
@@ -108,6 +140,14 @@ class OutputLine(Static):
         if command:
             self.add_class("command-line")
         self.text_content = text
+        self.can_focus = True
+
+    def action_copy(self) -> None:
+        """复制内容到剪贴板"""
+        if self._copy_selected_text():
+            return
+        if self.text_content:
+            self.app.copy_to_clipboard(self.text_content)
 
     def update(self, content: VisualType = "", *, layout: bool = True) -> None:
         """更新组件内容，确保禁用富文本标记解析"""
@@ -122,49 +162,34 @@ class OutputLine(Static):
         return self.text_content
 
 
-class MarkdownOutputLine(Static):
-    """Markdown输出行组件，使用rich库渲染富文本"""
+class MarkdownOutput(SelectionCopyMixin, Markdown):
+    """Markdown 输出组件"""
 
     def __init__(self, markdown_content: str = "") -> None:
-        """初始化支持真正富文本的Markdown输出组件"""
-        super().__init__("")
-        # 存储原始内容
+        """初始化 Markdown 输出组件"""
+        super().__init__(markdown_content)
         self.current_content = markdown_content
-        self.update_markdown(markdown_content)
+        self.add_class("llm-output")
+        self.can_focus = True
+
+    def action_copy(self) -> None:
+        """复制内容到剪贴板"""
+        if self._copy_selected_text():
+            return
+        if self.current_content:
+            self.app.copy_to_clipboard(self.current_content)
 
     def update_markdown(self, markdown_content: str) -> None:
-        """更新Markdown内容"""
+        """更新 Markdown 内容"""
         self.current_content = markdown_content
-
-        # 使用rich的Markdown渲染器
-        md = RichMarkdown(
-            markdown_content,
-            code_theme=self._get_code_theme(),
-            hyperlinks=True,
-        )
-
-        # 使用rich渲染后的内容更新组件
-        super().update(md)
+        self.update(markdown_content)
 
     def get_content(self) -> str:
-        """获取当前Markdown原始内容"""
+        """获取当前 Markdown 原始内容"""
         return self.current_content
 
-    def _get_code_theme(self) -> str:
-        """根据当前Textual主题获取适合的代码主题"""
-        return "material" if self.app.current_theme.dark else "xcode"
 
-    def _on_mount(self, event: Mount) -> None:
-        """组件挂载时设置主题监听"""
-        super()._on_mount(event)
-        self.watch(self.app, "theme", self._retheme)
-
-    def _retheme(self) -> None:
-        """主题变化时重新应用主题"""
-        self.update_markdown(self.current_content)
-
-
-class ProgressOutputLine(MarkdownOutputLine):
+class ProgressOutputLine(MarkdownOutput):
     """可替换的进度输出行组件，用于 MCP 工具进度显示"""
 
     def __init__(self, markdown_content: str = "", *, step_id: str = "") -> None:
@@ -176,37 +201,6 @@ class ProgressOutputLine(MarkdownOutputLine):
     def get_step_id(self) -> str:
         """获取步骤ID"""
         return self.step_id
-
-    def update_markdown(self, markdown_content: str) -> None:
-        """更新Markdown内容"""
-        self.current_content = markdown_content
-
-        # 使用rich的Markdown渲染器
-        md = RichMarkdown(
-            markdown_content,
-            code_theme=self._get_code_theme(),
-            hyperlinks=True,
-        )
-
-        # 使用rich渲染后的内容更新组件
-        super().update(md)
-
-    def get_content(self) -> str:
-        """获取当前Markdown原始内容"""
-        return self.current_content
-
-    def _get_code_theme(self) -> str:
-        """根据当前Textual主题获取适合的代码主题"""
-        return "material" if self.app.current_theme.dark else "xcode"
-
-    def _on_mount(self, event: Mount) -> None:
-        """组件挂载时设置主题监听"""
-        super()._on_mount(event)
-        self.watch(self.app, "theme", self._retheme)
-
-    def _retheme(self) -> None:
-        """主题变化时重新应用主题"""
-        self.update_markdown(self.current_content)
 
 
 class CommandInput(Input):
@@ -343,37 +337,45 @@ class IntelligentTerminal(App):
 
     def action_cancel(self) -> None:
         """取消当前正在进行的操作（命令执行或AI问答）"""
-        if not self.processing:
-            # 如果当前没有正在处理的操作，只显示提示
-            self.logger.debug("当前没有正在进行的操作可以取消")
+        if self.processing:
+            self.logger.info("用户请求取消当前操作")
+
+            # 取消当前所有的后台任务
+            interrupted_count = 0
+            for task in list(self.background_tasks):
+                if not task.done():
+                    task.cancel()
+                    interrupted_count += 1
+                    self.logger.debug("已取消后台任务")
+
+            # 取消 LLM 客户端请求
+            if self._llm_client is not None:
+                # 异步调用取消方法
+                cancel_task = asyncio.create_task(self._cancel_llm_request())
+                self.background_tasks.add(cancel_task)
+                cancel_task.add_done_callback(self._task_done_callback)
+
+            if interrupted_count > 0:
+                # 显示中断消息
+                output_container = self.query_one("#output-container")
+                interrupt_line = OutputLine(_("[Cancelled]"))
+                output_container.mount(interrupt_line)
+                # 异步滚动到底部
+                scroll_task = asyncio.create_task(self._scroll_to_end())
+                self.background_tasks.add(scroll_task)
+                scroll_task.add_done_callback(self._task_done_callback)
             return
 
-        self.logger.info("用户请求取消当前操作")
-
-        # 取消当前所有的后台任务
-        interrupted_count = 0
-        for task in list(self.background_tasks):
-            if not task.done():
-                task.cancel()
-                interrupted_count += 1
-                self.logger.debug("已取消后台任务")
-
-        # 取消 LLM 客户端请求
-        if self._llm_client is not None:
-            # 异步调用取消方法
-            cancel_task = asyncio.create_task(self._cancel_llm_request())
-            self.background_tasks.add(cancel_task)
-            cancel_task.add_done_callback(self._task_done_callback)
-
-        if interrupted_count > 0:
-            # 显示中断消息
-            output_container = self.query_one("#output-container")
-            interrupt_line = OutputLine(_("[Cancelled]"))
-            output_container.mount(interrupt_line)
-            # 异步滚动到底部
-            scroll_task = asyncio.create_task(self._scroll_to_end())
-            self.background_tasks.add(scroll_task)
-            scroll_task.add_done_callback(self._task_done_callback)
+        # 如果没有正在进行的操作，尝试调用当前焦点组件的复制功能
+        focused_widget = self.focused
+        if focused_widget and hasattr(focused_widget, "action_copy"):
+            try:
+                # 显式转换为 Any 以绕过类型检查，因为我们已经检查了 hasattr
+                cast("Any", focused_widget).action_copy()
+            except Exception:
+                self.logger.exception("执行复制操作失败")
+        else:
+            self.logger.debug("当前没有正在进行的操作可以取消，且当前组件不支持复制")
 
     def on_mount(self) -> None:
         """初始化完成时设置焦点和绑定"""
@@ -736,8 +738,8 @@ class IntelligentTerminal(App):
                 else:
                     # 非LLM输出，重置累积内容
                     stream_state["current_content"] = ""
-            elif isinstance(stream_state["current_line"], MarkdownOutputLine) and is_llm_output:
-                # 只有在LLM输出且有有效的 MarkdownOutputLine 时才累积
+            elif isinstance(stream_state["current_line"], MarkdownOutput) and is_llm_output:
+                # 只有在LLM输出且有有效的 MarkdownOutput 时才累积
                 stream_state["current_content"] += content
 
     def _handle_timeout_error(self, output_container: Container, stream_state: dict) -> bool:
@@ -755,9 +757,9 @@ class IntelligentTerminal(App):
     async def _process_content_chunk(
         self,
         params: ContentChunkParams,
-        current_line: OutputLine | MarkdownOutputLine | None,
+        current_line: OutputLine | MarkdownOutput | None,
         output_container: Container,
-    ) -> OutputLine | MarkdownOutputLine | None:
+    ) -> OutputLine | MarkdownOutput | None:
         """处理单个内容块"""
         content = params.content
         is_llm_output = params.is_llm_output
@@ -797,14 +799,14 @@ class IntelligentTerminal(App):
 
         # 处理第一段内容，创建适当的输出组件
         if is_first_content:
-            new_line: OutputLine | MarkdownOutputLine = (
-                MarkdownOutputLine(content) if is_llm_output else OutputLine(content)
+            new_line: OutputLine | MarkdownOutput = (
+                MarkdownOutput(content) if is_llm_output else OutputLine(content)
             )
             output_container.mount(new_line)
             return new_line
 
         # 处理后续内容
-        if is_llm_output and isinstance(current_line, MarkdownOutputLine):
+        if is_llm_output and isinstance(current_line, MarkdownOutput):
             # 继续累积LLM富文本内容
             # 注意：current_content 已经包含了之前的所有内容，包括第一次的内容
             updated_content = current_content + content
@@ -822,7 +824,7 @@ class IntelligentTerminal(App):
         if is_llm_output:
             # 如果切换到LLM输出，使用累积的内容（如果有的话）
             content_to_display = current_content + content if current_content else content
-            new_line = MarkdownOutputLine(content_to_display)
+            new_line = MarkdownOutput(content_to_display)
         else:
             # 如果切换到非LLM输出，只使用当前内容
             new_line = OutputLine(content)
