@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, cast
 
 from textual import on
 from textual.app import App, ComposeResult
@@ -106,6 +106,12 @@ class OutputLine(Static):
         if command:
             self.add_class("command-line")
         self.text_content = text
+        self.can_focus = True
+
+    def action_copy(self) -> None:
+        """复制内容到剪贴板"""
+        if self.text_content:
+            self.app.copy_to_clipboard(self.text_content)
 
     def update(self, content: VisualType = "", *, layout: bool = True) -> None:
         """更新组件内容，确保禁用富文本标记解析"""
@@ -128,6 +134,12 @@ class MarkdownOutput(Markdown):
         super().__init__(markdown_content)
         self.current_content = markdown_content
         self.add_class("llm-output")
+        self.can_focus = True
+
+    def action_copy(self) -> None:
+        """复制内容到剪贴板"""
+        if self.current_content:
+            self.app.copy_to_clipboard(self.current_content)
 
     def update_markdown(self, markdown_content: str) -> None:
         """更新 Markdown 内容"""
@@ -287,37 +299,45 @@ class IntelligentTerminal(App):
 
     def action_cancel(self) -> None:
         """取消当前正在进行的操作（命令执行或AI问答）"""
-        if not self.processing:
-            # 如果当前没有正在处理的操作，只显示提示
-            self.logger.debug("当前没有正在进行的操作可以取消")
+        if self.processing:
+            self.logger.info("用户请求取消当前操作")
+
+            # 取消当前所有的后台任务
+            interrupted_count = 0
+            for task in list(self.background_tasks):
+                if not task.done():
+                    task.cancel()
+                    interrupted_count += 1
+                    self.logger.debug("已取消后台任务")
+
+            # 取消 LLM 客户端请求
+            if self._llm_client is not None:
+                # 异步调用取消方法
+                cancel_task = asyncio.create_task(self._cancel_llm_request())
+                self.background_tasks.add(cancel_task)
+                cancel_task.add_done_callback(self._task_done_callback)
+
+            if interrupted_count > 0:
+                # 显示中断消息
+                output_container = self.query_one("#output-container")
+                interrupt_line = OutputLine(_("[Cancelled]"))
+                output_container.mount(interrupt_line)
+                # 异步滚动到底部
+                scroll_task = asyncio.create_task(self._scroll_to_end())
+                self.background_tasks.add(scroll_task)
+                scroll_task.add_done_callback(self._task_done_callback)
             return
 
-        self.logger.info("用户请求取消当前操作")
-
-        # 取消当前所有的后台任务
-        interrupted_count = 0
-        for task in list(self.background_tasks):
-            if not task.done():
-                task.cancel()
-                interrupted_count += 1
-                self.logger.debug("已取消后台任务")
-
-        # 取消 LLM 客户端请求
-        if self._llm_client is not None:
-            # 异步调用取消方法
-            cancel_task = asyncio.create_task(self._cancel_llm_request())
-            self.background_tasks.add(cancel_task)
-            cancel_task.add_done_callback(self._task_done_callback)
-
-        if interrupted_count > 0:
-            # 显示中断消息
-            output_container = self.query_one("#output-container")
-            interrupt_line = OutputLine(_("[Cancelled]"))
-            output_container.mount(interrupt_line)
-            # 异步滚动到底部
-            scroll_task = asyncio.create_task(self._scroll_to_end())
-            self.background_tasks.add(scroll_task)
-            scroll_task.add_done_callback(self._task_done_callback)
+        # 如果没有正在进行的操作，尝试调用当前焦点组件的复制功能
+        focused_widget = self.focused
+        if focused_widget and hasattr(focused_widget, "action_copy"):
+            try:
+                # 显式转换为 Any 以绕过类型检查，因为我们已经检查了 hasattr
+                cast("Any", focused_widget).action_copy()
+            except Exception:
+                self.logger.exception("执行复制操作失败")
+        else:
+            self.logger.debug("当前没有正在进行的操作可以取消，且当前组件不支持复制")
 
     def on_mount(self) -> None:
         """初始化完成时设置焦点和绑定"""
