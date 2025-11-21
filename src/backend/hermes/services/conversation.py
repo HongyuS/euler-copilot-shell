@@ -58,22 +58,34 @@ class HermesConversationManager:
 
     async def stop_conversation(self) -> None:
         """停止当前会话"""
-        if self.http_manager.client is None or self.http_manager.client.is_closed:
+        if not self._conversation_id:
+            self.logger.debug("No active Hermes conversation to stop")
+            return
+
+        client = self.http_manager.client
+        if client is None or client.is_closed:
+            self.logger.debug("HTTP client already closed, skip stop request")
+            self._conversation_id = None
             return
 
         try:
             stop_url = urljoin(self.http_manager.base_url, "/api/stop")
             headers = self.http_manager.build_headers()
 
-            response = await self.http_manager.client.post(stop_url, headers=headers)
+            response = await client.post(stop_url, headers=headers)
 
             if response.status_code != HTTP_OK:
                 error_text = await response.aread()
                 raise HermesAPIError(response.status_code, error_text.decode("utf-8"))
 
+            self.logger.info("Hermes 会话已停止 - ID: %s", self._conversation_id)
+
         except httpx.RequestError as e:
             log_exception(self.logger, "停止会话请求失败", e)
             raise HermesAPIError(500, f"Failed to stop conversation: {e!s}") from e
+        finally:
+            # 无论成功与否都重置会话ID，避免重复调用导致的额外错误
+            self._conversation_id = None
 
     async def _create_conversation(self, llm_id: str = "") -> str:
         """

@@ -556,8 +556,13 @@ class HermesChatClient(LLMClientBase):
 
     async def _stop(self) -> None:
         """停止当前会话"""
-        if self._conversation_manager is not None:
+        if self._conversation_manager is None:
+            return
+
+        try:
             await self._conversation_manager.stop_conversation()
+        except HermesAPIError as exc:
+            self.logger.warning("Failed to stop Hermes conversation gracefully: %s", exc)
 
     async def __aenter__(self) -> Self:
         """异步上下文管理器入口"""
