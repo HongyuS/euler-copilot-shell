@@ -19,6 +19,7 @@ from app.settings import SettingsScreen
 from app.tui_header import OIHeader
 from app.tui_mcp_handler import TUIMCPEventHandler
 from backend import BackendFactory, HermesChatClient, OpenAIClient
+from backend.hermes.exceptions import HermesAPIError
 from backend.hermes.mcp_helpers import (
     MCPTags,
     extract_mcp_tag,
@@ -1070,7 +1071,7 @@ class IntelligentTerminal(App):
             try:
                 await self._llm_client.close()
                 self.logger.info("LLM 客户端已安全关闭")
-            except (OSError, RuntimeError, ValueError) as e:
+            except (OSError, RuntimeError, ValueError, HermesAPIError) as e:
                 log_exception(self.logger, "关闭 LLM 客户端时出错", e)
 
     def _cleanup_task_done_callback(self, task: asyncio.Task) -> None:
