@@ -201,6 +201,7 @@ class SettingsScreen(ModalScreen):
                     classes="settings-input",
                     id="api-key",
                     placeholder=_("API 访问密钥，可选"),
+                    password=True,
                 ),
                 classes="settings-option"),
         ]
